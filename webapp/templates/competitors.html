@@ -45,12 +45,15 @@
   <div style="margin-top:12px">{{ sm.run(actions.backlinks, 'Pull backlinks') }}</div>
 {% else %}
   <table><tr><th>Competitor</th><th>Found by</th><th class="r">Shared keywords</th><th class="r">Their keywords</th><th class="r">Their traffic</th><th>Names ChatGPT may use</th><th></th></tr>
-  {% for c in comps %}<tr><td><b>{{ c.name }}</b><br><span class="note">{{ c.domain or '' }}</span></td><td>{{ 'Semrush' if c.source=='semrush' else 'Added by hand' }}</td>
+  {% for c in comps if not c.own %}<tr><td><b>{{ c.name }}</b><br><span class="note">{{ c.domain or '' }}</span></td><td>{{ 'Semrush' if c.source=='semrush' else 'Added by hand' }}</td>
   <td class="r">{{ c.common|n }}</td><td class="r">{{ c.keywords|n }}</td><td class="r">{{ c.traffic|n }}</td>
   <td style="min-width:220px"><form method="post" style="display:flex;gap:6px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="aliases_for" value="{{ c.id }}">
-  <input type="text" name="name" value="{{ c.name }}" aria-label="Brand name" style="max-width:120px"><input type="text" name="aliases" placeholder="other spellings, comma separated" aria-label="Other spellings"><button class="btn ln">Save</button></form></td>
-  <td><form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="toggle" value="{{ c.id }}"><button class="btn {{ 'blk' if c.tracked else 'red' }}">{{ 'Tracked' if c.tracked else 'Track' }}</button></form></td></tr>
+  <input type="text" name="name" value="{{ c.name }}" aria-label="Brand name" style="max-width:120px"><input type="text" name="aliases" value="{{ (c.aliases or [])|join(', ') }}" placeholder="other spellings, comma separated" aria-label="Other spellings"><button class="btn ln">Save</button></form></td>
+  <td style="white-space:nowrap"><form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="toggle" value="{{ c.id }}"><button class="btn {{ 'blk' if c.tracked else 'red' }}">{{ 'Tracked' if c.tracked else 'Track' }}</button></form>
+  <form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="own_brand" value="{{ c.id }}"><button class="btn ln" title="One of {{ client.name }}'s own businesses">Our brand</button></form></td></tr>
   {% else %}<tr><td colspan="7" class="empty">No competitors yet. Pull Semrush, or add one below.</td></tr>{% endfor %}</table>
+  {% set own = comps|selectattr('own')|list %}{% if own %}<p class="note" style="margin-top:12px">{{ client.name }}'s own brands, never tracked as competitors:
+  {% for c in own %}<b>{{ c.domain or c.name }}</b> <form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="own_brand" value="{{ c.id }}"><button class="btn ln" style="min-height:28px;padding:0 10px">Not ours</button></form>{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
   <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:14px"><input type="hidden" name="csrf" value="{{ csrf }}">
   <div style="flex:1 1 200px"><label for="an">Brand name</label><input id="an" type="text" name="add_name" required></div>
   <div style="flex:1 1 200px"><label for="ad">Website</label><input id="ad" type="text" name="add_domain" placeholder="example.com"></div><button class="btn red">Add and track</button></form>

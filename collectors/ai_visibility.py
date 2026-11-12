@@ -92,10 +92,13 @@ def brand_patterns(name, aliases, domain):
 
 def find_mentions(answer, brands):
     """brands = [{name, aliases, domain, is_client}] -> [{name, is_client, rank}] in order of first appearance."""
+    spans = [[(m.start(), m.end()) for p in brand_patterns(b["name"], b["aliases"], b["domain"]) for m in p.finditer(answer)] for b in brands]
     hits = []
-    for b in brands:
-        first = min((m.start() for p in brand_patterns(b["name"], b["aliases"], b["domain"]) for m in p.finditer(answer)), default=None)
-        if first is not None: hits.append((first, b))
+    for i, b in enumerate(brands):
+        # a match inside a longer match of another brand is that brand's: "PNG" in "PNG Brothers" is not Gargi
+        own = [s for s in spans[i] if not any(o[0] <= s[0] and s[1] <= o[1] and o[1] - o[0] > s[1] - s[0]
+                                             for j, other in enumerate(spans) if j != i for o in other)]
+        if own: hits.append((min(s[0] for s in own), b))
     hits.sort(key=lambda x: x[0])
     return [{"name": b["name"], "is_client": b["is_client"], "rank": i + 1} for i, (_, b) in enumerate(hits)]
 

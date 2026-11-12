@@ -71,15 +71,24 @@ def discover(session, domain):
         else: pages += [u for u in locs if (urlparse(u).hostname or "").lower().replace("www.", "") == site]
     return list(dict.fromkeys(normalise(u) for u in pages))
 
+def rival_terms(conn, client_id):
+    try:
+        import gsc
+        name, dom, aliases = conn.execute("SELECT name, domain, aliases FROM clients WHERE client_id=%s", [client_id]).fetchone()
+        return gsc.competitor_terms(conn, client_id, gsc.brand_terms(name, dom, aliases))
+    except ImportError:
+        return []
+
 def fill_keywords(conn, client_id):
     """Primary keyword for pages that have none, from Search Console (non-branded, most clicks, 90 days), else Semrush."""
     missing = conn.execute("""SELECT page_id, url FROM pages WHERE client_id=%s AND (primary_keyword IS NULL OR intent='auto')""",
                            [client_id]).fetchall()                  # keywords picked automatically are refreshed; a person's are kept
     if not missing: return 0
-    best = {}
+    best, rival = {}, rival_terms(conn, client_id)
     for page, query, clicks in conn.execute("""SELECT page, query, sum(clicks) c FROM gsc_search_daily
                                                WHERE client_id=%s AND NOT is_branded AND date > current_date - 90
                                                GROUP BY page, query HAVING sum(clicks) > 0""", [client_id]):
+        if any(x in query.lower().replace(" ", "") for x in rival): continue      # a competitor's name is never a page's keyword
         k = page_key(page)
         if k not in best or clicks > best[k][1]: best[k] = (query, clicks)
     for url, kw, traffic in conn.execute("""SELECT url, keyword, coalesce(traffic_pct,0) FROM semrush_keywords

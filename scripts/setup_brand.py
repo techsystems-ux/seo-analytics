@@ -24,9 +24,11 @@ def setup(conn, seed):
         import semrush
         semrush.store_keywords(conn, cid, sm["domain"], sm["database"], sm["pulled_on"], sm["keywords"])
         for c in sm["competitors"]:
-            conn.execute("""INSERT INTO competitors (client_id, name, domain, source, tracked, relevance, common_keywords, organic_keywords, organic_traffic, pulled_on)
-                            VALUES (%s,%s,%s,'semrush',false,%s,%s,%s,%s,%s) ON CONFLICT (client_id, name) DO NOTHING""",
-                         [cid, c["domain"], c["domain"], c["relevance"], c["common_keywords"], c["organic_keywords"], c["organic_traffic"], sm["pulled_on"]])
+            conn.execute("""INSERT INTO competitors (client_id, name, domain, source, tracked, own_brand, aliases, relevance, common_keywords,
+                              organic_keywords, organic_traffic, pulled_on)
+                            VALUES (%s,%s,%s,'semrush',%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (client_id, name) DO NOTHING""",
+                         [cid, c["domain"], c["domain"], c.get("tracked", False), c.get("own_brand", False), c.get("aliases", []),
+                          c["relevance"], c["common_keywords"], c["organic_keywords"], c["organic_traffic"], sm["pulled_on"]])
         for u in sm["usage"]:                     # the credits these rows cost count against the lifetime Semrush cap
             conn.execute("INSERT INTO semrush_usage (client_id, report, lines, units, called_at) VALUES (%s,%s,%s,%s,%s)",
                          [cid, u["report"] + " (connector)", u["lines"], u["units"], sm["pulled_on"]])

@@ -28,6 +28,9 @@
       "game changer",
       "elevate",
       "unleash"
+    ],
+    "sister_domains": [
+      "pngadgilandsons.com"
     ]
   },
   "prompts": {
@@ -317,7 +320,11 @@
         "relevance": 0.25,
         "common_keywords": 139,
         "organic_keywords": 1161,
-        "organic_traffic": 8908
+        "organic_traffic": 8908,
+        "tracked": true,
+        "aliases": [
+          "PNG Exclusive"
+        ]
       },
       {
         "domain": "zavya.co",
@@ -331,7 +338,8 @@
         "relevance": 0.18,
         "common_keywords": 177,
         "organic_keywords": 8763,
-        "organic_traffic": 204711
+        "organic_traffic": 204711,
+        "own_brand": true
       },
       {
         "domain": "truesilver.co.in",
@@ -345,7 +353,11 @@
         "relevance": 0.14,
         "common_keywords": 66,
         "organic_keywords": 510,
-        "organic_traffic": 3785
+        "organic_traffic": 3785,
+        "tracked": true,
+        "aliases": [
+          "PNG Brothers"
+        ]
       }
     ]
   }

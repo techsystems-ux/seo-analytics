@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 7
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 8
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -53,7 +53,8 @@ class FakeSemrush:
                           "silver mangalsutra;4;7;12100;0.4;https://gargi.shop/collections/mangalsutra;9.1;1;38;3\n"
                           "oxidised earrings;11;9;27100;0.2;https://gargi.shop/collections/earrings;3.2;1;45;0,3\n")
         if "type=domain_domains" in url:
-            assert "%2A%7Cor%7Cgiva.co%7C%2B%7Cor%7Cpalmonas.com%7C-%7Cor%7Cgargi.shop" in url, url
+            assert "%2A%7Cor%7Cpngexclusive.com%7C%2B%7Cor%7Cpngbrothers.com%7C%2B%7Cor%7Cgiva.co%7C%2B%7Cor%7Cpalmonas.com%7C-%7Cor%7Cgargi.shop" in url, url
+            assert "pngadgilandsons" not in url                                   # the group's own brand is never a gap competitor
             return R(200, "Keyword;giva.co;palmonas.com;gargi.shop;Search Volume;CPC;Competition\n"
                           "silver anklets for women;3;0;0;22200;0.3;1\ndemi fine jewellery;0;5;0;6600;0.5;1\n")
         return R(200, "ERROR 50 :: NOTHING FOUND")
@@ -66,7 +67,7 @@ semrush.TOTAL_CAP = 100000                                 # lift the cap only t
 fs = FakeSemrush()
 with connect() as conn:
     out = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, session=fs, today=dt.date(2026, 11, 9), competitor_refresh_days=0)
-    assert "2 non-branded keywords" in out and "2 competitors" in out and "2 untapped keywords vs 2 competitors" in out and "(260 units)" in out, out
+    assert "2 non-branded keywords" in out and "2 competitors" in out and "2 untapped keywords vs 4 competitors" in out and "(260 units)" in out, out
     assert conn.execute("SELECT sum(units) FROM semrush_usage WHERE client_id=%s", [cid]).fetchone()[0] == 660
     assert conn.execute("SELECT tracked FROM competitors WHERE client_id=%s AND name='myntra.com'", [cid]).fetchone()[0] is False
     stopped = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, max_units=100, session=FakeSemrush(), competitor_refresh_days=0)
@@ -183,6 +184,34 @@ r = cl.post(f"/c/{cid}/rankings", data={"csrf": "tok", "keywords": "Silver Toe R
 with connect() as conn:
     assert conn.execute("SELECT target_url FROM rank_keywords WHERE client_id=%s AND keyword='silver toe rings'", [cid]).fetchone()[0].endswith("toe-rings")
 print("every screen renders; brand rules, competitor tracking, issue tracker and rank keywords save; CSRF enforced; Semrush buttons refuse when not ready")
+
+# ------------------------------------------------------------------ sister brands and competitor names that contain the brand's words
+import gsc
+with connect() as conn:
+    day = dt.date.today() - dt.timedelta(days=4)
+    for q in ("png brothers silver", "png exclusive rings", "png gargi earrings", "png gadgil and sons", "gargi silver chain", "silver toe rings"):
+        conn.execute("INSERT INTO gsc_search_daily VALUES (%s,%s,%s,'https://gargi.shop/','ind','MOBILE',1,10,0.1,5,true) ON CONFLICT DO NOTHING", [cid, day, q])
+    name, dom, al = conn.execute("SELECT name, domain, aliases FROM clients WHERE client_id=%s", [cid]).fetchone()
+    gsc.relabel_branded(conn, cid, gsc.brand_terms(name, dom, al))
+    lab = dict(conn.execute("SELECT query, is_branded FROM gsc_search_daily WHERE client_id=%s AND date=%s AND query LIKE ANY (%s)",
+                            [cid, day, ["png%", "%silver chain", "silver toe rings"]]).fetchall())
+    assert lab == {"png brothers silver": False, "png exclusive rings": False, "png gargi earrings": True, "png gadgil and sons": True,
+                   "gargi silver chain": True, "silver toe rings": False}, lab
+    assert gsc.is_branded("PNG Brothers", gsc.brand_terms(name, dom, al), ["pngbrothers"]) is False
+    m = av.find_mentions("Good options: PNG Brothers for gold, then Gargi by PNG for silver.", av.tracked_brands(conn, cid))
+    assert [(x["name"], x["rank"]) for x in m] == [("pngbrothers.com", 1), ("Gargi", 2)], m          # "PNG" inside "PNG Brothers" is not Gargi
+    zid = conn.execute("SELECT competitor_id FROM competitors WHERE client_id=%s AND domain='zavya.co'", [cid]).fetchone()[0]
+    own = dict(conn.execute("SELECT domain, own_brand FROM competitors WHERE client_id=%s AND domain LIKE 'png%%'", [cid]).fetchall())
+    assert own == {"pngexclusive.com": False, "pngbrothers.com": False, "pngadgilandsons.com": True}, own
+cl.post(f"/c/{cid}/competitors", data={"csrf": "tok", "own_brand": str(zid)})
+with connect() as conn:
+    assert conn.execute("SELECT own_brand, tracked FROM competitors WHERE competitor_id=%s", [zid]).fetchone() == (True, False)
+    assert "zavya.co" in conn.execute("SELECT sister_domains FROM brand_rules WHERE client_id=%s", [cid]).fetchone()[0]
+assert "own brands, never tracked" in cl.get(f"/c/{cid}/competitors?tab=list").get_data(as_text=True)
+cl.post(f"/c/{cid}/competitors", data={"csrf": "tok", "own_brand": str(zid)})
+with connect() as conn:
+    assert "zavya.co" not in conn.execute("SELECT sister_domains FROM brand_rules WHERE client_id=%s", [cid]).fetchone()[0]
+print("sister brands: P N Gadgil & Sons is Gargi's own, PNG Brothers and PNG Exclusive searches and mentions are not Gargi's")
 
 with psycopg.connect(owner, autocommit=True) as c:                                                 # a client session sees only itself
     c.execute("SET ROLE aeo_app"); c.execute("SELECT set_config('app.client_id', %s, false)", [str(other)])

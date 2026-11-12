@@ -12,9 +12,13 @@ def seed_keywords(conn, client_id, n=40):
     kws = conn.execute("""SELECT primary_keyword, url FROM pages WHERE client_id=%s AND page_type IN ('collection','home')
                           AND primary_keyword IS NOT NULL ORDER BY search_volume DESC NULLS LAST LIMIT %s""", [client_id, n // 2]).fetchall()
     have = {k.lower() for k, _ in kws}
+    import gsc
+    name, dom, aliases = conn.execute("SELECT name, domain, aliases FROM clients WHERE client_id=%s", [client_id]).fetchone()
+    rival = gsc.competitor_terms(conn, client_id, gsc.brand_terms(name, dom, aliases))
     for (q,) in conn.execute("""SELECT query FROM gsc_search_daily WHERE client_id=%s AND NOT is_branded AND date >= current_date - 90
-                                GROUP BY query ORDER BY sum(clicks) DESC, sum(impressions) DESC LIMIT %s""", [client_id, n]):
+                                GROUP BY query ORDER BY sum(clicks) DESC, sum(impressions) DESC LIMIT %s""", [client_id, n * 2]):
         if len(kws) >= n: break
+        if any(x in q.lower().replace(" ", "") for x in rival): continue        # competitor brand searches are not tracked by default
         if q.lower() not in have: kws.append((q, None)); have.add(q.lower())
     with conn.cursor() as cur:
         cur.executemany("INSERT INTO rank_keywords (client_id, keyword, target_url, tags) VALUES (%s,%s,%s,'{auto}') ON CONFLICT DO NOTHING",

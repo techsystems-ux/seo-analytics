@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""

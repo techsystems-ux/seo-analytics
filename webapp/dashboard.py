@@ -160,6 +160,12 @@ def competitors_save(cid):
                          [cid, request.form["add_name"].strip(), (request.form.get("add_domain") or "").strip().lower() or None])
         if request.form.get("toggle"):
             conn.execute("UPDATE competitors SET tracked = NOT tracked WHERE client_id=%s AND competitor_id::text=%s", [cid, request.form["toggle"]])
+        if request.form.get("own_brand"):           # a sister brand: never tracked as a competitor, listed in the brand rules
+            row = conn.execute("""UPDATE competitors SET own_brand = NOT own_brand, tracked = false WHERE client_id=%s AND competitor_id::text=%s
+                                  RETURNING own_brand, domain""", [cid, request.form["own_brand"]]).fetchone()
+            if row and row[1]:
+                conn.execute("""UPDATE brand_rules SET sister_domains = CASE WHEN %s THEN (SELECT array(SELECT DISTINCT unnest(coalesce(sister_domains,'{}') || ARRAY[%s::text])))
+                                  ELSE array_remove(sister_domains, %s) END WHERE client_id=%s""", [row[0], row[1], row[1], cid])
         if request.form.get("aliases_for"):
             conn.execute("UPDATE competitors SET name=%s, aliases=%s WHERE client_id=%s AND competitor_id::text=%s",
                          [request.form["name"].strip(), [a.strip() for a in request.form.get("aliases", "").split(",") if a.strip()],

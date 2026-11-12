@@ -151,9 +151,10 @@ def untracked_brands(conn, client_id, days=30, limit=10):
 
 # ------------------------------------------------------------------ competitors (Semrush)
 def competitors(conn, client_id):
-    return rows(conn.execute("""SELECT competitor_id, name, domain, source, tracked, relevance, common_keywords, organic_keywords, organic_traffic
-                                FROM competitors WHERE client_id=%s ORDER BY tracked DESC, common_keywords DESC NULLS LAST, name""", [client_id]),
-                ["id", "name", "domain", "source", "tracked", "relevance", "common", "keywords", "traffic"])
+    return rows(conn.execute("""SELECT competitor_id, name, domain, source, tracked, relevance, common_keywords, organic_keywords, organic_traffic,
+                                       own_brand, aliases
+                                FROM competitors WHERE client_id=%s ORDER BY own_brand, tracked DESC, common_keywords DESC NULLS LAST, name""", [client_id]),
+                ["id", "name", "domain", "source", "tracked", "relevance", "common", "keywords", "traffic", "own", "aliases"])
 
 def keyword_gaps(conn, client_id, limit=50):
     last = conn.execute("SELECT max(pulled_on) FROM keyword_gaps WHERE client_id=%s", [client_id]).fetchone()[0]

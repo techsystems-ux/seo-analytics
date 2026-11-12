@@ -2,7 +2,7 @@
 """Search Console collector (free API). Pulls query x page x country x device per day, plus daily totals.
 Re-pulls overlap on purpose: rows are upserted, so late-settling data self-corrects.
 Usage: python gsc.py [--client-id UUID] [--days 7] [--lag 3]      (backfill: --days 480)"""
-import argparse, sys
+import argparse, re, sys
 from urllib.parse import quote
 from common import connect, window
 from google_auth import SessionPool
@@ -30,8 +30,20 @@ def brand_terms(name, domain, aliases):
     terms = {t.lower().strip() for t in [name, stem, *(aliases or [])] if t and len(t.strip()) >= 3}
     return {t.replace(" ", "") for t in terms}          # compare with spaces removed: 'right kind' == 'rightkind'
 
-def is_branded(query, terms):
+def competitor_terms(conn, client_id, terms):
+    """Competitor names that contain one of the brand's own words, e.g. 'pngbrothers' when 'png' is a Gargi alias.
+    Those are cut out of a query before testing it, so 'png brothers' is not counted as a Gargi search. Sister brands
+    (own_brand) are left in: a search for them is a search for the brand's family."""
+    out = set()
+    for name, domain, aliases in conn.execute("SELECT name, domain, aliases FROM competitors WHERE client_id=%s AND NOT own_brand", [client_id]):
+        for t in [name, (domain or "").lower().replace("www.", "").split(".")[0], *(aliases or [])]:
+            t = re.sub(r"\.(com|in|co|shop|net|org)(\.in)?$", "", (t or "").lower()).replace(" ", "")
+            if len(t) >= 4 and any(b in t and b != t for b in terms): out.add(t)
+    return sorted(out, key=len, reverse=True)
+
+def is_branded(query, terms, exclude=()):
     q = query.lower().replace(" ", "")
+    for x in exclude: q = q.replace(x, " ")
     return any(t in q for t in terms)
 
 def clip(s, max_bytes):
@@ -40,12 +52,12 @@ def clip(s, max_bytes):
     b = s.encode("utf-8")
     return s if len(b) <= max_bytes else b[:max_bytes].decode("utf-8", "ignore")
 
-def parse_rows(rows, client_id, terms):
+def parse_rows(rows, client_id, terms, exclude=()):
     out = []
     for r in rows:
         d, q, p, c, dev = r["keys"]
         out.append((client_id, d, clip(q, 600), clip(p, 1600), c, dev, int(r["clicks"]), int(r["impressions"]),
-                    r.get("ctr"), r.get("position"), is_branded(q, terms)))
+                    r.get("ctr"), r.get("position"), is_branded(q, terms, exclude)))
     return out
 
 def parse_totals(rows, client_id):
@@ -61,7 +73,7 @@ ON CONFLICT (client_id,date) DO UPDATE SET clicks=EXCLUDED.clicks, impressions=E
 def sync_client(conn, session, client_id, site_url, name, domain, aliases, days=7, lag=3, row_limit=25000):
     start, end = window(days, lag)
     terms = brand_terms(name, domain, aliases)
-    detail = parse_rows(fetch_all(session, site_url, start, end, DIMS, row_limit), client_id, terms)
+    detail = parse_rows(fetch_all(session, site_url, start, end, DIMS, row_limit), client_id, terms, competitor_terms(conn, client_id, terms))
     totals = parse_totals(fetch_all(session, site_url, start, end, ["date"], row_limit), client_id)
     with conn.cursor() as cur:
         cur.executemany(UPSERT, detail)
@@ -70,12 +82,15 @@ def sync_client(conn, session, client_id, site_url, name, domain, aliases, days=
     return len(detail) + len(totals)
 
 def relabel_branded(conn, client_id, terms):
-    """Re-mark every stored query when the brand's names change (e.g. 'PNG' added), not just the days just pulled."""
+    """Re-mark every stored query when the brand's or competitors' names change (e.g. 'PNG' added), not just the days just pulled."""
     pats = [f"%{t}%" for t in terms]
     if not pats: return 0
-    return conn.execute("""UPDATE gsc_search_daily SET is_branded = (replace(lower(query),' ','') LIKE ANY (%s))
-                           WHERE client_id=%s AND is_branded IS DISTINCT FROM (replace(lower(query),' ','') LIKE ANY (%s))""",
-                        [pats, client_id, pats]).rowcount
+    ex = competitor_terms(conn, client_id, terms)
+    q = "replace(lower(query),' ','')"
+    if ex: q = f"regexp_replace({q}, %(ex)s, ' ', 'g')"
+    return conn.execute(f"""UPDATE gsc_search_daily SET is_branded = ({q} LIKE ANY (%(p)s))
+                            WHERE client_id=%(c)s AND is_branded IS DISTINCT FROM ({q} LIKE ANY (%(p)s))""",
+                        {"p": pats, "c": client_id, "ex": "|".join(re.escape(x) for x in ex)}).rowcount
 
 def clients_to_sync(conn, client_id=None):
     q = """SELECT c.client_id, i.gsc_site_url, c.name, c.domain, c.aliases, i.google_connection_id FROM clients c
