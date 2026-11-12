@@ -51,7 +51,9 @@
 <tr><td>Search Console</td><td>{{ integ[0] if integ and integ[0] else 'Not linked' }}</td></tr>
 <tr><td>GA4</td><td>{{ integ[1] if integ and integ[1] else 'Not linked' }}</td></tr>
 <tr><td>OpenAI (ChatGPT)</td><td>{{ 'Key set' if keys.OPENAI_API_KEY else 'No key on the server' }}</td></tr>
-<tr><td>Semrush</td><td>{{ 'Key set' if keys.SEMRUSH_API_KEY else 'No key on the server' }} · {{ budget.used|n }} of {{ budget.cap|n }} credits used, {{ budget.left|n }} left (hard limit)</td></tr></table>
+<tr><td>Semrush</td><td>{{ 'Key set' if keys.SEMRUSH_API_KEY else 'No key on the server' }} · {{ budget.used|n }} of {{ budget.cap|n }} credits used, {{ budget.left|n }} left (hard limit)</td></tr>
+<tr><td>Apify (Reddit)</td><td>{{ 'Token set' if keys.APIFY_TOKEN else 'No token on the server (APIFY_TOKEN)' }} · paid per result, capped by APIFY_MAX_ITEMS and APIFY_TOTAL_ITEMS</td></tr>
+<tr><td>YouTube Data API</td><td>{{ 'Key set' if keys.YOUTUBE_API_KEY else 'No key on the server (YOUTUBE_API_KEY)' }} · free daily quota</td></tr></table>
 <p class="note">Keys live in the server's settings, never in the app. Search Console and GA4 are linked from <a href="{{ url_for('connections') }}">Google connections</a>.</p></section>
 <section class="card"><h2>Pull data now</h2><p class="note">Search Console, GA4, rankings and ChatGPT also run every night; page checks and the technical crawl every Monday. Semrush runs only when someone presses a button below.</p>
 <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
@@ -70,7 +72,7 @@
 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px">
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="{{ 'sample_clear' if client.sample else 'sample_load' }}">
 <button class="btn {{ 'blk' if client.sample else 'ln' }}">{{ 'Remove sample data' if client.sample else 'Show sample data' }}</button></form>
-<span class="note">{{ 'Sample rows are showing on Competitors, Content ideas, Technical and Rankings. A real Semrush pull removes them first.' if client.sample else 'Fills the Semrush sections with clearly marked sample rows to review the screens. No credits.' }}</span></div>
+<span class="note">{{ 'Sample rows are showing on Competitors, Research, Reddit, YouTube, Content ideas, Technical and Rankings. A real Semrush pull removes them first.' if client.sample else 'Fills the Semrush, Reddit and YouTube sections with clearly marked sample rows to review the screens. No credits.' }}</span></div>
 <p class="note">Set the project up in Semrush itself (crawls and tracked keywords added there use the project's limits, not API credits). This tool only reads the results.</p></section>
 <section class="card"><h2>Last runs</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
 {% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '').split('\n')[0][:300] }}</span></td></tr>{% endfor %}</table>

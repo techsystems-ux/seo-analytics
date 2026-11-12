@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 9
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 10
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -153,6 +153,9 @@ checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Where Gargi stands", "Untapped k
           f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID"],
           f"/c/{cid}/technical": ["Technical health", "No crawl yet", "Import Site Audit"], f"/c/{cid}/ideas": ["What shoppers ask", "No ideas yet"],
           f"/c/{cid}/search?tab=rankings": ["silver mangalsutra", "Track"], f"/c/{cid}/competitors?tab=backlinks": ["No backlink data yet", "Pull backlinks"],
+          f"/c/{cid}/research/keyword": ["Keyword research", "No lookups yet", "disabled"], f"/c/{cid}/research/domain": ["Quick pick", "gargi.shop"],
+          f"/c/{cid}/research/backlinks": ["Backlink analytics"], f"/c/{cid}/research/paid": ["Paid and shopping"],
+          f"/c/{cid}/reddit": ["What Reddit says", "No Reddit data yet", "No Apify token"], f"/c/{cid}/youtube": ["What YouTube shows", "No YouTube API key"],
           f"/c/{cid}/ai": ["Hovers Visibility Score", "#2", "Zaveri Pearls", "Failed"], f"/c/{cid}/ai/answer/{aid}": ["GIVA is the best known", "Read only"],
           f"/c/{cid}/pages": ["Pages found", "No checked pages in this view yet"], f"/c/{cid}/pages?show=unchecked": ["silver mangalsutra", "Not checked yet"], f"/c/{cid}/settings": ["Gargi by PNG"],
           f"/c/{cid}/settings?tab=prompts": ["best silver jewellery brands in India", "Approve all"]}
@@ -223,14 +226,27 @@ for url, needles in {f"/c/{cid}/ideas": ["Sample data", "how to clean silver ear
                      f"/c/{cid}/competitors?tab=keywords": ["AI Overview"], f"/c/{cid}/competitors?tab=gap": ["silver toe rings"],
                      f"/c/{cid}/technical": ["Duplicate title tags", "Semrush Site Audit, imported"],
                      f"/c/{cid}/technical?issue=semrush:4": ["Broken internal links"],
-                     f"/c/{cid}/search?tab=rankings": ["Semrush"], f"/c/{cid}/settings?tab=data": ["Remove sample data"]}.items():
+                     f"/c/{cid}/search?tab=rankings": ["Semrush"], f"/c/{cid}/settings?tab=data": ["Remove sample data"],
+                     f"/c/{cid}/research/keyword": ["silver anklets", "27,100", "silver payal", "Plan content"], f"/c/{cid}/research/keyword?tab=questions": ["how to clean silver anklets"],
+                     f"/c/{cid}/research/keyword?tab=serp": ["marketplace-one.example"],
+                     f"/c/{cid}/research/domain": ["Ranking keywords", "Organic traffic, last 12 months"],
+                     f"/c/{cid}/research/domain?tab=competitors": ["Shared keywords"],
+                     f"/c/{cid}/research/backlinks?tab=anchors": ["gargi by png"], f"/c/{cid}/research/backlinks?tab=new": ["Festive gifting guide"],
+                     f"/c/{cid}/research/paid?tab=copies": ["Sample ad"], f"/c/{cid}/research/paid?tab=shopping": ["Oxidised jhumka"],
+                     f"/c/{cid}/reddit": ["Brand vs competitors", "Gargi (you)", "r/pune"],
+                     f"/c/{cid}/reddit?tab=subreddits": ["r/weddingsIndia"], f"/c/{cid}/reddit?tab=questions": ["Tarnish and care", "Questions people ask"],
+                     f"/c/{cid}/reddit?tab=cited": ["Where to buy real silver jewellery online"],
+                     f"/c/{cid}/youtube": ["Topic searches", "silver anklets"], f"/c/{cid}/youtube?tab=videos": ["haul"],
+                     f"/c/{cid}/youtube?tab=creators": ["Style With Asha"], f"/c/{cid}/youtube?tab=comments": ["Questions viewers ask"],
+                     f"/c/{cid}/youtube?tab=cited": ["Real vs fake silver"]}.items():
     page = cl.get(url).get_data(as_text=True)
     for n in needles: assert n in page, (url, n)
 assert "Sample data" not in cl.get(f"/c/{cid}/ai").get_data(as_text=True)
 cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "sample_clear"})
 with connect() as conn:
     assert conn.execute("SELECT coalesce(sum(units),0), count(*) FROM semrush_usage").fetchone() == used        # no credits, nothing logged
-    for t in ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_gap", "tech_crawls", "tech_issues", "rank_positions"):
+    for t in ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_gap", "tech_crawls", "tech_issues", "rank_positions",
+              "research_lookups", "reddit_items", "youtube_videos", "youtube_comments"):
         assert conn.execute(f"SELECT count(*) FROM {t} WHERE client_id=%s AND sample", [cid]).fetchone()[0] == 0, t
     assert conn.execute("SELECT count(*) FROM semrush_keywords WHERE client_id=%s AND serp_features IS NOT NULL", [cid]).fetchone()[0] == real_feats
     assert conn.execute("SELECT count(*) FROM tech_issues WHERE client_id=%s AND issue_code='page_4xx'", [cid]).fetchone()[0] == 1   # real rows kept
@@ -240,6 +256,7 @@ print("sample data: every Semrush screen fills with marked rows, no credits logg
 with psycopg.connect(owner, autocommit=True) as c:                                                 # a client session sees only itself
     c.execute("SET ROLE aeo_app"); c.execute("SELECT set_config('app.client_id', %s, false)", [str(other)])
     for t in ("semrush_keywords", "keyword_gaps", "answers", "citations", "scores_daily", "ga4_organic_landing", "competitors",
-              "tech_issues", "rank_keywords", "rank_positions", "keyword_ideas", "backlink_overview", "backlink_gap"):
+              "tech_issues", "rank_keywords", "rank_positions", "keyword_ideas", "backlink_overview", "backlink_gap",
+              "research_lookups", "reddit_items", "youtube_videos"):
         assert c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0, t
 print("tenant isolation holds for the new tables")

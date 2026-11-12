@@ -94,3 +94,22 @@ per-feature caps: `SEMRUSH_CAP_IDEAS`, `SEMRUSH_CAP_BACKLINKS`, `SEMRUSH_CAP_GAP
 The 10,000-credit Site Audit snapshot report is never called.
 
 Test: `DATABASE_URL=... python tests/test_semrush_suite.py` (fake site and fake Semrush, no credits).
+
+## Research and Community (migration 010)
+
+Side panel → **Research**: Keyword research, Domain research, Backlink analytics, Paid and shopping
+(`collectors/semrush_research.py`). Each lookup is one button with its worst-case credits shown, capped like every
+Semrush call (`SEMRUSH_TOTAL_CAP`, optional `SEMRUSH_CAP_RESEARCH_<TOOL>`), and stored so reopening it is free. Rows can
+be sent to Rankings (Track) or Content ideas (Plan content).
+
+Side panel → **Community**:
+- **Reddit** (`collectors/reddit.py`, Apify, `APIFY_TOKEN`): brand vs competitor mentions and tone, subreddit map with
+  each brand's mentions per community, questions and pain points, and the Reddit threads ChatGPT cites. Paid per
+  result, capped by `APIFY_MAX_ITEMS` (per run, default 300) and `APIFY_TOTAL_ITEMS` (lifetime, default 1000). Manual only.
+  Actor: `APIFY_REDDIT_ACTOR` (default `trudax~reddit-scraper-lite`).
+- **YouTube** (`collectors/youtube.py`, YouTube Data API, `YOUTUBE_API_KEY`): share of voice in topic searches, videos
+  naming each brand, creators, questions and pain points from comments, videos ChatGPT cites. Free daily quota
+  (`YOUTUBE_DAILY_QUOTA`, default 10,000; a run stops at 90%). Runs every Monday once the key is set.
+
+Topics searched on Reddit and YouTube are set on either screen (default: the brand's top collection keywords).
+Settings → Data → Show sample data fills all of these screens with marked sample rows.

@@ -337,3 +337,153 @@ def backlinks(conn, client_id):
     gap = rows(conn.execute("""SELECT domain, ascore, links_to, status FROM backlink_gap WHERE client_id=%s AND pulled_on=%s AND status <> 'dismissed'
                                ORDER BY ascore DESC NULLS LAST LIMIT 200""", [client_id, gday]), ["domain", "ascore", "links_to", "status"]) if gday else []
     return {"day": day, "me": me, "overview": ov, "refdomains": ref, "gap": gap, "gap_day": gday}
+
+# ------------------------------------------------------------------ research lookups (Semrush)
+def lookups(conn, client_id, tool, limit=12):
+    return rows(conn.execute("""SELECT lookup_id, query, database, pulled_at, units, sample FROM research_lookups WHERE client_id=%s AND tool=%s
+                                ORDER BY pulled_at DESC LIMIT %s""", [client_id, tool, limit]), ["id", "query", "database", "at", "units", "sample"])
+
+def lookup(conn, client_id, tool, lookup_id=None):
+    q = """SELECT lookup_id, query, database, pulled_at, units, result, sample FROM research_lookups WHERE client_id=%s AND tool=%s"""
+    r = conn.execute(q + (" AND lookup_id::text=%s" if lookup_id else " ORDER BY pulled_at DESC LIMIT 1"),
+                     [client_id, tool] + ([lookup_id] if lookup_id else [])).fetchone()
+    if not r: return None
+    out = dict(zip(["id", "query", "database", "at", "units", "result", "sample"], r))
+    res = out["result"]
+    for sec in res.values():                               # SERP feature names for every row that has codes
+        for row in (sec if isinstance(sec, list) else [sec] if isinstance(sec, dict) else []):
+            if isinstance(row, dict) and ("fk" in row or "fp" in row):
+                row["features"] = serp_features(row.get("fk"), row.get("fp"))
+    return out
+
+# ------------------------------------------------------------------ Reddit
+def _client_brand(conn, client_id):
+    return conn.execute("SELECT name FROM clients WHERE client_id=%s", [client_id]).fetchone()[0]
+
+def reddit_summary(conn, client_id):
+    total, last = conn.execute("SELECT count(*), max(pulled_on) FROM reddit_items WHERE client_id=%s", [client_id]).fetchone()
+    if not total: return None
+    me = _client_brand(conn, client_id)
+    brands = rows(conn.execute("""SELECT b, count(*), count(*) FILTER (WHERE sentiment='positive'), count(*) FILTER (WHERE sentiment='negative'),
+                                         count(DISTINCT subreddit), coalesce(sum(score),0)
+                                  FROM reddit_items, unnest(brands) b WHERE client_id=%s GROUP BY b ORDER BY count(*) DESC""", [client_id]),
+                  ["brand", "mentions", "positive", "negative", "subreddits", "upvotes"])
+    allm = sum(b["mentions"] for b in brands) or 1
+    for b in brands: b["share"] = b["mentions"] / allm; b["is_client"] = b["brand"] == me
+    q = conn.execute("SELECT count(*) FILTER (WHERE is_question), count(*) FILTER (WHERE pain_point IS NOT NULL) FROM reddit_items WHERE client_id=%s",
+                     [client_id]).fetchone()
+    return {"total": total, "last": last, "brands": brands, "me": me, "questions": q[0], "pains": q[1]}
+
+def subreddit_map(conn, client_id, brand_names):
+    out = rows(conn.execute("""SELECT subreddit, count(*), count(*) FILTER (WHERE found_by='cited'), max(created_at), coalesce(sum(score),0),
+                                      count(*) FILTER (WHERE is_question)
+                               FROM reddit_items WHERE client_id=%s AND subreddit IS NOT NULL GROUP BY subreddit ORDER BY count(*) DESC LIMIT 40""", [client_id]),
+               ["subreddit", "posts", "cited", "last", "upvotes", "questions"])
+    per = {}
+    for sub, b, n in conn.execute("""SELECT subreddit, b, count(*) FROM reddit_items, unnest(brands) b WHERE client_id=%s GROUP BY 1, 2""", [client_id]):
+        per.setdefault(sub, {})[b] = n
+    for r in out: r["by_brand"] = [per.get(r["subreddit"], {}).get(b, 0) for b in brand_names]
+    return out
+
+def reddit_items(conn, client_id, brand=None, sentiment=None, limit=60):
+    return rows(conn.execute("""SELECT kind, subreddit, title, body, url, score, comments, created_at, brands, sentiment, found_by
+                                FROM reddit_items WHERE client_id=%s AND (%s::text IS NULL OR %s = ANY(brands)) AND (%s::text IS NULL OR sentiment=%s)
+                                AND cardinality(brands) > 0 ORDER BY score DESC NULLS LAST LIMIT %s""",
+                             [client_id, brand, brand, sentiment, sentiment, limit]),
+                ["kind", "subreddit", "title", "body", "url", "score", "comments", "created_at", "brands", "sentiment", "found_by"])
+
+def reddit_questions(conn, client_id):
+    qs = rows(conn.execute("""SELECT coalesce(topic, query, 'Other') t, title, body, url, subreddit, score, comments FROM reddit_items
+                              WHERE client_id=%s AND is_question ORDER BY t, score DESC NULLS LAST""", [client_id]),
+              ["topic", "title", "body", "url", "subreddit", "score", "comments"])
+    groups = {}
+    for q in qs: groups.setdefault(q["topic"], []).append(q)
+    pains = rows(conn.execute("""SELECT pain_point, count(*), count(*) FILTER (WHERE cardinality(brands) > 0),
+                                        (array_agg(coalesce(title, left(body, 160)) ORDER BY score DESC NULLS LAST))[1:3]
+                                 FROM reddit_items WHERE client_id=%s AND pain_point IS NOT NULL GROUP BY 1 ORDER BY 2 DESC""", [client_id]),
+                 ["theme", "items", "with_brand", "examples"])
+    return groups, pains
+
+def reddit_cited(conn, client_id):
+    """Reddit threads ChatGPT cited for this brand's prompts, with the brands named in each (from the pulled thread)."""
+    import re as _re
+    cites = rows(conn.execute("""SELECT c.url, count(*), count(DISTINCT r.prompt_id),
+                                        bool_or(EXISTS (SELECT 1 FROM mentions m WHERE m.answer_id = c.answer_id AND m.is_client))
+                                 FROM citations c JOIN answers a ON a.answer_id = c.answer_id JOIN runs r ON r.run_id = a.run_id
+                                 WHERE c.client_id=%s AND (c.domain = 'reddit.com' OR c.domain LIKE '%%.reddit.com') GROUP BY c.url ORDER BY 2 DESC""", [client_id]),
+                 ["url", "times", "prompts", "client_in_answer"])
+    items = conn.execute("SELECT url, subreddit, title, brands, score, comments FROM reddit_items WHERE client_id=%s AND url LIKE '%%/comments/%%'",
+                         [client_id]).fetchall()
+    tid = lambda u: (_re.search(r"/comments/([a-z0-9]+)", u or "", _re.I) or [None, None])[1]
+    by_thread = {}
+    for u, sub, title, brands, score, ncom in items:
+        t = tid(u)
+        if not t: continue
+        d = by_thread.setdefault(t.lower(), {"subreddit": sub, "title": None, "brands": set(), "score": None, "comments": None})
+        d["brands"] |= set(brands or [])
+        if title: d.update(title=title, score=score, comments=ncom)
+    have = {(tid(c["url"]) or "").lower() for c in cites}
+    for u, in conn.execute("""SELECT DISTINCT url FROM reddit_items WHERE client_id=%s AND sample AND found_by='cited'""", [client_id]).fetchall():
+        if (tid(u) or "").lower() not in have:           # sample rows stand in for citations until ChatGPT runs
+            cites.append({"url": u, "times": 1, "prompts": 1, "client_in_answer": False}); have.add((tid(u) or "").lower())
+    for c in cites:
+        d = by_thread.get((tid(c["url"]) or "").lower(), {})
+        c.update(subreddit=d.get("subreddit"), title=d.get("title"), brands=sorted(d.get("brands", [])), score=d.get("score"), comments=d.get("comments"),
+                 pulled=bool(d))
+    return cites
+
+# ------------------------------------------------------------------ YouTube
+def youtube_summary(conn, client_id):
+    total, last = conn.execute("SELECT count(*), max(pulled_on) FROM youtube_videos WHERE client_id=%s", [client_id]).fetchone()
+    if not total: return None
+    me = _client_brand(conn, client_id)
+    brands = rows(conn.execute("""SELECT b, count(*), coalesce(sum(views),0), count(*) FILTER (WHERE found_by='topic'),
+                                         count(DISTINCT channel_id)
+                                  FROM youtube_videos, unnest(brands) b WHERE client_id=%s GROUP BY b ORDER BY sum(views) DESC NULLS LAST""", [client_id]),
+                  ["brand", "videos", "views", "in_topic", "channels"])
+    allv = sum(b["views"] for b in brands) or 1
+    for b in brands: b["share"] = b["views"] / allv; b["is_client"] = b["brand"] == me
+    own = conn.execute("SELECT count(*), coalesce(sum(views),0) FROM youtube_videos WHERE client_id=%s AND own_channel", [client_id]).fetchone()
+    return {"videos": total, "last": last, "brands": brands, "me": me, "own_videos": own[0], "own_views": own[1]}
+
+def youtube_topics(conn, client_id, brand_names):
+    """For each topic search: who appears in the top results and how high."""
+    out = []
+    for (q,) in conn.execute("SELECT DISTINCT query FROM youtube_videos WHERE client_id=%s AND found_by='topic' ORDER BY 1", [client_id]).fetchall():
+        vids = rows(conn.execute("""SELECT search_rank, title, channel, views, brands, own_channel, video_id FROM youtube_videos
+                                    WHERE client_id=%s AND found_by='topic' AND query=%s ORDER BY search_rank NULLS LAST""", [client_id, q]),
+                    ["rank", "title", "channel", "views", "brands", "own", "id"])
+        best = {b: min([v["rank"] for v in vids if b in v["brands"] and v["rank"]] or [None], key=lambda x: x or 999) for b in brand_names}
+        out.append({"query": q, "videos": vids, "count": [sum(1 for v in vids if b in v["brands"]) for b in brand_names],
+                    "best": [best[b] for b in brand_names]})
+    return out
+
+def youtube_videos(conn, client_id, brand=None, limit=60):
+    return rows(conn.execute("""SELECT video_id, title, channel, published_at, views, likes, comments, duration_s, brands, own_channel, found_by, query
+                                FROM youtube_videos WHERE client_id=%s AND (%s::text IS NULL OR %s = ANY(brands)) AND cardinality(brands) > 0
+                                ORDER BY views DESC NULLS LAST LIMIT %s""", [client_id, brand, brand, limit]),
+                ["id", "title", "channel", "published", "views", "likes", "comments", "duration", "brands", "own", "found_by", "query"])
+
+def youtube_creators(conn, client_id, limit=30):
+    return rows(conn.execute("""SELECT c.channel_id, c.title, c.subscribers, count(v.*), coalesce(sum(v.views),0),
+                                       array_remove(array_agg(DISTINCT b), NULL)
+                                FROM youtube_channels c JOIN youtube_videos v ON v.client_id=c.client_id AND v.channel_id=c.channel_id
+                                LEFT JOIN LATERAL unnest(v.brands) b ON true
+                                WHERE c.client_id=%s AND NOT v.own_channel GROUP BY c.channel_id, c.title, c.subscribers
+                                ORDER BY c.subscribers DESC NULLS LAST LIMIT %s""", [client_id, limit]),
+                ["id", "title", "subscribers", "videos", "views", "brands"])
+
+def youtube_comment_insights(conn, client_id):
+    qs = rows(conn.execute("""SELECT c.text, c.likes, v.title, v.video_id FROM youtube_comments c JOIN youtube_videos v USING (client_id, video_id)
+                              WHERE c.client_id=%s AND c.is_question ORDER BY c.likes DESC NULLS LAST LIMIT 40""", [client_id]),
+              ["text", "likes", "video", "video_id"])
+    pains = rows(conn.execute("""SELECT pain_point, count(*), (array_agg(left(text, 160) ORDER BY likes DESC NULLS LAST))[1:3]
+                                 FROM youtube_comments WHERE client_id=%s AND pain_point IS NOT NULL GROUP BY 1 ORDER BY 2 DESC""", [client_id]),
+                 ["theme", "items", "examples"])
+    return qs, pains
+
+def youtube_cited(conn, client_id):
+    return rows(conn.execute("""SELECT v.video_id, v.title, v.channel, v.views, v.brands, greatest(count(c.*), CASE WHEN v.sample THEN 1 ELSE 0 END)
+                                FROM youtube_videos v LEFT JOIN citations c ON c.client_id=v.client_id AND (c.url LIKE '%%' || v.video_id || '%%')
+                                WHERE v.client_id=%s AND (v.found_by='cited' OR c.url IS NOT NULL) GROUP BY 1,2,3,4,5, v.sample ORDER BY 6 DESC""", [client_id]),
+                ["id", "title", "channel", "views", "brands", "times"])

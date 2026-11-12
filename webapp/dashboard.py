@@ -241,7 +241,7 @@ def settings(cid):
         runs, budget = A.last_runs(conn, cid), A.semrush_budget(conn)
         project = conn.execute("SELECT semrush_project_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         actions, by_feature = semrush_actions(conn, cid), A.semrush_by_feature(conn)
-    keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY", "SEMRUSH_API_KEY")}
+    keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
     return view("settings.html", c, "settings", tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
                 msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature)
 
@@ -383,13 +383,165 @@ def semrush_run(cid):
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
 
-def start_job(cid, only, max_units=None, seeds=""):
+def start_job(cid, only, max_units=None, seeds="", research=""):
     """Runs the daily job for one client in the background. Results go to the run log on screen; full output,
     errors included, is appended to logs/jobs.log in the project folder."""
     import datetime as dt
     logdir = os.path.join(HERE, "..", "logs"); os.makedirs(logdir, exist_ok=True)
     out = open(os.path.join(logdir, "jobs.log"), "a")
     out.write(f"\n=== {dt.datetime.now():%Y-%m-%d %H:%M:%S} {only} for {cid}\n"); out.flush()
-    extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else [])
+    extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else [])
     subprocess.Popen([sys.executable, os.path.join(HERE, "..", "collectors", "daily.py"), "--client-id", cid, "--only", only, "--force-weekly"] + extra,
                      stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+
+
+# ------------------------------------------------------------------ Research (Semrush lookups)
+TOOLS = {"keyword": ("Keyword research", "keyword"), "domain": ("Domain research", "domain"),
+         "backlinks": ("Backlink analytics", "domain"), "paid": ("Paid and shopping", "domain")}
+
+def back_with(url, msg):
+    from urllib.parse import urlencode
+    return redirect(url + ("&" if "?" in url else "?") + urlencode({"msg": msg}))
+
+@bp.get("/c/<cid>/research/<tool>")
+def research(cid, tool):
+    if tool not in TOOLS: abort(404)
+    import semrush_research as sr, semrush_suite as ss
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        hist, cur = A.lookups(conn, cid, tool), A.lookup(conn, cid, tool, request.args.get("id"))
+        budget = A.semrush_budget(conn)
+        comps = ss.tracked_competitors(conn, cid, 6)
+        tracked = {r[0] for r in conn.execute("SELECT lower(keyword) FROM rank_keywords WHERE client_id=%s", [cid])}
+        ideas = {r[0] for r in conn.execute("SELECT lower(keyword) FROM keyword_ideas WHERE client_id=%s", [cid])}
+    cost = sr.estimate(tool)
+    why = (None if os.environ.get("SEMRUSH_API_KEY") else "No Semrush key on the server") or \
+          (f"Needs up to {cost:,} credits; the limit leaves {budget['left']:,}" if cost > budget["left"] else None)
+    chart = None
+    if cur and tool == "domain" and cur["result"].get("history"):
+        pts = sorted(cur["result"]["history"], key=lambda r: str(r.get("date")))
+        chart = line_chart([{"date": __import__("datetime").date.fromisoformat(str(p["date"])[:10]) if str(p.get("date", ""))[:4].isdigit() else None,
+                             "traffic": p.get("org_traffic") or 0} for p in pts if p.get("date")], ["traffic"])
+    return view("research.html", c, f"r_{tool}", tool=tool, label=TOOLS[tool][0], kind=TOOLS[tool][1], hist=hist, cur=cur, cost=cost, why=why,
+                tab=request.args.get("tab"), comps=comps, tracked=tracked, ideas=ideas, chart=chart, msg=request.args.get("msg"))
+
+@bp.post("/c/<cid>/research/<tool>")
+def research_run(cid, tool):
+    check_csrf()
+    if tool not in TOOLS: abort(404)
+    import semrush_research as sr
+    back = url_for("dash.research", cid=cid, tool=tool, id=request.form.get("lookup") or None, tab=request.form.get("tab") or None)
+    with connect() as conn:
+        client_or_404(conn, cid)
+        kw = (request.form.get("keyword") or "").strip().lower()[:200]
+        if request.form.get("do") == "track" and kw:
+            import rank
+            conn.execute("INSERT INTO rank_keywords (client_id, keyword) VALUES (%s,%s) ON CONFLICT DO NOTHING", [cid, kw])
+            rank.sync_client(conn, cid, days=90)
+            return back_with(back, f"Tracking “{kw}” in Rankings.")
+        if request.form.get("do") == "idea" and kw:
+            conn.execute("""INSERT INTO keyword_ideas (client_id, seed, kind, keyword, search_volume, kd, pulled_on, status)
+                            VALUES (%s,%s,%s,%s,%s,%s,current_date,'planned') ON CONFLICT (client_id, kind, keyword) DO UPDATE SET status='planned'""",
+                         [cid, request.form.get("seed") or kw, "question" if request.form.get("kind") == "question" else "related", kw,
+                          request.form.get("volume") or None, request.form.get("kd") or None])
+            return back_with(back, f"“{kw}” added to Content ideas as planned.")
+        q = (request.form.get("query") or "").strip()
+        if not q: return back_with(back, "Type a keyword or domain first.")
+        cost, budget = sr.estimate(tool), A.semrush_budget(conn)
+        if not os.environ.get("SEMRUSH_API_KEY"): return back_with(back, "No Semrush key on the server, so nothing was pulled.")
+        if cost > budget["left"]: return back_with(back, f"Needs up to {cost:,} credits; the limit leaves {budget['left']:,}. Nothing was pulled.")
+    start_job(cid, "research", max_units=cost, research=f"{tool}:{q}")
+    return back_with(url_for("dash.research", cid=cid, tool=tool), f"Looking up {q}: up to {cost:,} credits. Refresh in a minute.")
+
+# ------------------------------------------------------------------ Community: Reddit and YouTube
+def brand_cols(conn, cid):
+    import community
+    from ai_visibility import tracked_brands
+    return [{"name": b["name"], "label": community.display_name(b), "is_client": b["is_client"]} for b in tracked_brands(conn, cid)]
+
+def topics_of(conn, cid):
+    import semrush_suite
+    t = conn.execute("SELECT community_topics FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
+    return list(t or []), semrush_suite.default_seeds(conn, cid)
+
+@bp.get("/c/<cid>/reddit")
+def reddit_view(cid):
+    tab = request.args.get("tab", "overview")
+    import reddit as rd
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        cols = brand_cols(conn, cid)
+        summ = A.reddit_summary(conn, cid)
+        data = {}
+        if tab == "overview": data["items"] = A.reddit_items(conn, cid, request.args.get("brand"), request.args.get("sentiment"))
+        if tab == "subreddits": data["subs"] = A.subreddit_map(conn, cid, [b["name"] for b in cols])
+        if tab == "questions": data["groups"], data["pains"] = A.reddit_questions(conn, cid)
+        if tab == "cited": data["cited"] = A.reddit_cited(conn, cid)
+        topics, defaults = topics_of(conn, cid)
+        left = rd.items_left(conn)
+    labels = {b["name"]: b["label"] for b in cols}
+    why = None if os.environ.get("APIFY_TOKEN") else "No Apify token on the server"
+    if not why and left <= 0: why = "The Apify result limit is used up"
+    return view("reddit.html", c, "reddit", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, defaults=defaults,
+                run_items=min(rd.RUN_ITEMS, left), left=left, why=why, msg=request.args.get("msg"),
+                brand=request.args.get("brand"), sentiment=request.args.get("sentiment"))
+
+@bp.post("/c/<cid>/reddit")
+def reddit_save(cid):
+    check_csrf()
+    import reddit as rd
+    with connect() as conn:
+        client_or_404(conn, cid)
+        if request.form.get("what") == "topics":
+            save_topics(conn, cid, request.form.get("topics", ""))
+            return back_with(url_for("dash.reddit_view", cid=cid, tab=request.form.get("tab", "overview")), "Topics saved for Reddit and YouTube.")
+        if not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
+        n = min(rd.RUN_ITEMS, rd.items_left(conn))
+        if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Apify result limit is used up.")
+        import sample_semrush; sample_semrush.clear(conn, cid)
+    start_job(cid, "reddit", max_units=n)
+    return back_with(url_for("dash.reddit_view", cid=cid), f"Reddit pull started: up to {n} results. Refresh in a few minutes.")
+
+def save_topics(conn, cid, text):
+    topics = [t.strip().lower()[:80] for t in text.replace("\n", ",").split(",") if t.strip()][:8]
+    conn.execute("UPDATE clients SET community_topics=%s WHERE client_id=%s", [topics, cid])
+
+@bp.get("/c/<cid>/youtube")
+def youtube_view(cid):
+    tab = request.args.get("tab", "overview")
+    import youtube as yt
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        cols = brand_cols(conn, cid)
+        summ = A.youtube_summary(conn, cid)
+        data = {}
+        if tab == "overview": data["topics"] = A.youtube_topics(conn, cid, [b["name"] for b in cols])
+        if tab == "videos": data["videos"] = A.youtube_videos(conn, cid, request.args.get("brand"))
+        if tab == "creators": data["creators"] = A.youtube_creators(conn, cid)
+        if tab == "comments": data["questions"], data["pains"] = A.youtube_comment_insights(conn, cid)
+        if tab == "cited": data["cited"] = A.youtube_cited(conn, cid)
+        topics, defaults = topics_of(conn, cid)
+        channel = conn.execute("SELECT youtube_channel_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
+        quota = yt.used_today(conn)
+    labels = {b["name"]: b["label"] for b in cols}
+    why = None if os.environ.get("YOUTUBE_API_KEY") else "No YouTube API key on the server"
+    return view("youtube.html", c, "youtube", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, defaults=defaults,
+                channel=channel, quota=quota, daily=yt.DAILY, why=why, msg=request.args.get("msg"), brand=request.args.get("brand"))
+
+@bp.post("/c/<cid>/youtube")
+def youtube_save(cid):
+    check_csrf()
+    with connect() as conn:
+        client_or_404(conn, cid)
+        what = request.form.get("what")
+        if what == "topics":
+            save_topics(conn, cid, request.form.get("topics", ""))
+            return back_with(url_for("dash.youtube_view", cid=cid), "Topics saved for Reddit and YouTube.")
+        if what == "channel":
+            ch = "".join(ch for ch in request.form.get("channel", "") if ch.isalnum() or ch in "-_")[:40] or None
+            conn.execute("UPDATE clients SET youtube_channel_id=%s WHERE client_id=%s", [ch, cid])
+            return back_with(url_for("dash.youtube_view", cid=cid), "Channel saved.")
+        if not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "No YouTube API key on the server, so nothing was pulled.")
+        import sample_semrush; sample_semrush.clear(conn, cid)
+    start_job(cid, "youtube")
+    return back_with(url_for("dash.youtube_view", cid=cid), "YouTube pull started (free daily quota). Refresh in a minute or two.")

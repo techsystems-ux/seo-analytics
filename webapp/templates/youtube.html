@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Community · YouTube</span><h1>What YouTube shows</h1>
+<p class="lead">Who shows up when people search the category on YouTube, which videos and creators name {{ client.name }} or its competitors, what viewers ask in the comments, and the videos ChatGPT cites in its answers.</p></div></div>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+<div class="grid2">
+<form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="topics">
+  <div style="flex:1 1 240px"><label for="tp">Topics searched (comma separated; shared with Reddit)</label><input id="tp" type="text" name="topics" value="{{ topics|join(', ') }}" placeholder="{{ defaults|join(', ') }}"></div>
+  <button class="btn blk">Save</button></form>
+<form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="channel">
+  <div style="flex:1 1 200px"><label for="ch">{{ client.name }}'s YouTube channel ID (optional)</label><input id="ch" type="text" name="channel" value="{{ channel or '' }}" placeholder="starts with UC…"></div>
+  <button class="btn blk">Save</button></form></div>
+<form method="post" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run">
+  <button class="btn {{ 'red' if not why else 'ln' }}" {{ 'disabled' if why }}>Pull YouTube · free quota</button>
+  <span class="note">{{ why ~ '. ' if why }}Uses Google's free daily quota ({{ quota|n }} of {{ daily|n }} used today); a full pull uses about 1,000–1,500. Runs every Monday on its own once the key is set.</span></form>
+</section>
+
+{% if summ %}
+{% set mine = summ.brands|selectattr('is_client')|first %}
+<div class="grid">
+  <div class="card kpi"><div class="l">Videos naming {{ client.name }}</div><div class="v">{{ mine.videos|n if mine else 0 }}</div><div class="s mute">{{ mine.channels|n if mine else 0 }} channels</div></div>
+  <div class="card kpi"><div class="l">Views on those</div><div class="v">{{ mine.views|n if mine else 0 }}</div><div class="s mute">all time</div></div>
+  <div class="card kpi"><div class="l">Share of views</div><div class="v">{{ mine.share|pct if mine else '0%' }}</div><div class="s mute">across videos naming tracked brands</div></div>
+  <div class="card kpi"><div class="l">Own channel</div><div class="v">{{ summ.own_videos|n }}</div><div class="s mute">videos found · {{ summ.own_views|n }} views</div></div>
+  <div class="card kpi"><div class="l">Pulled</div><div class="v" style="font-size:18px">{{ summ.last.strftime('%d %b %Y') }}</div><div class="s mute">{{ summ.videos|n }} videos</div></div>
+</div>
+<section class="card"><h2>Brand vs competitors</h2>
+<div class="tw"><table><tr><th>Brand</th><th class="r">Videos</th><th class="r">Views</th><th style="width:28%">Share of views</th><th class="r">In topic searches</th><th class="r">Channels</th></tr>
+{% for b in summ.brands %}<tr><td>{% if b.is_client %}<b>{{ client.name }} (you)</b>{% else %}{{ labels.get(b.brand, b.brand) }}{% endif %}</td><td class="r">{{ b.videos|n }}</td><td class="r">{{ b.views|n }}</td>
+<td><div style="background:#F0F0F0;border-radius:6px;height:10px"><div style="width:{{ (b.share * 100)|round(1) }}%;height:10px;border-radius:6px;background:{{ '#B20F00' if b.is_client else '#000' }}"></div></div><span class="note">{{ b.share|pct }}</span></td>
+<td class="r">{{ b.in_topic|n }}</td><td class="r">{{ b.channels|n }}</td></tr>{% endfor %}</table></div></section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+<div class="seg">{% for k, l in [('overview','Topic searches'),('videos','Videos'),('creators','Creators'),('comments','Comments'),('cited','Videos ChatGPT cites')] %}<a class="{{ 'on' if tab==k }}" href="?tab={{ k }}">{{ l }}</a>{% endfor %}</div>
+
+{% if tab=='overview' %}
+<p class="note">For each topic, the top YouTube results in India: how many name each brand, and the highest position a video naming it reaches.</p>
+{% if data.topics %}<div class="tw"><table><tr><th>Search</th>{% for b in cols %}<th class="r">{{ 'You' if b.is_client else b.label }}</th>{% endfor %}<th>Top result</th></tr>
+{% for t in data.topics %}<tr><td><b>{{ t.query }}</b><br><span class="note">{{ t.videos|length }} results read</span></td>
+{% for n in t.count %}<td class="r">{% if n %}<b>{{ n }}</b> <span class="note">best #{{ t.best[loop.index0] }}</span>{% else %}<span class="mute">–</span>{% endif %}</td>{% endfor %}
+<td style="max-width:300px">{% set v = t.videos[0] %}{% if v %}<a href="https://www.youtube.com/watch?v={{ v.id }}" target="_blank" rel="noopener">{{ v.title }}</a><br><span class="note">{{ v.channel }} · {{ v.views|n }} views</span>{% endif %}</td></tr>{% endfor %}</table></div>
+<p class="note">Topics where competitors appear and {{ client.name }} does not are where a video, or a creator collaboration, can earn a place.</p>
+{% else %}<p class="empty">No topic searches yet.</p>{% endif %}
+
+{% elif tab=='videos' %}
+<div style="display:flex;gap:6px;flex-wrap:wrap"><a class="tag {{ 't-blk' if not brand else 't-pass' }}" href="?tab=videos">All brands</a>{% for b in cols %}<a class="tag {{ 't-blk' if brand==b.name else 't-pass' }}" href="?tab=videos&brand={{ b.name|urlencode }}">{{ b.label }}</a>{% endfor %}</div>
+{% if data.videos %}<div class="tw"><table><tr><th>Video</th><th>Channel</th><th>Brands named</th><th class="r">Views</th><th class="r">Likes</th><th class="r">Comments</th><th>Published</th></tr>
+{% for v in data.videos %}<tr><td style="max-width:420px"><a href="https://www.youtube.com/watch?v={{ v.id }}" target="_blank" rel="noopener"><b>{{ v.title }}</b></a><br><span class="note">{{ 'own channel · ' if v.own }}{{ v.found_by }}{{ ': ' ~ v.query if v.query }}{{ ' · ' ~ (v.duration // 60) ~ ' min' if v.duration }}</span></td>
+<td>{{ v.channel }}</td><td>{% for b in v.brands %}<span class="tag {{ 't-blk' if b==summ.me else 't-pass' }}">{{ labels.get(b, b) }}</span> {% endfor %}</td>
+<td class="r">{{ v.views|n }}</td><td class="r">{{ v.likes|n }}</td><td class="r">{{ v.comments|n }}</td><td>{{ v.published.strftime('%b %Y') if v.published else '' }}</td></tr>{% endfor %}</table></div>
+{% else %}<p class="empty">No videos for this filter.</p>{% endif %}
+
+{% elif tab=='creators' %}
+<p class="note">Channels in the results, by size, and which brands their videos name: a starting list for creator outreach.</p>
+{% if data.creators %}<div class="tw"><table><tr><th>Channel</th><th class="r">Subscribers</th><th class="r">Videos found</th><th class="r">Views on them</th><th>Brands they name</th></tr>
+{% for c in data.creators %}<tr><td><a href="https://www.youtube.com/channel/{{ c.id }}" target="_blank" rel="noopener"><b>{{ c.title }}</b></a></td><td class="r">{{ c.subscribers|n }}</td><td class="r">{{ c.videos|n }}</td><td class="r">{{ c.views|n }}</td>
+<td>{% for b in c.brands %}<span class="tag {{ 't-blk' if b==summ.me else 't-pass' }}">{{ labels.get(b, b) }}</span> {% else %}<span class="mute">none yet: open to approach</span>{% endfor %}</td></tr>{% endfor %}</table></div>
+{% else %}<p class="empty">No creators yet.</p>{% endif %}
+
+{% elif tab=='comments' %}
+<div class="grid2">
+<div><h2>Questions viewers ask</h2>{% for q in data.questions %}<p style="margin:0 0 8px">“{{ q.text[:200] }}{{ '…' if q.text|length > 200 }}” <span class="note">{{ q.likes|n }} likes · on <a href="https://www.youtube.com/watch?v={{ q.video_id }}" target="_blank" rel="noopener">{{ q.video[:50] }}</a></span></p>{% else %}<p class="empty">No questions found.</p>{% endfor %}</div>
+<div><h2>Pain points</h2>{% if data.pains %}<table><tr><th>Theme</th><th class="r">Comments</th></tr>{% for p in data.pains %}<tr><td><b>{{ p.theme }}</b>{% for e in p.examples %}<br><span class="note">“{{ e }}”</span>{% endfor %}</td><td class="r">{{ p['items']|n }}</td></tr>{% endfor %}</table>{% else %}<p class="empty">None found.</p>{% endif %}</div></div>
+
+{% else %}
+<p class="note">YouTube videos ChatGPT cited in its answers to {{ client.name }}'s prompts.</p>
+{% if data.cited %}<div class="tw"><table><tr><th>Video</th><th>Channel</th><th class="r">Views</th><th>Brands named</th><th class="r">Times cited</th></tr>
+{% for v in data.cited %}<tr><td><a href="https://www.youtube.com/watch?v={{ v.id }}" target="_blank" rel="noopener"><b>{{ v.title }}</b></a></td><td>{{ v.channel }}</td><td class="r">{{ v.views|n }}</td>
+<td>{% for b in v.brands %}<span class="tag {{ 't-blk' if b==summ.me else 't-pass' }}">{{ labels.get(b, b) }}</span> {% else %}<span class="mute">none</span>{% endfor %}</td><td class="r">{{ v.times|n }}</td></tr>{% endfor %}</table></div>
+{% else %}<p class="empty">ChatGPT has not cited YouTube in the answers so far.</p>{% endif %}
+{% endif %}
+</section>
+{% else %}
+<section class="card"><p class="empty">No YouTube data yet. Add a YouTube API key on the server and press Pull YouTube, or show the sample in Settings → Data.</p></section>
+{% endif %}
+{% endblock %}

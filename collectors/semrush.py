@@ -18,7 +18,11 @@ API = "https://api.semrush.com/"
 # Prices from Semrush's API docs. Per line unless listed in PER_REQUEST.
 UNIT_COST = {"domain_organic": 10, "domain_organic_organic": 40, "domain_domains": 80,
              "phrase_questions": 40, "phrase_related": 40,
-             "backlinks_overview": 40, "backlinks_refdomains": 40, "backlinks_matrix": 40}
+             "backlinks_overview": 40, "backlinks_refdomains": 40, "backlinks_matrix": 40,
+             # research screens (Semrush API price list; first real runs should be small to confirm)
+             "phrase_this": 10, "phrase_fullsearch": 20, "phrase_organic": 10, "domain_ranks": 10, "domain_rank_history": 10,
+             "domain_organic_unique": 10, "backlinks_anchors": 40, "backlinks": 40, "domain_adwords": 20, "domain_adwords_unique": 40,
+             "domain_shopping": 30}
 PER_REQUEST = {"backlinks_overview"}
 BACKLINKS_API = "https://api.semrush.com/analytics/v1/"
 ORGANIC_COLS = "Ph,Po,Pp,Nq,Cp,Ur,Tr,Co,Kd,In,Fk,Fp"

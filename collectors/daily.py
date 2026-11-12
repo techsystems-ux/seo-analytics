@@ -36,10 +36,11 @@ def weekly_due(conn, client_id, name, force):
     return last is None
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl")
+    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl,youtube")
     ap.add_argument("--force-weekly", action="store_true")
     ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")
     ap.add_argument("--seeds", default="", help="topics for semrush_ideas, separated by ;")
+    ap.add_argument("--research", default="", help="tool:query for a Semrush research lookup, e.g. keyword:silver anklets")
     a = ap.parse_args(); only = set(a.only.split(",")); ok = True
     import gsc, ga4
     from google_auth import SessionPool
@@ -88,6 +89,18 @@ def main():
                          "semrush_audit": lambda: sp.import_audit(conn, cid, key, max_units=a.max_units),
                          "semrush_rank": lambda: sp.import_positions(conn, cid, key, max_units=a.max_units)}
                 for f in manual: ok &= log(conn, cid, f, steps[f])
+            # Research lookups (Semrush), Reddit (Apify, paid per result): only when named, with an explicit limit
+            if a.research and key and a.max_units > 0:
+                import semrush_research as sr
+                tool, _, q = a.research.partition(":")
+                ok &= log(conn, cid, f"research_{tool}", lambda: "{} units".format(sr.run(conn, cid, key, tool, q, max_units=a.max_units)[1]))
+            if "reddit" in only and os.environ.get("APIFY_TOKEN") and a.max_units > 0:
+                import reddit
+                ok &= log(conn, cid, "reddit", lambda: reddit.run(conn, cid, os.environ["APIFY_TOKEN"], a.max_units))
+            # YouTube: free daily quota, so it runs weekly on its own once a key is set
+            if "youtube" in only and os.environ.get("YOUTUBE_API_KEY") and weekly_due(conn, cid, "youtube", a.force_weekly):
+                import youtube
+                ok &= log(conn, cid, "youtube", lambda: youtube.run(conn, cid, os.environ["YOUTUBE_API_KEY"]))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(

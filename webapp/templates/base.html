@@ -60,6 +60,14 @@ label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:upperca
     <a class="{{ 'on' if active=='search' }}" href="{{ url_for('dash.search', cid=client.id) }}">Search performance</a>
     <a class="{{ 'on' if active=='ai' }}" href="{{ url_for('dash.ai', cid=client.id) }}">AI visibility</a>
     <a class="{{ 'on' if active=='competitors' }}" href="{{ url_for('dash.competitors', cid=client.id) }}">Competitors</a></div>
+  <div class="grp"><span class="h">Research</span>
+    <a class="{{ 'on' if active=='r_keyword' }}" href="{{ url_for('dash.research', cid=client.id, tool='keyword') }}">Keyword research</a>
+    <a class="{{ 'on' if active=='r_domain' }}" href="{{ url_for('dash.research', cid=client.id, tool='domain') }}">Domain research</a>
+    <a class="{{ 'on' if active=='r_backlinks' }}" href="{{ url_for('dash.research', cid=client.id, tool='backlinks') }}">Backlink analytics</a>
+    <a class="{{ 'on' if active=='r_paid' }}" href="{{ url_for('dash.research', cid=client.id, tool='paid') }}">Paid and shopping</a></div>
+  <div class="grp"><span class="h">Community</span>
+    <a class="{{ 'on' if active=='reddit' }}" href="{{ url_for('dash.reddit_view', cid=client.id) }}">Reddit</a>
+    <a class="{{ 'on' if active=='youtube' }}" href="{{ url_for('dash.youtube_view', cid=client.id) }}">YouTube</a></div>
   <div class="grp"><span class="h">Work</span>
     <a class="{{ 'on' if active=='pages' }}" href="{{ url_for('dash.pages', cid=client.id) }}">Pages</a>
     <a class="{{ 'on' if active=='technical' }}" href="{{ url_for('dash.technical', cid=client.id) }}">Technical</a>
@@ -70,7 +78,7 @@ label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:upperca
 </nav>
 <main>
 {% if request.args.get('msg') %}<div class="msg">{{ request.args.get('msg') }}</div>{% endif %}
-{% if client and client.sample and active in ('competitors','ideas','technical','search','settings') %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush sections of this screen, for reviewing the layout. Nothing came from Semrush and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
+{% if client and client.sample and active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_') %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
 {% block body %}{% endblock %}
 </main>
 </div>

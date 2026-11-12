@@ -36,9 +36,12 @@ def default_seeds(conn, client_id, n=3):
     seeds = [r[0] for r in conn.execute("""SELECT primary_keyword FROM pages WHERE client_id=%s AND page_type='collection'
                                            AND primary_keyword IS NOT NULL ORDER BY search_volume DESC NULLS LAST, url LIMIT %s""", [client_id, n])]
     if len(seeds) < n:
+        import gsc
+        name, dom, aliases = conn.execute("SELECT name, domain, aliases FROM clients WHERE client_id=%s", [client_id]).fetchone()
+        rival = gsc.competitor_terms(conn, client_id, gsc.brand_terms(name, dom, aliases))     # never a competitor's name as a topic
         seeds += [r[0] for r in conn.execute("""SELECT query FROM gsc_search_daily WHERE client_id=%s AND NOT is_branded
                                                 AND date >= current_date - 90 GROUP BY query ORDER BY sum(clicks) DESC LIMIT %s""",
-                                             [client_id, n]) if r[0] not in seeds]
+                                             [client_id, n * 3]) if r[0] not in seeds and not any(x in r[0].lower().replace(" ", "") for x in rival)]
     return seeds[:n]
 
 def parse_ideas(rows):

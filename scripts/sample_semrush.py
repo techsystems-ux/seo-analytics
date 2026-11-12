@@ -10,7 +10,7 @@ shows a "Sample data" banner while it is loaded, and clear() removes all of it. 
 """
 import argparse, datetime as dt, json, os, random, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo")]
+sys.path[:0] = [HERE, os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo")]
 
 IDEAS = {
     "silver earrings": (["how to clean silver earrings at home", "are silver earrings good for sensitive ears", "how to tell if silver earrings are real",
@@ -100,10 +100,14 @@ def load(conn, cid, today=None):
             cur.executemany("""INSERT INTO rank_positions (client_id, keyword, date, source, position, sample) VALUES (%s,%s,%s,'semrush',%s,true)
                                ON CONFLICT DO NOTHING""",
                             [(cid, kw, today - dt.timedelta(days=d), max(1, base + rnd.randint(-2, 2))) for d in range(14)])
+    import sample_community
+    sample_community.load(conn, cid, me, [c for c in comps if not c.endswith(".example")], today)
     conn.execute("UPDATE clients SET sample_semrush=true WHERE client_id=%s", [cid])
     return "sample data loaded"
 
 def clear(conn, cid):
+    import sample_community
+    sample_community.clear(conn, cid)
     for t in ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_refdomains", "backlink_gap", "tech_crawls", "tech_issues",
               "rank_positions", "rank_keywords"):
         conn.execute(f"DELETE FROM {t} WHERE client_id=%s AND sample", [cid])

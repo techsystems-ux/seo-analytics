@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% import "_semrush.html" as sm with context %}
+{% macro table(rows, cols, actions=False, seed='', kind='related') %}
+{% if rows %}<div class="tw"><table><tr>{% for k, l, f in cols %}<th class="{{ 'r' if f in ('n','pct','pos','ratio') }}">{{ l }}</th>{% endfor %}{% if actions %}<th></th>{% endif %}</tr>
+{% for r in rows %}<tr>{% for k, l, f in cols %}<td class="{{ 'r' if f in ('n','pct','pos','ratio') }}">
+{%- set v = r.get(k) -%}
+{%- if f == 'url' and v %}<a href="{{ v if v.startswith('http') else 'https://' ~ v }}" target="_blank" rel="noopener">{{ v|path if v.startswith('http') else v }}</a>
+{%- elif f == 'n' %}{{ v|n }}{% elif f == 'ratio' %}{{ v|pct if v is not none and v != '' else '–' }}{% elif f == 'pct' %}{{ (v / 100)|pct(1) if v is not none and v != '' else '–' }}
+{%- elif f == 'pos' %}{{ v if v not in (none, '', 0) else '–' }}
+{%- elif f == 'feat' %}{{ sm.features((r.features or [])[:3]) }}
+{%- elif f == 'b' %}<b>{{ v or '–' }}</b>{% elif f == 'small' %}<span class="note">{{ v or '' }}</span>
+{%- elif f == 'move' %}{% set d = (r.prev or 0) - (r.position or 0) %}{% if r.prev and r.position %}<span class="{{ 'up' if d > 0 else 'down' }}">{{ r.prev }} → {{ r.position }}</span>{% else %}{{ r.position or '–' }}{% endif %}
+{%- else %}{{ v if v not in (none, '') else '–' }}{% endif -%}
+</td>{% endfor %}
+{% if actions %}{% set kw = r.keyword %}<td style="white-space:nowrap">
+<form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="do" value="track"><input type="hidden" name="keyword" value="{{ kw }}"><input type="hidden" name="lookup" value="{{ cur.id }}"><input type="hidden" name="tab" value="{{ tab or '' }}">
+<button class="btn ln" style="min-height:30px;padding:0 10px" {{ 'disabled' if kw|lower in tracked }} title="Follow its Google position in Rankings">{{ 'Tracked' if kw|lower in tracked else 'Track' }}</button></form>
+<form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="do" value="idea"><input type="hidden" name="keyword" value="{{ kw }}"><input type="hidden" name="seed" value="{{ seed }}"><input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="volume" value="{{ r.volume or '' }}"><input type="hidden" name="kd" value="{{ r.kd or '' }}"><input type="hidden" name="lookup" value="{{ cur.id }}"><input type="hidden" name="tab" value="{{ tab or '' }}">
+<button class="btn ln" style="min-height:30px;padding:0 10px" {{ 'disabled' if kw|lower in ideas }} title="Add to Content ideas as planned">{{ 'In ideas' if kw|lower in ideas else 'Plan content' }}</button></form></td>{% endif %}
+</tr>{% endfor %}</table></div>
+{% else %}<p class="empty">Nothing in this part of the lookup.</p>{% endif %}
+{% endmacro %}
+
+{% block body %}
+{% set R = cur.result if cur else {} %}
+<div class="top"><div><span class="kicker">Research · {{ label }}</span><h1>{{ label }}</h1>
+<p class="lead">{% if tool=='keyword' %}Look up any keyword: monthly searches in India, difficulty, intent and the last 12 months, what Google shows for it, and the related, broad-match and question keywords around it. Track a keyword or plan content from any row.
+{% elif tool=='domain' %}Look up any site: how many keywords it ranks for, its organic traffic over the last year, its top keywords and pages, what is rising or falling, and who it competes with in Google.
+{% elif tool=='backlinks' %}Look up any site's links: authority, linking sites, the words used to link to it, and the links it won or lost recently.
+{% else %}Look up any site's Google Ads: the keywords it bids on, its ad copy, and its Shopping product ads.{% endif %}</p></div></div>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+<form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <div style="flex:1 1 320px"><label for="q">{{ 'Keyword' if kind=='keyword' else 'Domain' }}</label>
+  <input id="q" type="text" name="query" required value="{{ cur.query if cur and not cur.sample else '' }}" placeholder="{{ 'e.g. silver anklets' if kind=='keyword' else 'e.g. ' ~ client.domain }}"></div>
+  <button class="btn {{ 'red' if not why else 'ln' }}" {{ 'disabled' if why }}>Look up · up to {{ cost|n }} credits</button></form>
+{% if why %}<p class="note" style="margin:0">{{ why }}. Earlier lookups below open for free.</p>{% endif %}
+{% if kind=='domain' %}<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="note">Quick pick:</span>
+  {% for d in [client.domain] + comps %}<form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="query" value="{{ d }}"><button class="tag t-pass" style="border:0;cursor:pointer" {{ 'disabled' if why }}>{{ d }}</button></form>{% endfor %}</div>{% endif %}
+{% if hist %}<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="note">Earlier lookups (free to reopen):</span>
+  {% for h in hist %}<a class="tag {{ 't-blk' if cur and h.id==cur.id else 't-pass' }}" href="?id={{ h.id }}">{{ h.query }}{{ ' · sample' if h.sample }}</a>{% endfor %}</div>{% endif %}
+</section>
+
+{% if cur %}
+<div class="top" style="align-items:baseline"><h2 style="font-size:20px">{{ cur.query }}</h2>
+<span class="note">{{ 'Sample' if cur.sample else 'Semrush' }} · {{ cur.database|upper }} database · {{ cur.at.strftime('%d %b %Y, %H:%M') }}{% if not cur.sample %} · {{ cur.units|n }} credits{% endif %}</span></div>
+{% if R.stopped %}<p class="msg">Stopped early to stay inside the credit limit: {{ R.stopped }}</p>{% endif %}
+
+{% if tool=='keyword' %}{% set o = R.overview or {} %}
+<div class="grid">
+  <div class="card kpi"><div class="l">Monthly searches</div><div class="v">{{ o.volume|n }}</div><div class="s mute">India, Google</div></div>
+  <div class="card kpi"><div class="l">Difficulty</div><div class="v">{{ o.kd|n }}</div><div class="s mute">{{ 'hard' if (o.kd or 0) >= 70 else 'possible' if (o.kd or 0) >= 40 else 'easy' }} · 0–100</div></div>
+  <div class="card kpi"><div class="l">Intent</div><div class="v" style="font-size:20px">{{ (o.intent or '–')|replace(',', ', ') }}</div><div class="s mute">why people search it</div></div>
+  <div class="card kpi"><div class="l">Ads competition</div><div class="v">{{ o.competition|n }}</div><div class="s mute">0–1 · CPC {{ o.cpc if o.cpc is not none else '–' }} USD</div></div>
+  <div class="card kpi"><div class="l">Last 12 months</div>
+    {% if o.trend %}<svg viewBox="0 0 120 40" style="width:100%;height:48px" role="img" aria-label="Search interest by month">{% for t in o.trend %}<rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 40 - (t * 36)|round(1) }}" width="8" height="{{ (t * 36)|round(1) }}" fill="{{ '#B20F00' if loop.last else '#000' }}"/>{% endfor %}</svg>{% else %}<div class="v">–</div>{% endif %}
+    <div class="s mute">relative interest, latest month red</div></div>
+</div>
+{% if o.features %}<p class="note">On Google's page for this keyword: {{ sm.features(o.features) }}</p>{% endif %}
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+{% set tabs = [('related','Related ('~(R.related|length)~')'),('broad','Broad match ('~(R.broad|length)~')'),('questions','Questions ('~(R.questions|length)~')'),('serp','Google top 10')] %}
+{% set t = tab or 'related' %}
+<div class="seg">{% for k, l in tabs %}<a class="{{ 'on' if t==k }}" href="?id={{ cur.id }}&tab={{ k }}">{{ l }}</a>{% endfor %}</div>
+{% if t=='serp' %}{{ table(R.serp, [('position','#','pos'),('domain','Site','b'),('url','Page','url'),('features','Shown in','feat')]) if R.serp and R.serp[0].position is defined else table(R.serp, [('domain','Site','b'),('url','Page','url'),('features','Shown in','feat')]) }}
+{% else %}{{ table(R.get(t), [('keyword','Keyword','b'),('volume','Monthly searches','n'),('kd','Difficulty','n'),('intent','Intent','small'),('features',"On Google's page",'feat')], actions=True, seed=cur.query, kind='question' if t=='questions' else 'related') }}{% endif %}
+</section>
+
+{% elif tool=='domain' %}{% set o = R.overview or {} %}
+<div class="grid">
+  <div class="card kpi"><div class="l">Ranking keywords</div><div class="v">{{ o.org_keywords|n }}</div><div class="s mute">in Google's top 100, India</div></div>
+  <div class="card kpi"><div class="l">Organic traffic</div><div class="v">{{ o.org_traffic|n }}</div><div class="s mute">visits a month, Semrush estimate</div></div>
+  <div class="card kpi"><div class="l">Traffic value</div><div class="v">{{ o.org_cost|n }}</div><div class="s mute">USD a month if bought as ads</div></div>
+  <div class="card kpi"><div class="l">Paid keywords</div><div class="v">{{ o.ad_keywords|n }}</div><div class="s mute">Google Ads, India</div></div>
+  <div class="card kpi"><div class="l">Semrush rank</div><div class="v">{{ o.rank|n }}</div><div class="s mute">by organic traffic, lower is bigger</div></div>
+</div>
+{% if chart %}<section class="card"><h2>Organic traffic, last 12 months</h2>{{ chart }}</section>{% endif %}
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+{% set t = tab or 'keywords' %}
+<div class="seg">{% for k, l in [('keywords','Top keywords'),('pages','Top pages'),('rising','Rising'),('falling','Falling'),('competitors','Organic competitors')] %}<a class="{{ 'on' if t==k }}" href="?id={{ cur.id }}&tab={{ k }}">{{ l }}</a>{% endfor %}</div>
+{% if t=='keywords' %}{{ table(R.keywords, [('keyword','Keyword','b'),('position','Position','pos'),('volume','Monthly searches','n'),('kd','Difficulty','n'),('traffic_pct','Traffic share','pct'),('url','Page','url'),('features',"On Google's page",'feat')], actions=True, seed=cur.query) }}
+{% elif t=='pages' %}{{ table(R.pages, [('url','Page','url'),('keywords','Keywords','n'),('traffic','Traffic','n'),('traffic_pct','Traffic share','pct')]) }}
+{% elif t in ('rising','falling') %}{{ table(R.get(t), [('keyword','Keyword','b'),('position','Movement','move'),('volume','Monthly searches','n'),('url','Page','url')], actions=True, seed=cur.query) }}
+{% else %}{{ table(R.competitors, [('domain','Site','b'),('relevance','Overlap','ratio'),('common','Shared keywords','n'),('org_keywords','Keywords','n'),('org_traffic','Traffic','n')]) }}{% endif %}
+</section>
+
+{% elif tool=='backlinks' %}{% set o = R.overview or {} %}
+<div class="grid">
+  <div class="card kpi"><div class="l">Authority Score</div><div class="v">{{ o.ascore|n }}</div><div class="s mute">Semrush, 0–100</div></div>
+  <div class="card kpi"><div class="l">Linking sites</div><div class="v">{{ o.domains_num|n }}</div><div class="s mute">{{ o.ips_num|n }} IPs</div></div>
+  <div class="card kpi"><div class="l">Backlinks</div><div class="v">{{ o.total|n }}</div><div class="s mute">{{ o.urls_num|n }} linking pages</div></div>
+  <div class="card kpi"><div class="l">Follow share</div><div class="v">{{ (o.follows_num / o.total)|pct if o.total else '–' }}</div><div class="s mute">links that pass authority</div></div>
+  <div class="card kpi"><div class="l">Text links</div><div class="v">{{ (o.texts_num / o.total)|pct if o.total else '–' }}</div><div class="s mute">the rest are image links</div></div>
+</div>
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+{% set t = tab or 'refdomains' %}
+<div class="seg">{% for k, l in [('refdomains','Linking sites'),('anchors','Anchor text'),('new','New links'),('lost','Lost links')] %}<a class="{{ 'on' if t==k }}" href="?id={{ cur.id }}&tab={{ k }}">{{ l }}</a>{% endfor %}</div>
+{% if t=='refdomains' %}{{ table(R.refdomains, [('domain','Site','b'),('domain_ascore','Authority','n'),('backlinks_num','Links','n'),('country','Country',''),('first_seen','First seen','')]) }}
+{% elif t=='anchors' %}{{ table(R.anchors, [('anchor','Anchor text','b'),('domains_num','Sites','n'),('backlinks_num','Links','n'),('first_seen','First seen','')]) }}
+{% else %}{{ table(R.get(t), [('source_title','From page','b'),('source_url','Link on','url'),('target_url','Points to','url'),('anchor','Anchor',''),('page_ascore','Page authority','n'),('first_seen' if t=='new' else 'last_seen','Found' if t=='new' else 'Gone since','')]) }}{% endif %}
+<p class="note">Link prospects (sites linking to competitors but not to {{ client.name }}) are on Competitors → Backlinks.</p>
+</section>
+
+{% else %}{% set o = R.overview or {} %}
+<div class="grid">
+  <div class="card kpi"><div class="l">Paid keywords</div><div class="v">{{ o.ad_keywords|n }}</div><div class="s mute">Google Ads, India</div></div>
+  <div class="card kpi"><div class="l">Paid traffic</div><div class="v">{{ o.ad_traffic|n }}</div><div class="s mute">visits a month, estimate</div></div>
+  <div class="card kpi"><div class="l">Est. ad spend</div><div class="v">{{ o.ad_cost|n }}</div><div class="s mute">USD a month, Semrush estimate</div></div>
+  <div class="card kpi"><div class="l">Shopping ads</div><div class="v">{{ R.shopping|length if R.shopping else 0 }}</div><div class="s mute">product ads in this lookup</div></div>
+</div>
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+{% set t = tab or 'ads' %}
+<div class="seg">{% for k, l in [('ads','Ads keywords'),('copies','Ad copy'),('shopping','Shopping ads')] %}<a class="{{ 'on' if t==k }}" href="?id={{ cur.id }}&tab={{ k }}">{{ l }}</a>{% endfor %}</div>
+{% if t=='ads' %}{{ table(R.ads, [('keyword','Keyword','b'),('position','Ad position','pos'),('volume','Monthly searches','n'),('cpc','CPC (USD)',''),('traffic_pct','Traffic share','pct'),('url','Landing page','url')], actions=True, seed=cur.query) }}
+{% elif t=='copies' %}{% if R.copies %}<div class="grid2">{% for c in R.copies %}<div class="card" style="padding:14px"><span class="note">Ad · {{ c.visible_url or '' }}</span><p style="margin:6px 0 4px;color:#1a0dab;font-weight:600">{{ c.title }}</p><p class="note" style="margin:0">{{ c.description }}</p><p class="note" style="margin-top:6px">{{ c.keywords|n }} keywords show this ad</p></div>{% endfor %}</div>{% else %}<p class="empty">No ad copy in this lookup.</p>{% endif %}
+{% else %}{{ table(R.shopping, [('title','Product','b'),('price','Price',''),('keyword','Shown for',''),('position','Position','pos'),('volume','Monthly searches','n'),('shop','Shop','small'),('url','Page','url')]) }}{% endif %}
+</section>
+{% endif %}
+{% else %}
+<section class="card"><p class="empty">No lookups yet. {{ 'Type a keyword above.' if kind=='keyword' else 'Type a domain above or pick one.' }} Each lookup is stored, so opening it again costs nothing.</p></section>
+{% endif %}
+{% endblock %}
