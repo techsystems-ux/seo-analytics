@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Settings</span><h1>{{ client.name }} setup</h1>
+<p class="lead">What the checks and the analytics depend on. Set once per brand; the client signs off the brand rules.</p></div></div>
+<div class="seg">{% for k,v in [('brand','Brand rules'),('prompts','Prompts'),('data','Data and integrations')] %}<a class="{{ 'on' if tab==k }}" href="?tab={{ k }}">{{ v }}</a>{% endfor %}</div>
+
+{% if tab=='brand' %}
+<form method="post" class="grid2"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="brand">
+<section class="card"><h2>Names and facts</h2>
+<label for="bs">BR-01 Brand spelling first, then variants people search</label><input id="bs" type="text" name="brand_spellings" value="{{ (rules.brand_spellings or [])|join(', ') }}">
+<label for="pn">BR-02 Product and range names, exactly</label><textarea id="pn" name="product_names" rows="2">{{ (rules.product_names or [])|join(', ') }}</textarea>
+<label for="tf">BR-02 Term fixes, one per line: wrong =&gt; right</label><textarea id="tf" name="term_fixes" rows="3">{% for w,r in (rules.term_fixes or {}).items() %}{{ w }} => {{ r }}
+{% endfor %}</textarea></section>
+<section class="card"><h2>What pages must say</h2>
+<label for="us">BR-03 USPs for product descriptions</label><textarea id="us" name="usps" rows="2">{{ (rules.usps or [])|join(', ') }}</textarea>
+<label for="um">BR-03 Words that prove a USP is mentioned</label><input id="um" type="text" name="usp_markers" value="{{ (rules.usp_markers or [])|join(', ') }}">
+<label for="rw">BR-07 Region words</label><input id="rw" type="text" name="region_words" value="{{ (rules.region_words or [])|join(', ') }}"></section>
+<section class="card"><h2>What copy must avoid</h2>
+<label for="tb">BR-05 Never in titles or H1s</label><input id="tb" type="text" name="title_banned_words" value="{{ (rules.title_banned_words or [])|join(', ') }}">
+<label for="bw">BR-05 Never in any copy</label><input id="bw" type="text" name="banned_words" value="{{ (rules.banned_words or [])|join(', ') }}">
+<label for="cl">BR-06 Claims not allowed</label><textarea id="cl" name="claims_to_avoid" rows="2">{{ (rules.claims_to_avoid or [])|join(', ') }}</textarea></section>
+<section class="card"><h2>Links, sister brands and review</h2>
+<label for="cd">BR-08 Live domain</label><input id="cd" type="text" name="correct_domain" value="{{ rules.correct_domain or client.domain }}">
+<label for="wd">BR-08 Domains never to link to</label><input id="wd" type="text" name="wrong_domains" value="{{ (rules.wrong_domains or [])|join(', ') }}">
+<label for="sd">BR-09 Sister brands (no shared copy)</label><input id="sd" type="text" name="sister_domains" value="{{ (rules.sister_domains or [])|join(', ') }}">
+<label><input type="checkbox" name="theme_appends_brand" {{ 'checked' if rules.theme_appends_brand }}> The theme adds the brand to every title</label>
+<label for="rv">BR-10 Client reviewer</label><input id="rv" type="text" name="reviewer" value="{{ rules.reviewer or '' }}">
+<label for="rd">BR-10 Review turnaround, working days</label><input id="rd" type="number" min="0" name="review_days" value="{{ rules.review_days or '' }}">
+<label><input type="checkbox" name="signed_off"> Client has signed off this card</label><input type="text" name="approved_by" placeholder="Signed off by" aria-label="Signed off by">
+<div style="margin-top:16px"><button class="btn red">Save brand rules</button></div></section>
+</form>
+
+{% elif tab=='prompts' %}
+<section class="card"><div class="top" style="align-items:center"><h2>Tracked prompts</h2>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="prompt_approve_all"><button class="btn ln">Approve all</button></form></div>
+<p class="note">Only approved prompts run. Each run costs one OpenAI web search call plus one short sentiment call.</p>
+<div class="tw"><table><tr><th>Prompt</th><th>Stage</th><th></th><th></th></tr>
+{% for p in prompts %}<tr><td>{{ p[1] }}</td><td>{{ stages[p[2]] }}</td>
+<td><form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="prompt_toggle"><input type="hidden" name="id" value="{{ p[0] }}"><button class="btn {{ 'blk' if p[3] else 'red' }}">{{ 'Approved' if p[3] else 'Approve' }}</button></form></td>
+<td><form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="prompt_delete"><input type="hidden" name="id" value="{{ p[0] }}"><button class="btn ln">Remove</button></form></td></tr>
+{% else %}<tr><td colspan="4" class="empty">No prompts yet.</td></tr>{% endfor %}</table></div></section>
+<section class="card"><h2>Add prompts</h2><form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="prompt_add">
+<label for="pt">One per line, written the way a shopper would ask</label><textarea id="pt" name="text" rows="5" placeholder="best silver jewellery brands in India"></textarea>
+<label for="st">Buying stage</label><select id="st" name="stage">{% for k,v in stages.items() %}<option value="{{ k }}" {{ 'selected' if k=='consideration' }}>{{ v }}</option>{% endfor %}</select>
+<div style="margin-top:14px"><button class="btn red">Add prompts</button></div></form></section>
+
+{% else %}
+<div class="grid2">
+<section class="card"><h2>Connections</h2><table>
+<tr><td>Search Console</td><td>{{ integ[0] if integ and integ[0] else 'Not linked' }}</td></tr>
+<tr><td>GA4</td><td>{{ integ[1] if integ and integ[1] else 'Not linked' }}</td></tr>
+<tr><td>OpenAI (ChatGPT)</td><td>{{ 'Key set' if keys.OPENAI_API_KEY else 'No key on the server' }}</td></tr>
+<tr><td>Semrush</td><td>{{ 'Key set' if keys.SEMRUSH_API_KEY else 'No key on the server' }} · {{ budget.used|n }} of {{ budget.cap|n }} credits used, {{ budget.left|n }} left (hard limit)</td></tr></table>
+<p class="note">Keys live in the server's settings, never in the app. Search Console and GA4 are linked from <a href="{{ url_for('connections') }}">Google connections</a>.</p></section>
+<section class="card"><h2>Pull data now</h2><p class="note">Search Console, GA4, ChatGPT and page checks also run on their own every night. Semrush runs only from here.</p>
+<div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
+{% for only,label in [('gsc,ga4','Pull Search Console and GA4'),('ai','Ask ChatGPT all approved prompts'),('pages','Check all pages')] %}
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run"><input type="hidden" name="only" value="{{ only }}"><button class="btn {{ 'red' if loop.first else 'ln' }}">{{ label }}</button></form>{% endfor %}
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run"><input type="hidden" name="only" value="semrush">
+<button class="btn ln" {{ 'disabled' if budget.left < 200 }}>Pull Semrush ({{ budget.left|n }} credits left)</button></form>
+{% if budget.left < 200 %}<p class="note">Semrush is off: a pull needs up to 200 credits and the hard limit leaves {{ budget.left|n }}. Raise SEMRUSH_TOTAL_CAP on the server only if you approve more spend.</p>{% endif %}</div></section>
+</div>
+<section class="card"><h2>Last runs</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
+{% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '')[:300] }}</span></td></tr>{% endfor %}</table>
+{% else %}<p class="empty">Nothing has run yet.</p>{% endif %}</section>
+{% endif %}
+{% endblock %}

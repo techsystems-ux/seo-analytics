@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Hovers AI Search</span><h1>Brands</h1>
+<p class="lead">Pick a brand to see where it stands in Google and in AI answers. Brands come from the Google connections page.</p></div></div>
+<div class="grid">
+{% for c in clients %}
+<a class="card" href="{{ url_for('dash.overview', cid=c.id) }}" style="text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:8px">
+  <b style="font-size:16px">{{ c.name }}</b><span class="mute">{{ c.domain }}</span>
+  <span>{% if c.score is not none %}<b style="font-size:22px">{{ c.score|n }}</b> <span class="tag t-pass">{{ c.band }}</span>{% else %}<span class="mute">No visibility score yet</span>{% endif %}</span>
+  <span class="note">{{ c.prompts }} approved prompts · Search Console {{ c.gsc_to.strftime('%d %b') if c.gsc_to else 'not pulled yet' }}</span>
+</a>
+{% else %}<div class="card empty">No brands yet. <a href="{{ url_for('connections') }}">Import them from a Google connection.</a></div>{% endfor %}
+</div>
+{% endblock %}

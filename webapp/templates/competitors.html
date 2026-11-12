@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Analytics · Competitors</span><h1>Who {{ client.name }} competes with</h1>
+<p class="lead">Organic competitors from Semrush, and the brands ChatGPT names instead. Tracked competitors feed the keyword gap and the visibility score.</p></div>
+<span class="note">Semrush credits: <b>{{ budget.used|n }} of {{ budget.cap|n }}</b> used (hard limit)</span></div>
+
+{% if vis %}<section class="card"><h2>Hovers Visibility Score in ChatGPT</h2><p class="note">{{ vis.date.strftime('%d %b %Y') }} · mention 35%, position 25%, citation 25%, sentiment 15%</p>
+<div class="tw"><table><tr><th>Brand</th><th class="r">Score</th><th class="r">Named in</th><th class="r">Cited in</th><th class="r">Average position</th><th class="r">Share of voice</th></tr>
+{% for b in vis.brands %}<tr><td>{% if b.brand=='' %}<b>{{ client.name }} (you)</b>{% else %}{{ b.brand }}{% endif %}</td><td class="r"><b>{{ b.score|n }}</b></td><td class="r">{{ b.mention_rate|pct }}</td><td class="r">{{ b.citation_rate|pct }}</td><td class="r">{{ b.avg_position|n if b.avg_position else '–' }}</td><td class="r">{{ b.sov|pct }}</td></tr>{% endfor %}</table></div></section>{% endif %}
+
+<section class="card" style="display:flex;flex-direction:column;gap:14px">
+<div class="seg"><a class="{{ 'on' if tab=='gap' }}" href="?tab=gap">Untapped keywords</a><a class="{{ 'on' if tab=='keywords' }}" href="?tab=keywords">Your ranking keywords</a><a class="{{ 'on' if tab=='list' }}" href="?tab=list">Competitor list</a></div>
+<div class="tw">
+{% if tab=='gap' %}
+  {% if gaps %}<p class="note">Keywords at least one tracked competitor ranks for and {{ client.name }} does not. Semrush, {{ gap_day.strftime('%d %b %Y') }}.</p>
+  <table><tr><th>Keyword</th><th class="r">Monthly searches</th><th>Who ranks (position)</th></tr>
+  {% for g in gaps %}<tr><td>{{ g.keyword }}</td><td class="r">{{ g.volume|n }}</td><td>{% for d,p in g.positions.items() if p %}<span class="tag t-pass">{{ d }} · {{ p }}</span> {% endfor %}</td></tr>{% endfor %}</table>
+  {% else %}<p class="empty">No keyword gap pulled. A gap costs 80 credits per keyword, so it is off while the credit limit is low.</p>{% endif %}
+{% elif tab=='keywords' %}
+  {% if kws %}<p class="note">Top keywords by traffic share. Semrush, {{ kw_day.strftime('%d %b %Y') }}.</p>
+  <table><tr><th>Keyword</th><th class="r">Position</th><th class="r">Before</th><th class="r">Monthly searches</th><th class="r">Difficulty</th><th>Intent</th><th>Ranking page</th></tr>
+  {% for k in kws %}<tr><td>{{ k.keyword }}</td><td class="r">{{ k.position }}</td><td class="r">{{ k.prev or '–' }}</td><td class="r">{{ k.volume|n }}</td><td class="r">{{ k.kd|n }}</td><td>{{ k.intent or '–' }}</td><td><a href="{{ k.url }}" target="_blank" rel="noopener">{{ k.url|path }}</a></td></tr>{% endfor %}</table>
+  {% else %}<p class="empty">Appears after the first Semrush pull.</p>{% endif %}
+{% else %}
+  <table><tr><th>Competitor</th><th>Found by</th><th class="r">Shared keywords</th><th class="r">Their keywords</th><th class="r">Their traffic</th><th>Names ChatGPT may use</th><th></th></tr>
+  {% for c in comps %}<tr><td><b>{{ c.name }}</b><br><span class="note">{{ c.domain or '' }}</span></td><td>{{ 'Semrush' if c.source=='semrush' else 'Added by hand' }}</td>
+  <td class="r">{{ c.common|n }}</td><td class="r">{{ c.keywords|n }}</td><td class="r">{{ c.traffic|n }}</td>
+  <td style="min-width:220px"><form method="post" style="display:flex;gap:6px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="aliases_for" value="{{ c.id }}">
+  <input type="text" name="name" value="{{ c.name }}" aria-label="Brand name" style="max-width:120px"><input type="text" name="aliases" placeholder="other spellings, comma separated" aria-label="Other spellings"><button class="btn ln">Save</button></form></td>
+  <td><form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="toggle" value="{{ c.id }}"><button class="btn {{ 'blk' if c.tracked else 'red' }}">{{ 'Tracked' if c.tracked else 'Track' }}</button></form></td></tr>
+  {% else %}<tr><td colspan="7" class="empty">No competitors yet. Pull Semrush, or add one below.</td></tr>{% endfor %}</table>
+  <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:14px"><input type="hidden" name="csrf" value="{{ csrf }}">
+  <div style="flex:1 1 200px"><label for="an">Brand name</label><input id="an" type="text" name="add_name" required></div>
+  <div style="flex:1 1 200px"><label for="ad">Website</label><input id="ad" type="text" name="add_domain" placeholder="example.com"></div><button class="btn red">Add and track</button></form>
+  <p class="note">Semrush finds competitors by shared keywords, which can include marketplaces and publishers. Track only real competitors: up to 4 go into the keyword gap.</p>
+{% endif %}
+</div></section>
+{% endblock %}

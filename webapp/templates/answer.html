@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker"><a href="{{ url_for('dash.ai', cid=client.id) }}">AI visibility</a> · Answer</span><h1 style="font-size:22px">{{ d.prompt }}</h1>
+<p class="lead">Asked {{ d.run_at.strftime('%d %b %Y, %H:%M') }} · {{ d.model }}</p></div></div>
+<div class="grid2">
+<section class="card"><h2>The answer</h2><div style="white-space:pre-wrap;margin-top:10px">{{ d.text }}</div></section>
+<div style="display:flex;flex-direction:column;gap:12px">
+<section class="card"><h2>Brands named</h2><table><tr><th>Brand</th><th class="r">Place</th><th>Sentiment</th><th>Recommended</th></tr>
+{% for m in d.mentions %}<tr><td>{% if m.is_client %}<b>{{ m.brand }} (you)</b>{% else %}{{ m.brand }}{% endif %}</td><td class="r">{{ m.rank or '–' }}</td><td>{{ m.sentiment or '–' }}</td><td>{{ 'Yes' if m.recommended else ('No' if m.recommended is not none else '–') }}</td></tr>
+{% else %}<tr><td colspan="4" class="empty">No brands named.</td></tr>{% endfor %}</table></section>
+<section class="card"><h2>Sources</h2><table><tr><th>Site</th><th>Cited or read</th></tr>
+{% for c in d.citations %}<tr><td><a href="{{ c.url }}" target="_blank" rel="noopener nofollow">{{ c.title or c.domain }}</a><br><span class="note">{{ c.domain }}</span>{% if c.is_client %} <span class="tag t-blk">you</span>{% endif %}</td><td>{{ 'Cited' if c.cited else 'Read only' }}</td></tr>
+{% else %}<tr><td colspan="2" class="empty">No sources.</td></tr>{% endfor %}</table></section>
+</div></div>
+{% endblock %}

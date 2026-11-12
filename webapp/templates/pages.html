@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Work · Pages</span><h1>Every page, checked against the SOP</h1>
+<p class="lead">Each page is checked against the SOP rules and the brand rules card. Rule IDs match the SOP doc.</p></div>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Check pages now</button></form></div>
+
+<div class="top" style="align-items:center">
+<div class="seg">{% for k,v in [('all','All'),('collection','Collections'),('product','Products'),('blog','Blogs'),('static','Other')] %}<a class="{{ 'on' if type==k }}" href="?type={{ k }}">{{ v }}</a>{% endfor %}</div>
+<span class="note">{{ rows|sum(attribute='fails') }} checks to fix across {{ rows|length }} pages</span></div>
+
+{% if all_count %}
+<div class="grid2">
+<section class="card" style="padding:8px 10px"><table><tr><th>Page and keyword</th><th>To fix</th><th>Status</th></tr>
+{% for r in rows %}<tr style="{{ 'background:#F5F5F5;box-shadow:inset 3px 0 0 #B20F00' if sel==r.page_id|string }}">
+<td><a href="?type={{ type }}&page={{ r.page_id }}" style="font-weight:600;color:#000">{{ r.url|path }}</a><br><span class="note">{{ r.type }} · {{ r.keyword or 'no keyword set' }}</span></td>
+<td>{% if not r.checked_at %}<span class="tag t-na">Not checked</span>{% elif r.fails %}<span class="tag t-fail">{{ r.fails }} to fix</span>{% else %}<span class="tag t-pass">All clear</span>{% endif %}</td>
+<td class="note">{{ r.status|replace('_',' ') }}</td></tr>{% endfor %}</table></section>
+<section class="card">{% if selected %}<span class="note">{{ selected.type }} · {{ selected.status|replace('_',' ') }}</span><h2 style="overflow-wrap:anywhere">{{ selected.url|path }}</h2>
+<p class="note">Primary keyword: {{ selected.keyword or 'not set' }}{% if checks %} · checked {{ checks[0].taken_at.strftime('%d %b %Y') }} ({{ checks[0].source }}){% endif %}</p>
+{% for c in checks %}<div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid #F0F0F0">
+<div><span class="tag t-{{ c.result }}">{{ {'fail':'Fix','warn':'Improve','pass':'Pass','na':'n/a'}[c.result] }}</span><div class="note" style="margin-top:6px;font-weight:600">{{ c.id }}</div></div>
+<div><div>{{ c.message }}</div><div class="note">Found: {{ c.found }}</div></div></div>
+{% else %}<p class="empty">Not checked yet.</p>{% endfor %}{% endif %}</section>
+</div>
+{% else %}
+<section class="card"><h2>Add pages</h2><p>Upload a CSV with these columns: <code>url, page_type, primary_keyword, secondary_keywords, search_volume, intent</code>. Page type is collection, product, blog, static or home; separate secondary keywords with semicolons.</p>
+<form method="post" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="csv" accept=".csv" required aria-label="Pages CSV"><button class="btn red">Import pages</button></form></section>
+{% endif %}
+{% if all_count %}<details class="card"><summary style="cursor:pointer;font-weight:600">Add or update pages from a CSV</summary>
+<p class="note">Columns: url, page_type, primary_keyword, secondary_keywords (separated by ;), search_volume, intent. Existing URLs are updated.</p>
+<form method="post" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="csv" accept=".csv" required aria-label="Pages CSV"><button class="btn red">Import pages</button></form></details>{% endif %}
+{% endblock %}

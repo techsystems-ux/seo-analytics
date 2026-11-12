@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Overview</span><h1>Where {{ client.name }} stands</h1>
+<p class="lead">Google and ChatGPT, side by side. Last 28 days against the 28 days before.</p></div></div>
+
+<div class="grid">
+  <div class="card kpi"><div class="l">Hovers Visibility Score · ChatGPT</div>
+    {% if vis and vis.you %}<div class="v">{{ vis.you.score|n }}</div><div class="s"><span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}</div>
+    {% else %}<div class="v mute">–</div><div class="s mute">Runs once prompts are approved</div>{% endif %}</div>
+  <div class="card kpi"><div class="l">Non-branded clicks</div><div class="v">{{ search.nb_clicks|n }}</div><div class="s">{{ search.nb_clicks_change|delta }}</div></div>
+  <div class="card kpi"><div class="l">Organic share of revenue</div>
+    {% if rev %}<div class="v">{{ rev.revenue_share if rev.revenue_share is not none else '–' }}%</div><div class="s mute">{{ rev.session_share }}% of sessions · GA4</div>
+    {% else %}<div class="v mute">–</div><div class="s mute">No GA4 data yet</div>{% endif %}</div>
+  <div class="card kpi"><div class="l">Prompts where ChatGPT names you</div><div class="v">{{ won }}<span class="mute" style="font-size:18px"> / {{ asked }}</span></div><div class="s mute">latest daily run</div></div>
+  <div class="card kpi"><div class="l">Page checks to fix</div><div class="v">{{ fixes }}</div><div class="s mute">across {{ pages_checked }} checked pages</div></div>
+</div>
+
+<div class="grid2">
+  <section class="card"><div class="top" style="align-items:center"><h2>Clicks from Google, daily</h2><span class="note"><b style="color:#B20F00">Non-branded</b> · <b>Branded</b></span></div>{{ chart }}</section>
+  <section class="card"><h2>Untapped keywords</h2><p class="note">Competitors rank for these; {{ client.name }} does not. From Semrush.</p>
+    {% if gaps %}<table><tr><th>Keyword</th><th class="r">Monthly searches</th></tr>
+    {% for g in gaps %}<tr><td>{{ g.keyword }}</td><td class="r">{{ g.volume|n }}</td></tr>{% endfor %}</table>
+    <a href="{{ url_for('dash.competitors', cid=client.id) }}">All gaps</a>
+    {% else %}<p class="empty">Appears after the first Semrush pull.</p>{% endif %}</section>
+</div>
+
+<section class="card"><h2>Data freshness</h2>
+{% if runs %}<div class="tw"><table><tr><th>Source</th><th>Last run</th><th>Result</th></tr>
+{% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'GA4','ai':'ChatGPT prompts','semrush':'Semrush','pages':'Page checks'}.get(r.collector, r.collector) }}</td>
+<td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{% if r.status=='ok' %}<span class="tag t-pass">OK</span> <span class="note">{{ r.note }}</span>{% elif r.status=='running' %}<span class="tag t-na">Running</span>{% else %}<span class="tag t-fail">Failed</span>{% endif %}</td></tr>{% endfor %}</table></div>
+{% else %}<p class="empty">Nothing pulled yet. Start a pull from Settings, Data.</p>{% endif %}</section>
+{% endblock %}

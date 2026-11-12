@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Analytics · Search performance</span><h1>Google organic search</h1>
+<p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the 28 days before. Branded queries contain the brand name.</p></div></div>
+
+<div class="grid">
+  <div class="card kpi"><div class="l">All clicks</div><div class="v">{{ totals.clicks|n }}</div><div class="s">{{ totals.clicks_change|delta }}</div></div>
+  <div class="card kpi"><div class="l">Non-branded clicks</div><div class="v">{{ totals.nb_clicks|n }}</div><div class="s">{{ totals.nb_clicks_change|delta }}</div></div>
+  <div class="card kpi"><div class="l">Impressions</div><div class="v">{{ totals.impressions|n }}</div><div class="s mute">non-branded {{ totals.nb_impressions|n }}</div></div>
+  <div class="card kpi"><div class="l">Average position</div><div class="v">{{ totals.position if totals.position else '–' }}</div><div class="s mute">weighted by impressions</div></div>
+  <div class="card kpi"><div class="l">Organic conversion rate</div><div class="v">{{ rev.organic_cvr if rev and rev.organic_cvr is not none else '–' }}{% if rev and rev.organic_cvr is not none %}%{% endif %}</div><div class="s mute">{{ rev.organic_orders|n if rev else '–' }} orders · GA4</div></div>
+</div>
+
+<section class="card"><div class="top" style="align-items:center"><h2>Daily clicks</h2><span class="note"><b style="color:#B20F00">Non-branded</b> · <b>Branded</b></span></div>{{ chart }}</section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:14px">
+  <div class="top" style="align-items:center">
+    <div class="seg" role="tablist">
+      <a class="{{ 'on' if tab=='queries' }}" href="?tab=queries&kind={{ kind }}">Queries</a>
+      <a class="{{ 'on' if tab=='pages' }}" href="?tab=pages">Pages</a>
+      <a class="{{ 'on' if tab=='revenue' }}" href="?tab=revenue">Revenue by landing page</a></div>
+    {% if tab=='queries' %}<div class="seg"><a class="{{ 'on' if kind=='nonbranded' }}" href="?tab=queries&kind=nonbranded">Non-branded</a><a class="{{ 'on' if kind=='branded' }}" href="?tab=queries&kind=branded">Branded</a><a class="{{ 'on' if kind=='all' }}" href="?tab=queries&kind=all">All</a></div>{% endif %}
+  </div>
+  <div class="tw">
+  {% if not data %}<p class="empty">No data for this view yet.</p>
+  {% elif tab=='queries' %}<table><tr><th>Query</th><th class="r">Clicks</th><th class="r">Impressions</th><th class="r">CTR</th><th class="r">Position</th><th class="r">Position change</th></tr>
+    {% for r in data %}<tr><td>{{ r.query }}</td><td class="r">{{ r.clicks|n }}</td><td class="r">{{ r.impressions|n }}</td><td class="r">{{ r.ctr }}%</td><td class="r">{{ r.position }}</td>
+    <td class="r">{% if r.position_gain is none %}<span class="mute">new</span>{% elif r.position_gain > 0 %}<span class="up">up {{ r.position_gain }}</span>{% elif r.position_gain < 0 %}<span class="down">down {{ -r.position_gain }}</span>{% else %}<span class="mute">same</span>{% endif %}</td></tr>{% endfor %}</table>
+  {% elif tab=='pages' %}<table><tr><th>Page</th><th>Top non-branded query</th><th class="r">Clicks</th><th class="r">Impressions</th><th class="r">CTR</th><th class="r">Position</th></tr>
+    {% for r in data %}<tr><td><a href="{{ r.page }}" target="_blank" rel="noopener">{{ r.page|path }}</a></td><td>{{ r.top_query }}</td><td class="r">{{ r.clicks|n }}</td><td class="r">{{ r.impressions|n }}</td><td class="r">{{ r.ctr }}%</td><td class="r">{{ r.position }}</td></tr>{% endfor %}</table>
+  {% else %}<p class="note">Organic Search sessions from GA4 by landing page, with the non-branded query that sends each page the most clicks. Revenue is shown as a share of organic revenue.</p>
+    <table><tr><th>Landing page</th><th>Top query</th><th class="r">Sessions</th><th class="r">Orders</th><th class="r">Conversion</th><th class="r">Share of organic revenue</th></tr>
+    {% for r in data %}<tr><td>{{ r.page }}</td><td>{{ r.top_query or '–' }}</td><td class="r">{{ r.sessions|n }}</td><td class="r">{{ r.orders|n }}</td><td class="r">{{ r.cvr if r.cvr is not none else '–' }}{% if r.cvr is not none %}%{% endif %}</td>
+    <td class="r" style="min-width:140px">{% if r.revenue_share is not none %}{{ r.revenue_share }}%<div class="bar"><i style="width:{{ [r.revenue_share,100]|min }}%"></i></div>{% else %}–{% endif %}</td></tr>{% endfor %}</table>{% endif %}
+  </div>
+</section>
+{% endblock %}

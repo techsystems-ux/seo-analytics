@@ -1,0 +1,37 @@
+# Local trial: Postgres + the Google connect page. Start with:  docker compose up --build
+# Then open http://localhost:8080
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: aeo
+      POSTGRES_PASSWORD: local-admin-only
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./db/002_pagespeed.sql:/docker-entrypoint-initdb.d/02_pagespeed.sql:ro
+      - ./db/003_gsc_ga4.sql:/docker-entrypoint-initdb.d/03_gsc_ga4.sql:ro
+      - ./db/004_google_oauth.sql:/docker-entrypoint-initdb.d/04_google_oauth.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aeo"]
+      interval: 3s
+      retries: 20
+  web:
+    build: .
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+  collect:                       # run on demand: docker compose run --rm collect gsc.py --days 7
+    build: .
+    env_file: .env
+    working_dir: /app/collectors
+    entrypoint: ["python"]
+    profiles: ["tools"]
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  pgdata:

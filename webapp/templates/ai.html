@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Analytics · AI visibility</span><h1>Is {{ client.name }} in ChatGPT's answers?</h1>
+<p class="lead">Each approved prompt is asked daily through the OpenAI API with web search on, from India. This approximates what ChatGPT shows its users.</p></div></div>
+
+{% if vis and vis.you %}
+<div class="grid">
+  <div class="card kpi"><div class="l">Hovers Visibility Score</div><div class="v">{{ vis.you.score|n }}</div><div class="s"><span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}</div></div>
+  <div class="card kpi"><div class="l">Named in answers · 35%</div><div class="v">{{ vis.you.mention_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.mention_rate or 0)*100 }}%"></i></div></div>
+  <div class="card kpi"><div class="l">Position when named · 25%</div><div class="v">{{ vis.you.avg_position|n if vis.you.avg_position else '–' }}</div><div class="s mute">average place among brands named</div></div>
+  <div class="card kpi"><div class="l">Site cited · 25%</div><div class="v">{{ vis.you.citation_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.citation_rate or 0)*100 }}%"></i></div></div>
+  <div class="card kpi"><div class="l">Sentiment · 15%</div><div class="v">{{ vis.you.sentiment|pct }}</div><div class="s mute">100% = always positive</div></div>
+</div>
+<section class="card"><h2>Score over time</h2><p class="note">0 to 39 Not shortlisted · 40 to 59 Emerging · 60 to 79 Competitive · 80 and above Leader</p>{{ trend }}</section>
+{% else %}<div class="card empty">No score yet. Approve prompts in Settings, then the next daily run (or Settings, Data, Ask ChatGPT now) produces one.</div>{% endif %}
+
+<section class="card" style="display:flex;flex-direction:column;gap:14px">
+<div class="top" style="align-items:center"><h2>Prompts{% if cycle %} · {{ cycle.strftime('%d %b %Y') }}{% endif %}</h2>
+<div class="seg"><a class="{{ 'on' if stage=='all' }}" href="?stage=all">All</a>{% for k,v in stages.items() %}<a class="{{ 'on' if stage==k }}" href="?stage={{ k }}">{{ v }}</a>{% endfor %}</div></div>
+<div class="tw"><table><tr><th>Prompt</th><th>Stage</th><th>{{ client.name }}</th><th>Site cited</th><th>Others named, in order</th><th></th></tr>
+{% for p in prompts %}<tr><td style="min-width:240px">{{ p.text }}</td><td>{{ stages[p.stage] }}</td>
+<td>{% if not p.answer_id %}{% if p.status=='error' %}<span class="tag t-fail" title="{{ p.error }}">Failed</span>{% else %}<span class="mute">not asked yet</span>{% endif %}
+{% elif p.rank %}<span class="tag t-blk">#{{ p.rank }}</span> <span class="note">{{ p.sentiment or '' }}</span>{% else %}<span class="tag t-fail">Not named</span>{% endif %}</td>
+<td>{% if p.answer_id %}{{ 'Yes' if p.cited else 'No' }}{% endif %}</td><td>{{ p.others or '–' }}</td>
+<td>{% if p.answer_id %}<a href="{{ url_for('dash.answer', cid=client.id, aid=p.answer_id) }}">Answer</a>{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">No approved prompts. <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Add or approve prompts.</a></td></tr>{% endfor %}</table></div></section>
+
+<div class="grid2">
+<section class="card"><h2>Sites ChatGPT cites most</h2><p class="note">Last 30 days. These are the places to be mentioned.</p>
+{% if cited %}<table><tr><th>Site</th><th>Type</th><th class="r">Answers</th></tr>{% for c in cited %}<tr><td>{{ c.domain }}{% if c.is_client %} <span class="tag t-blk">you</span>{% endif %}</td><td>{{ c.type|replace('_',' ') }}</td><td class="r">{{ c.answers }}</td></tr>{% endfor %}</table>
+{% else %}<p class="empty">No citations yet.</p>{% endif %}</section>
+<section class="card"><h2>Other brands ChatGPT names</h2><p class="note">Not tracked yet. Track the real competitors from Competitors.</p>
+{% if others %}<table><tr><th>Brand</th><th class="r">Answers</th><th></th></tr>{% for o in others %}<tr><td>{{ o.brand }}</td><td class="r">{{ o.answers }}</td>
+<td><form method="post" action="{{ url_for('dash.competitors_save', cid=client.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="add_name" value="{{ o.brand }}"><button class="btn ln">Track</button></form></td></tr>{% endfor %}</table>
+{% else %}<p class="empty">None yet.</p>{% endif %}</section>
+</div>
+{% endblock %}

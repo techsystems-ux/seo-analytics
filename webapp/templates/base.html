@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ client.name if client else 'Clients' }}{% endblock %} · Hovers AI Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--red:#B20F00;--ink:#000;--mute:#5A5A5A;--line:#E5E5E5;--soft:#F5F5F5}
+*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:14px/1.5 Montserrat,system-ui,Arial,sans-serif}
+a{color:var(--red)}a:hover{color:#8F0C00}
+.shell{display:flex;flex-wrap:wrap;min-height:100vh}
+nav.side{flex:1 1 220px;max-width:240px;background:#fff;border-right:1px solid var(--line);padding:24px 14px;display:flex;flex-direction:column;gap:18px}
+nav.side img{width:112px;margin:24px 8px 8px}
+.brandbox{padding:10px 12px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column}
+.brandbox b{font-size:14px}.brandbox span{font-size:12px;color:var(--mute)}
+.grp{display:flex;flex-direction:column;gap:2px}.grp .h{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);padding:4px 10px}
+.grp a{display:block;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--ink);font-weight:600;min-height:40px}
+.grp a.on{background:#000;color:#fff}.grp a:hover:not(.on){background:var(--soft)}
+main{flex:999 1 560px;min-width:0;padding:28px 32px 56px;max-width:1200px;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.kicker{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--red)}
+h1{margin:4px 0 0;font-size:28px;font-weight:800;line-height:1.15}h2{margin:0;font-size:16px;font-weight:800}
+.lead{margin:6px 0 0;color:var(--mute);max-width:720px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start}
+.kpi .l{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
+.kpi .v{font-size:30px;font-weight:800;line-height:1.15;margin:6px 0 2px}.kpi .s{font-size:12px}
+.up{color:#0A7A3D;font-weight:600}.down{color:var(--red);font-weight:600}.mute{color:var(--mute)}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid #000;border-radius:999px;overflow:hidden}
+.seg a{padding:8px 14px;min-height:36px;font-weight:600;font-size:12px;text-decoration:none;color:#000;background:#fff}.seg a.on{background:#000;color:#fff}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid #F0F0F0;vertical-align:top}td.r,th.r{text-align:right}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.t-fail{background:var(--red);color:#fff}.t-warn{border:1px solid var(--red);color:var(--red)}.t-pass{background:#F0F0F0}.t-blk{background:#000;color:#fff}.t-na{color:var(--mute);border:1px solid var(--line)}
+.btn{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;border:0;font:600 13px Montserrat,sans-serif;cursor:pointer;text-decoration:none}
+.btn.red{background:var(--red);color:#fff}.btn.blk{background:#000;color:#fff}.btn.ln{background:#fff;color:#000;box-shadow:inset 0 0 0 1px #000}
+input[type=text],input[type=number],textarea,select{font:inherit;padding:8px 10px;border:1px solid #000;border-radius:8px;width:100%;background:#fff}
+label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);display:block;margin:12px 0 6px}
+.msg{background:#000;color:#fff;border-radius:10px;padding:12px 16px}
+.bar{height:8px;background:#F0F0F0;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:var(--red)}
+.empty{padding:24px;text-align:center;color:var(--mute)}
+.note{font-size:12px;color:var(--mute)}
+@media (max-width:700px){main{padding:20px 16px 40px}nav.side{max-width:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav class="side" aria-label="Main menu">
+  <a href="{{ url_for('dash.clients') }}"><img src="{{ url_for('static', filename='hovers-logo.svg') }}" alt="Hovers"></a>
+  {% if client %}
+  <div class="brandbox"><b>{{ client.name }}</b><span>{{ client.domain }}</span><a href="{{ url_for('dash.clients') }}" style="font-size:12px;margin-top:4px">Switch brand</a></div>
+  <div class="grp"><a class="{{ 'on' if active=='overview' }}" href="{{ url_for('dash.overview', cid=client.id) }}">Overview</a></div>
+  <div class="grp"><span class="h">Analytics</span>
+    <a class="{{ 'on' if active=='search' }}" href="{{ url_for('dash.search', cid=client.id) }}">Search performance</a>
+    <a class="{{ 'on' if active=='ai' }}" href="{{ url_for('dash.ai', cid=client.id) }}">AI visibility</a>
+    <a class="{{ 'on' if active=='competitors' }}" href="{{ url_for('dash.competitors', cid=client.id) }}">Competitors</a></div>
+  <div class="grp"><span class="h">Work</span>
+    <a class="{{ 'on' if active=='pages' }}" href="{{ url_for('dash.pages', cid=client.id) }}">Pages</a></div>
+  <div class="grp"><a class="{{ 'on' if active=='settings' }}" href="{{ url_for('dash.settings', cid=client.id) }}">Settings</a></div>
+  {% endif %}
+  <div style="margin-top:auto;font-size:12px" class="mute">{{ staff }}<br><a href="{{ url_for('connections') }}">Google connections</a></div>
+</nav>
+<main>
+{% if request.args.get('msg') %}<div class="msg">{{ request.args.get('msg') }}</div>{% endif %}
+{% block body %}{% endblock %}
+</main>
+</div>
+</body>
+</html>

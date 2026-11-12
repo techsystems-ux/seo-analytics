@@ -1,0 +1,350 @@
+{
+  "name": "Gargi",
+  "domain": "gargi.shop",
+  "aliases": [
+    "Gargi by PNG",
+    "PNG Gargi",
+    "Gargi by P N Gadgil"
+  ],
+  "regions": [
+    "IN"
+  ],
+  "brand_rules": {
+    "brand_spellings": [
+      "Gargi",
+      "Gargi by PNG",
+      "PNG Gargi"
+    ],
+    "region_words": [
+      "India"
+    ],
+    "correct_domain": "gargi.shop",
+    "title_banned_words": [
+      "collection"
+    ],
+    "banned_words": [
+      "game changer",
+      "elevate",
+      "unleash"
+    ]
+  },
+  "prompts": {
+    "awareness": [
+      "best silver jewellery brands in India",
+      "where to buy fashion jewellery online in India",
+      "trending oxidised jewellery for everyday wear",
+      "best brands for daily wear mangalsutra",
+      "affordable gold plated jewellery brands in India",
+      "jewellery gift ideas for my wife under 5000 rupees"
+    ],
+    "consideration": [
+      "is 925 silver jewellery worth buying",
+      "gold plated vs silver jewellery, which lasts longer",
+      "most trusted online jewellery stores in India",
+      "best lightweight mangalsutra designs for office wear",
+      "which brand makes good quality oxidised earrings"
+    ],
+    "decision": [
+      "best place to buy silver anklets online in India",
+      "buy mangalsutra online with free shipping in India",
+      "best online store for gold plated earrings with easy returns"
+    ]
+  },
+  "semrush": {
+    "source": "Semrush connector, pulled by Claude on 12 Nov 2026",
+    "database": "in",
+    "pulled_on": "2026-11-12",
+    "usage": [
+      {
+        "report": "domain_organic",
+        "lines": 20,
+        "units": 200
+      },
+      {
+        "report": "domain_organic_organic",
+        "lines": 5,
+        "units": 200
+      }
+    ],
+    "domain": "gargi.shop",
+    "keywords": [
+      {
+        "keyword": "gargi by png thane p",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 40500,
+        "cpc": 0.06,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 43.69,
+        "competition": 0.23,
+        "kd": 36.0,
+        "intent": "navigational"
+      },
+      {
+        "keyword": "gargi by png",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 6600,
+        "cpc": 0.07,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 7.12,
+        "competition": 1.0,
+        "kd": 37.0,
+        "intent": "navigational"
+      },
+      {
+        "keyword": "gargi png",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 3600,
+        "cpc": 0.07,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 3.88,
+        "competition": 1.0,
+        "kd": 42.0,
+        "intent": "navigational"
+      },
+      {
+        "keyword": "gargi by png fc road",
+        "position": 1,
+        "prev_position": 0,
+        "search_volume": 110000,
+        "cpc": 0.07,
+        "url": "https://www.gargi.shop/collections/necklace",
+        "traffic_pct": 3.85,
+        "competition": 0.17,
+        "kd": 30.0,
+        "intent": "informational,transactional"
+      },
+      {
+        "keyword": "silver bracelet for women",
+        "position": 6,
+        "prev_position": 6,
+        "search_volume": 90500,
+        "cpc": 0.05,
+        "url": "https://www.gargi.shop/collections/silver-bracelet",
+        "traffic_pct": 3.66,
+        "competition": 1.0,
+        "kd": 22.0,
+        "intent": null
+      },
+      {
+        "keyword": "gargi by png orchid",
+        "position": 1,
+        "prev_position": 0,
+        "search_volume": 60500,
+        "cpc": 0.06,
+        "url": "https://www.gargi.shop/collections/all",
+        "traffic_pct": 1.46,
+        "competition": 0.24,
+        "kd": 23.0,
+        "intent": "informational,transactional"
+      },
+      {
+        "keyword": "gargi jewellery",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 1300,
+        "cpc": 0.06,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 1.4,
+        "competition": 0.96,
+        "kd": 40.0,
+        "intent": "commercial,navigational"
+      },
+      {
+        "keyword": "silver earrings",
+        "position": 4,
+        "prev_position": 4,
+        "search_volume": 27100,
+        "cpc": 0.06,
+        "url": "https://www.gargi.shop/collections/silver-earrings",
+        "traffic_pct": 1.09,
+        "competition": 1.0,
+        "kd": 23.0,
+        "intent": "commercial"
+      },
+      {
+        "keyword": "png gargi",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 1000,
+        "cpc": 0.08,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 1.07,
+        "competition": 0.96,
+        "kd": 43.0,
+        "intent": "navigational"
+      },
+      {
+        "keyword": "silver chain for women",
+        "position": 7,
+        "prev_position": 7,
+        "search_volume": 60500,
+        "cpc": 0.04,
+        "url": "https://www.gargi.shop/collections/silver-necklace",
+        "traffic_pct": 1.05,
+        "competition": 1.0,
+        "kd": 26.0,
+        "intent": "commercial"
+      },
+      {
+        "keyword": "chinchpeti",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 1600,
+        "cpc": 0.1,
+        "url": "https://www.gargi.shop/products/chichpeti-set",
+        "traffic_pct": 1.01,
+        "competition": 0.85,
+        "kd": 5.0,
+        "intent": "informational"
+      },
+      {
+        "keyword": "silver earrings for girls",
+        "position": 4,
+        "prev_position": 4,
+        "search_volume": 22200,
+        "cpc": 0.1,
+        "url": "https://www.gargi.shop/collections/silver-earrings",
+        "traffic_pct": 0.89,
+        "competition": 1.0,
+        "kd": 17.0,
+        "intent": "commercial"
+      },
+      {
+        "keyword": "png gargi collection",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 720,
+        "cpc": 0.05,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 0.77,
+        "competition": 0.99,
+        "kd": 39.0,
+        "intent": "navigational"
+      },
+      {
+        "keyword": "silver mangalsutra",
+        "position": 5,
+        "prev_position": 5,
+        "search_volume": 18100,
+        "cpc": 0.04,
+        "url": "https://www.gargi.shop/collections/silver-mangalsutra",
+        "traffic_pct": 0.73,
+        "competition": 1.0,
+        "kd": 17.0,
+        "intent": "commercial"
+      },
+      {
+        "keyword": "gargi collection",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 590,
+        "cpc": 0.05,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 0.63,
+        "competition": 0.56,
+        "kd": 32.0,
+        "intent": "commercial,navigational"
+      },
+      {
+        "keyword": "silver rakhis for brother",
+        "position": 6,
+        "prev_position": 6,
+        "search_volume": 9900,
+        "cpc": 0.05,
+        "url": "https://www.gargi.shop/collections/rakhi-special",
+        "traffic_pct": 0.53,
+        "competition": 1.0,
+        "kd": 11.0,
+        "intent": "informational"
+      },
+      {
+        "keyword": "evil eye anklet silver",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 2400,
+        "cpc": 0.05,
+        "url": "https://www.gargi.shop/products/silver-simple-evil-eye-anklet-fjak24129",
+        "traffic_pct": 0.42,
+        "competition": 1.0,
+        "kd": 17.0,
+        "intent": "informational"
+      },
+      {
+        "keyword": "silver mangalsutra png",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 590,
+        "cpc": 0.05,
+        "url": "https://www.gargi.shop/collections/silver-mangalsutra",
+        "traffic_pct": 0.37,
+        "competition": 1.0,
+        "kd": 21.0,
+        "intent": "informational"
+      },
+      {
+        "keyword": "png near me",
+        "position": 6,
+        "prev_position": 6,
+        "search_volume": 8100,
+        "cpc": 0.26,
+        "url": "https://www.gargi.shop/pages/store-locator",
+        "traffic_pct": 0.32,
+        "competition": 0.32,
+        "kd": 18.0,
+        "intent": "transactional"
+      },
+      {
+        "keyword": "gargi by png laxmi r",
+        "position": 1,
+        "prev_position": 1,
+        "search_volume": 12100,
+        "cpc": 0.06,
+        "url": "https://www.gargi.shop/",
+        "traffic_pct": 0.29,
+        "competition": 0.29,
+        "kd": 30.0,
+        "intent": "navigational"
+      }
+    ],
+    "competitors": [
+      {
+        "domain": "pngexclusive.com",
+        "relevance": 0.25,
+        "common_keywords": 139,
+        "organic_keywords": 1161,
+        "organic_traffic": 8908
+      },
+      {
+        "domain": "zavya.co",
+        "relevance": 0.18,
+        "common_keywords": 233,
+        "organic_keywords": 2457,
+        "organic_traffic": 63179
+      },
+      {
+        "domain": "pngadgilandsons.com",
+        "relevance": 0.18,
+        "common_keywords": 177,
+        "organic_keywords": 8763,
+        "organic_traffic": 204711
+      },
+      {
+        "domain": "truesilver.co.in",
+        "relevance": 0.16,
+        "common_keywords": 234,
+        "organic_keywords": 5395,
+        "organic_traffic": 51112
+      },
+      {
+        "domain": "pngbrothers.com",
+        "relevance": 0.14,
+        "common_keywords": 66,
+        "organic_keywords": 510,
+        "organic_traffic": 3785
+      }
+    ]
+  }
+}

@@ -1,0 +1,58 @@
+# Render Blueprint: the web app, the nightly data pull and the database, in Singapore (closest region to India).
+# Secrets are not in this file. After the first deploy, add these to the "hovers-secrets" group in the Render dashboard:
+#   GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, OPENAI_API_KEY, SEMRUSH_API_KEY
+# and add <your Render address>/auth/google/callback as an authorised redirect URI on the Google OAuth client.
+services:
+  - type: web
+    name: hovers-ai-search
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    dockerfilePath: ./Dockerfile
+    preDeployCommand: python scripts/migrate.py
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: {name: hovers-ai-search-db, property: connectionString}
+      - fromGroup: hovers-secrets
+      - fromGroup: hovers-settings
+
+  - type: cron
+    name: hovers-ai-search-daily
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    dockerfilePath: ./Dockerfile
+    schedule: "40 21 * * *"          # 03:10 India time, every night
+    dockerCommand: python collectors/daily.py
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: {name: hovers-ai-search-db, property: connectionString}
+      - fromGroup: hovers-secrets
+      - fromGroup: hovers-settings
+
+databases:
+  - name: hovers-ai-search-db
+    plan: 0.1c-256mb
+    region: singapore
+    postgresMajorVersion: "16"
+
+envVarGroups:
+  - name: hovers-secrets
+    envVars:
+      - key: FLASK_SECRET
+        generateValue: true
+      - key: TOKEN_KEY                 # encrypts stored Google sign-in tokens
+        generateValue: true
+  - name: hovers-settings
+    envVars:
+      - key: DB_SET_ROLE               # connect as the owner, then act as the app role so row-level security applies
+        value: aeo_app
+      - key: ALLOWED_EMAIL_DOMAINS
+        value: hovers.in
+      - key: SEMRUSH_TOTAL_CAP         # hard lifetime limit on Semrush units, all brands, all pulls (400 already used)
+        value: "500"
+      - key: SEMRUSH_MAX_UNITS         # most units one pull may spend, inside the lifetime limit
+        value: "500"
+      - key: AI_SAMPLES                # answers per prompt per night
+        value: "1"

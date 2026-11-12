@@ -1,0 +1,6 @@
+{"_note":"SYNTHETIC sample shaped like a PSI v5 response, for parser tests only",
+ "lighthouseResult":{"categories":{"performance":{"score":0.62}},
+  "audits":{"largest-contentful-paint":{"numericValue":3120.5},"cumulative-layout-shift":{"numericValue":0.08},
+   "total-blocking-time":{"numericValue":410},"first-contentful-paint":{"numericValue":1800},"server-response-time":{"numericValue":340}}},
+ "loadingExperience":{"overall_category":"AVERAGE","metrics":{
+   "LARGEST_CONTENTFUL_PAINT_MS":{"percentile":2900},"CUMULATIVE_LAYOUT_SHIFT_SCORE":{"percentile":12},"INTERACTION_TO_NEXT_PAINT":{"percentile":230}}}}
