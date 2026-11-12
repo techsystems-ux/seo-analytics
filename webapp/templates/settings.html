@@ -55,7 +55,7 @@
 <p class="note">Keys live in the server's settings, never in the app. Search Console and GA4 are linked from <a href="{{ url_for('connections') }}">Google connections</a>.</p></section>
 <section class="card"><h2>Pull data now</h2><p class="note">Search Console, GA4, rankings and ChatGPT also run every night; page checks and the technical crawl every Monday. Semrush runs only when someone presses a button below.</p>
 <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
-{% for only,label in [('gsc,ga4','Pull Search Console and GA4'),('ai','Ask ChatGPT all approved prompts'),('pages','Find and check pages')] %}
+{% for only,label in [('gsc,ga4,rank','Pull Search Console, GA4 and rankings'),('ai','Ask ChatGPT all approved prompts'),('pages','Find and check pages')] %}
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run"><input type="hidden" name="only" value="{{ only }}"><button class="btn {{ 'red' if loop.first else 'ln' }}">{{ label }}</button></form>{% endfor %}
 </div></section>
 </div>
