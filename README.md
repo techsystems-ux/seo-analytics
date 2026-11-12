@@ -117,3 +117,14 @@ brand's own YouTube channel is found by name. Once a key is set, the first pull 
 or the screen opens) and then refreshes weekly; Reddit's automatic run uses `APIFY_AUTO_ITEMS` (default 150) results.
 `COMMUNITY_AUTO=0` turns this off. Topics can still be overridden under "Adjust topics".
 Settings → Data → Show sample data fills all of these screens with marked sample rows.
+
+## Monthly report (migration 012)
+
+Side panel → Reports → **Monthly report**: pick the month (default: last complete month) and press Download PowerPoint.
+The 10-slide deck (cover, contents, keyword rankings, search performance, organic traffic, organic revenue, branded vs
+non-branded, top URLs, work done, plan of action) is built from stored Search Console and GA4 data by `webapp/report.py`
+with python-pptx; no API calls. Work done is drafted from what was marked done in the tool that month (fixed and
+verified technical issues, content ideas marked written, pages audited, crawls); the plan from keyword gaps, content
+ideas, slipping pages and open technical issues. Analysts can edit both on the screen; edits are saved per month.
+GA4 now also stores new users and organic product sales; the first pull after this update fetches 14 months of GA4
+(same-month-last-year comparisons) and 7 months of Search Console (the branded chart).

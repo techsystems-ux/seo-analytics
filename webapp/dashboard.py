@@ -315,8 +315,9 @@ def technical_save(cid):
         client_or_404(conn, cid)
         if request.form.get("issue"):
             due = request.form.get("due") or None
-            conn.execute("UPDATE tech_issues SET status=%s, owner=%s, due_date=%s WHERE client_id=%s AND issue_code=%s",
-                         [request.form.get("status", "open"), (request.form.get("owner") or "").strip() or None, due, cid, request.form["issue"]])
+            conn.execute("UPDATE tech_issues SET status=%s, owner=%s, due_date=%s, updated_at=CASE WHEN status IS DISTINCT FROM %s THEN now() ELSE updated_at END WHERE client_id=%s AND issue_code=%s",
+                         [request.form.get("status", "open"), (request.form.get("owner") or "").strip() or None, due, request.form.get("status", "open"),
+                          cid, request.form["issue"]])
             return redirect(url_for("dash.technical", cid=cid, issue=request.form["issue"], show=request.form.get("show", "open")))
     start_job(cid, "crawl")
     return redirect(url_for("dash.technical", cid=cid, msg="Crawl started. It checks up to 1,500 pages politely, so it can take 10 to 20 minutes; refresh to see results."))
@@ -338,7 +339,7 @@ def ideas_save(cid):
     check_csrf()
     with connect() as conn:
         client_or_404(conn, cid)
-        conn.execute("UPDATE keyword_ideas SET status=%s WHERE client_id=%s AND kind=%s AND keyword=%s",
+        conn.execute("UPDATE keyword_ideas SET status=%s, updated_at=now() WHERE client_id=%s AND kind=%s AND keyword=%s",
                      [request.form["status"], cid, request.form["kind"], request.form["keyword"]])
     return redirect(url_for("dash.ideas", cid=cid, kind=request.form.get("f_kind") or None, status=request.form.get("f_status", "new")))
 
@@ -441,7 +442,7 @@ def research_run(cid, tool):
             return back_with(back, f"Tracking “{kw}” in Rankings.")
         if request.form.get("do") == "idea" and kw:
             conn.execute("""INSERT INTO keyword_ideas (client_id, seed, kind, keyword, search_volume, kd, pulled_on, status)
-                            VALUES (%s,%s,%s,%s,%s,%s,current_date,'planned') ON CONFLICT (client_id, kind, keyword) DO UPDATE SET status='planned'""",
+                            VALUES (%s,%s,%s,%s,%s,%s,current_date,'planned') ON CONFLICT (client_id, kind, keyword) DO UPDATE SET status='planned', updated_at=now()""",
                          [cid, request.form.get("seed") or kw, "question" if request.form.get("kind") == "question" else "related", kw,
                           request.form.get("volume") or None, request.form.get("kd") or None])
             return back_with(back, f"“{kw}” added to Content ideas as planned.")
@@ -568,3 +569,61 @@ def youtube_save(cid):
         import sample_semrush; sample_semrush.clear(conn, cid, only='youtube')
     start_job(cid, "youtube")
     return back_with(url_for("dash.youtube_view", cid=cid), "YouTube pull started (free daily quota). Refresh in a minute or two.")
+
+# ------------------------------------------------------------------ Monthly report (download as PowerPoint)
+def report_month(arg):
+    import datetime as dt, report
+    try: return dt.datetime.strptime(arg, "%Y-%m").date() if arg else report.default_month()
+    except ValueError: abort(400)
+
+@bp.get("/c/<cid>/report")
+def monthly_report(cid):
+    import report, datetime as dt
+    month = report_month(request.args.get("month"))
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        R = report.compute(conn, cid, month)
+    months, m = [], report.default_month()
+    for _ in range(12): months.append(m); m = report.prev_month(m)
+    a, b = report.month_bounds(month)
+    full = (b - a).days + 1
+    t, g = R["search"]["cur"], R["traffic"]["cur"]
+    ready = [("Search Console, " + report.month_name(month), t["days"] if t else 0, full),
+             ("Search Console, " + report.month_name(R["prev"]), R["search"]["prev"]["days"] if R["search"]["prev"] else 0,
+              (report.month_bounds(R["prev"])[1] - R["prev"]).days + 1),
+             ("Google Analytics, " + report.month_name(month), g["days"] if g else 0, full)]
+    return view("report.html", c, "report", R=R, month=month, months=months, ready=ready,
+                work_text=R["saved"]["work"] if R["saved"] and R["saved"]["work"] else report.work_text(R["work_auto"]),
+                plan_text=R["saved"]["plan"] if R["saved"] and R["saved"]["plan"] else report.plan_text(R["plan_auto"]),
+                edited=bool(R["saved"] and (R["saved"]["work"] or R["saved"]["plan"])), fmt=report)
+
+@bp.post("/c/<cid>/report")
+def monthly_report_save(cid):
+    check_csrf()
+    import report
+    month = report_month(request.form.get("month"))
+    with connect() as conn:
+        client_or_404(conn, cid)
+        if request.form.get("do") == "reset":
+            conn.execute("DELETE FROM monthly_reports WHERE client_id=%s AND month=%s", [cid, month])
+            msg = "Back to the automatic draft."
+        else:
+            conn.execute("""INSERT INTO monthly_reports (client_id, month, work_done, plan, updated_by) VALUES (%s,%s,%s,%s,%s)
+                            ON CONFLICT (client_id, month) DO UPDATE SET work_done=EXCLUDED.work_done, plan=EXCLUDED.plan,
+                            updated_by=EXCLUDED.updated_by, updated_at=now()""",
+                         [cid, month, request.form.get("work", "").strip()[:8000] or None, request.form.get("plan", "").strip()[:8000] or None,
+                          session.get("staff_email")])
+            msg = "Saved. The download uses your text."
+    return back_with(url_for("dash.monthly_report", cid=cid, month=month.strftime("%Y-%m")), msg)
+
+@bp.get("/c/<cid>/report/<month>.pptx")
+def monthly_report_download(cid, month):
+    import report, io, re as _re
+    from flask import send_file
+    m = report_month(month)
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        data = report.build(report.compute(conn, cid, m))
+    name = _re.sub(r"[^A-Za-z0-9 ._-]", "", f"{c['name']} - SEO Report - {m.strftime('%B %Y')}.pptx")
+    return send_file(io.BytesIO(data), as_attachment=True, download_name=name,
+                     mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation")

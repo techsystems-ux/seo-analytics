@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 11
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 12
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -231,6 +231,24 @@ del os.environ["APIFY_TOKEN"], os.environ["YOUTUBE_API_KEY"]
 with connect() as conn: conn.execute("DELETE FROM collector_runs WHERE client_id=%s AND collector IN ('reddit','reddit_auto','youtube_auto')", [cid])
 print("reddit and youtube: the first pull starts by itself when a key is set and the screen opens, once; weekly after that")
 
+# ------------------------------------------------------------------ monthly report: page, edits, download
+import report as _rep
+mstr = _rep.default_month().strftime("%Y-%m")
+page = cl.get(f"/c/{cid}/report?month={mstr}").get_data(as_text=True)
+assert "Monthly SEO report" in page and "Download PowerPoint" in page and "Work done in" in page, page[:300]
+r = cl.post(f"/c/{cid}/report", data={"csrf": "tok", "month": mstr, "work": "Content | Wrote 4 blogs | 30 clicks", "plan": "Blogs\nGoal: x\n- y"})
+assert r.status_code == 302 and "Edited by" in cl.get(f"/c/{cid}/report?month={mstr}").get_data(as_text=True)
+r = cl.get(f"/c/{cid}/report/{mstr}.pptx")
+assert r.status_code == 200 and r.data[:2] == b"PK" and "SEO Report" in r.headers["Content-Disposition"], r.headers
+from pptx import Presentation as _P
+import io as _io
+assert "Wrote 4 blogs" in " ".join(sh.text_frame.text for sl in _P(_io.BytesIO(r.data)).slides for sh in sl.shapes if sh.has_text_frame) or \
+       any("Wrote 4 blogs" in c.text for sl in _P(_io.BytesIO(r.data)).slides for sh in sl.shapes if sh.has_table for row in sh.table.rows for c in row.cells)
+cl.post(f"/c/{cid}/report", data={"csrf": "tok", "month": mstr, "do": "reset"})
+assert "Edited by" not in cl.get(f"/c/{cid}/report?month={mstr}").get_data(as_text=True)
+assert cl.get(f"/c/{cid}/report?month=bad").status_code == 400
+print("monthly report: page shows the month's numbers and drafts, edits save and reset, the download is a PowerPoint with the edits")
+
 print("sister brands: P N Gadgil & Sons is Gargi's own, PNG Brothers and PNG Exclusive searches and mentions are not Gargi's")
 
 # ------------------------------------------------------------------ sample data for reviewing the Semrush screens
@@ -280,6 +298,6 @@ with psycopg.connect(owner, autocommit=True) as c:                              
     c.execute("SET ROLE aeo_app"); c.execute("SELECT set_config('app.client_id', %s, false)", [str(other)])
     for t in ("semrush_keywords", "keyword_gaps", "answers", "citations", "scores_daily", "ga4_organic_landing", "competitors",
               "tech_issues", "rank_keywords", "rank_positions", "keyword_ideas", "backlink_overview", "backlink_gap",
-              "research_lookups", "reddit_items", "youtube_videos"):
+              "research_lookups", "reddit_items", "youtube_videos", "monthly_reports"):
         assert c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0, t
 print("tenant isolation holds for the new tables")

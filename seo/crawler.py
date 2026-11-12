@@ -160,9 +160,11 @@ def save(conn, client_id, pages, issues, started_at, today=None):
                         ON CONFLICT (client_id, issue_code) DO UPDATE SET pages=EXCLUDED.pages, last_seen=now(), title=EXCLUDED.title,
                           how_to_fix=EXCLUDED.how_to_fix,
                           status=CASE WHEN tech_issues.status IN ('fixed','verified') THEN 'open' ELSE tech_issues.status END,
+                          updated_at=CASE WHEN tech_issues.status IN ('fixed','verified') THEN now() ELSE tech_issues.updated_at END,
                           due_date=CASE WHEN tech_issues.status IN ('fixed','verified') THEN EXCLUDED.due_date ELSE tech_issues.due_date END""",
                      [client_id, code, title, sev, team, fix, len({u for u, _ in rows}), today + dt.timedelta(days=DUE_DAYS[sev])])
-    gone = conn.execute("""UPDATE tech_issues SET pages=0, status=CASE WHEN status='fixed' THEN 'verified' ELSE status END
+    gone = conn.execute("""UPDATE tech_issues SET pages=0, status=CASE WHEN status='fixed' THEN 'verified' ELSE status END,
+                             updated_at=CASE WHEN status='fixed' THEN now() ELSE updated_at END
                            WHERE client_id=%s AND source='hovers' AND NOT (issue_code = ANY(%s)) AND pages > 0 RETURNING issue_code""",
                         [client_id, list(issues)]).fetchall()
     return {"crawl_id": crawl_id, "pages": len(pages), "ok": len(ok), "health": health, **counts, "cleared": len(gone)}

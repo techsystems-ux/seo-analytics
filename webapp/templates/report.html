@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block body %}
+{% set t = R.search.cur %}{% set g = R.traffic.cur %}{% set rk = R.rank.cur %}
+<div class="top"><div><span class="kicker">Reports · Monthly report</span><h1>Monthly SEO report</h1>
+<p class="lead">The client deck for the month, built from the data already in the tool: keyword rankings, search performance, organic traffic and revenue, branded vs non-branded, top pages, work done and next month's plan. Pick the month and download. Nothing is spent.</p></div></div>
+
+<section class="card" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between">
+  <form method="get" style="display:flex;gap:8px;align-items:flex-end">
+    <div><label for="mo">Month</label><select id="mo" name="month" onchange="this.form.submit()">{% for m in months %}<option value="{{ m.strftime('%Y-%m') }}" {{ 'selected' if m == month }}>{{ m.strftime('%B %Y') }}</option>{% endfor %}</select></div>
+    <noscript><button class="btn ln">Show</button></noscript></form>
+  <a class="btn red" href="{{ url_for('dash.monthly_report_download', cid=client.id, month=month.strftime('%Y-%m')) }}" style="text-decoration:none">Download PowerPoint · {{ month.strftime('%B %Y') }}</a>
+</section>
+
+<div class="grid">
+  <div class="card kpi"><div class="l">Google clicks</div><div class="v">{{ fmt.n(t.clicks) if t else '–' }}</div><div class="s mute">{{ ('vs ' ~ fmt.n(R.search.prev.clicks) ~ ' in ' ~ R.prev.strftime('%B')) if R.search.prev else 'no data for the month before' }}</div></div>
+  <div class="card kpi"><div class="l">Keywords in the top 10</div><div class="v">{{ fmt.n(rk.top10) }}</div><div class="s mute">{{ ('vs ' ~ fmt.n(R.rank.prev.top10)) if R.rank.prev else '–' }}</div></div>
+  <div class="card kpi"><div class="l">Organic sessions</div><div class="v">{{ fmt.n(g.sessions) if g else '–' }}</div><div class="s mute">{{ ('vs ' ~ fmt.n(R.traffic.prev.sessions)) if R.traffic.prev else 'no GA4 data for the month before' }}</div></div>
+  <div class="card kpi"><div class="l">Organic revenue</div><div class="v" style="font-size:24px">{{ fmt.inr(R.revenue.cur) }}</div><div class="s mute">{{ ('vs ' ~ fmt.inr(R.revenue.prev)) if R.revenue.prev is not none else '–' }}</div></div>
+</div>
+
+<section class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Data for this month</h2>
+  {% for label, have, need in ready %}<p style="margin:0">{% if have >= need %}<span class="tag t-pass">complete</span>{% elif have %}<span class="tag t-na">{{ have }} of {{ need }} days</span>{% else %}<span class="tag t-sev-error">missing</span>{% endif %} {{ label }}</p>{% endfor %}
+  <p class="note" style="margin:0">Same month last year: {{ 'GA4 data found, so traffic and revenue compare with ' ~ R.ly.strftime('%B %Y') if R.traffic.ly else 'not stored yet; the first GA4 pull after this update fetches 14 months' }}.
+  {% if not R.products %}Product sales: not available from GA4 for this property yet, so revenue is shown by landing page.{% endif %}</p>
+</section>
+
+<form method="post" class="grid2" style="align-items:stretch;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="month" value="{{ month.strftime('%Y-%m') }}">
+  <section class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Work done in {{ month.strftime('%B') }}</h2>
+    <p class="note" style="margin:0">{{ 'Edited by ' ~ (R.saved.by or 'the team') ~ '.' if edited else 'Drafted from what was marked done in the tool this month.' }} One line per area: <b>Area | what was done (separate items with /) | early result</b></p>
+    <textarea name="work" rows="9" aria-label="Work done">{{ work_text }}</textarea></section>
+  <section class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Plan of action for {{ (month.replace(day=28) + fmt.dt.timedelta(days=5)).strftime('%B') }}</h2>
+    <p class="note" style="margin:0">Drafted from this month's data: keyword gaps, content ideas, slipping pages and open technical issues. Up to four blocks, separated by an empty line: <b>title</b>, <b>Goal: …</b>, then <b>- points</b>.</p>
+    <textarea name="plan" rows="9" aria-label="Plan of action">{{ plan_text }}</textarea></section>
+  <div style="display:flex;gap:8px;align-items:center;grid-column:1/-1">
+    <button class="btn blk">Save edits</button>{% if edited %}<button class="btn ln" name="do" value="reset">Back to automatic draft</button>{% endif %}
+    <span class="note">Saving is optional: the download always works, with the draft if nothing was edited.</span></div>
+</form>
+{% endblock %}

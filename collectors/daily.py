@@ -36,6 +36,9 @@ def weekly_due(conn, client_id, name, force):
                         [client_id, name]).fetchone()[0]
     return last is None
 
+def ran_ok(conn, client_id, name):
+    return bool(conn.execute("SELECT 1 FROM collector_runs WHERE client_id=%s AND collector=%s AND status='ok' LIMIT 1", [client_id, name]).fetchone())
+
 def due(conn, client_id, name, days):
     """True when the last successful run is older than `days` (or there is none) and none has been running in the last hour."""
     last_ok, running = conn.execute("""SELECT max(started_at) FILTER (WHERE status='ok'),
@@ -62,10 +65,14 @@ def main():
                 for c, site, n, domain, aliases, gconn in gsc.clients_to_sync(conn, cid):
                     days = 7 if has_rows(conn, "gsc_search_daily", cid) else 90      # first pull: 90 days, so 28-day comparisons work
                     ok &= log(conn, cid, "gsc", lambda: gsc.sync_client(conn, gpool["gsc"].get(gconn), c, site, n, domain, aliases, days, 3))
+                    if not ran_ok(conn, cid, "gsc_history"):                         # once: 7 months, for the monthly report's trend chart
+                        ok &= log(conn, cid, "gsc_history", lambda: gsc.sync_client(conn, gpool["gsc"].get(gconn), c, site, n, domain, aliases, 215, 3))
             if "ga4" in only:
                 for c, pid, n, gconn in ga4.clients_to_sync(conn, cid):
                     days = 7 if has_rows(conn, "ga4_organic_landing", cid) else 90
                     ok &= log(conn, cid, "ga4", lambda: ga4.sync_client(conn, gpool["ga4"].get(gconn), c, pid, days, 1))
+                    if not ran_ok(conn, cid, "ga4_history"):                         # once: 14 months, for same-month-last-year comparisons
+                        ok &= log(conn, cid, "ga4_history", lambda: ga4.sync_client(conn, gpool["ga4"].get(gconn), c, pid, 430, 1))
             if "rank" in only:
                 import rank
                 ok &= log(conn, cid, "rank", lambda: rank.sync_client(conn, cid))

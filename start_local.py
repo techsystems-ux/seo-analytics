@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -83,7 +83,16 @@ def load_sample_once():
     try: os.remove(flag)
     except OSError: pass
 
+def ensure_packages():
+    """Packages added after the first install (python-pptx for the monthly report): installed once, on this computer."""
+    try:
+        import pptx  # noqa: F401
+    except ImportError:
+        print("Installing python-pptx for the monthly report (one time)...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "python-pptx==1.0.*"])
+
 def main():
+    ensure_packages()
     load_env()
     srv = start_db()
     load_seeds()

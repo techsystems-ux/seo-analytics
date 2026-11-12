@@ -55,3 +55,4 @@ urllib3==2.8.0
     # via requests
 werkzeug==3.1.9
     # via flask
+python-pptx==1.0.*
