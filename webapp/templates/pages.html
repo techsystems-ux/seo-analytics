@@ -1,33 +1,85 @@
 {% extends "base.html" %}
 {% block body %}
-<div class="top"><div><span class="kicker">Work · Pages</span><h1>Every page, checked against the SOP</h1>
-<p class="lead">Pages are found from the site's sitemap, given a keyword from Search Console, and checked against the SOP and the brand rules. Rule IDs match the SOP doc.</p></div>
+{% set q = '&type=' ~ type ~ '&show=' ~ show ~ ('&issue=' ~ issue if issue else '') %}
+<div class="top"><div><span class="kicker">Work · Page audit</span><h1>On-page audit, page by page</h1>
+<p class="lead">Every page on {{ client.domain }} is found from the sitemap and checked against the on-page rules in the SOP:
+how it shows in Google, its content, links, schema and brand rules. Technical issues (redirects, broken links, speed) are in the technical audit.</p></div>
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Find and check pages now</button></form></div>
 
-<div class="top" style="align-items:center">
-<div class="seg">{% for k,v in [('all','All'),('collection','Collections'),('product','Products'),('blog','Blogs'),('static','Other')] %}<a class="{{ 'on' if type==k }}" href="?type={{ k }}">{{ v }}</a>{% endfor %}</div>
-<span class="note">{{ rows|sum(attribute='fails') }} checks to fix across {{ rows|length }} pages</span></div>
-
 {% if all_count %}
-<div class="grid2">
-<section class="card" style="padding:8px 10px"><table><tr><th>Page and keyword</th><th>To fix</th><th>Status</th></tr>
+<div class="grid">
+  <div class="card kpi"><div class="l">Pages found</div><div class="v">{{ all_count|n }}</div>
+    <div class="s mute">{{ counts.collection }} collections · {{ counts.product }} products · {{ counts.blog }} blogs · {{ counts.static + counts.home }} other</div></div>
+  <div class="card kpi"><div class="l">Pages checked</div><div class="v">{{ checked_count|n }}</div><div class="s mute">top pages by priority; more each Monday</div></div>
+  <div class="card kpi"><div class="l">Checks to fix</div><div class="v">{{ fixes|n }}</div><div class="s mute">across checked pages</div></div>
+</div>
+
+{% if issues %}
+<section class="card"><div class="top" style="align-items:center"><h2>Most common issues</h2>
+{% if issue %}<a href="?type={{ type }}&show={{ show }}">Clear filter: {{ issue_name }}</a>{% endif %}</div>
+<p class="note">Fix these once in the theme or template and many pages improve together. Click an issue to see its pages.</p>
+<div class="tw"><table><tr><th>Issue</th><th>Area</th><th class="r">Pages to fix</th><th class="r">Pages to improve</th></tr>
+{% for i in issues[:8] %}<tr style="{{ 'background:#F5F5F5' if issue==i.id }}"><td><a href="?show=checked&issue={{ i.id }}" style="color:#000;font-weight:600">{{ i.name }}</a> <span class="note">{{ i.id }}</span></td>
+<td class="note">{{ i.group }}</td><td class="r">{% if i.fails %}<span class="tag t-fail">{{ i.fails }}</span>{% else %}–{% endif %}</td><td class="r">{{ i.warns or '–' }}</td></tr>{% endfor %}</table></div></section>
+{% endif %}
+
+<div class="top" style="align-items:center">
+  <div class="seg">{% for k,v in [('all','All'),('collection','Collections'),('product','Products'),('blog','Blogs'),('static','Other')] %}<a class="{{ 'on' if type==k }}" href="?type={{ k }}&show={{ show }}{{ '&issue=' ~ issue if issue else '' }}">{{ v }}</a>{% endfor %}</div>
+  <div class="seg"><a class="{{ 'on' if show=='checked' }}" href="?type={{ type }}&show=checked">Checked</a><a class="{{ 'on' if show=='unchecked' }}" href="?type={{ type }}&show=unchecked">Not checked yet</a></div>
+</div>
+
+<div class="grid2" style="grid-template-columns:minmax(300px,2fr) minmax(360px,3fr)">
+<section class="card" style="padding:8px 10px;max-height:1100px;overflow:auto">
+<table><tr><th>Page</th><th class="r">To fix</th><th class="r">Score</th></tr>
 {% for r in rows %}<tr style="{{ 'background:#F5F5F5;box-shadow:inset 3px 0 0 #B20F00' if sel==r.page_id|string }}">
-<td><a href="?type={{ type }}&page={{ r.page_id }}" style="font-weight:600;color:#000">{{ r.url|path }}</a><br><span class="note">{{ r.type }} · {{ r.keyword or 'no keyword set' }}</span></td>
-<td>{% if not r.checked_at %}<span class="tag t-na">Not checked</span>{% elif r.fails %}<span class="tag t-fail">{{ r.fails }} to fix</span>{% else %}<span class="tag t-pass">All clear</span>{% endif %}</td>
-<td class="note">{{ r.status|replace('_',' ') }}</td></tr>{% endfor %}</table></section>
-<section class="card">{% if selected %}<span class="note">{{ selected.type }} · {{ selected.status|replace('_',' ') }}</span><h2 style="overflow-wrap:anywhere">{{ selected.url|path }}</h2>
-<p class="note">Primary keyword: {{ selected.keyword or 'not set' }}{% if checks %} · checked {{ checks[0].taken_at.strftime('%d %b %Y') }} ({{ checks[0].source }}){% endif %}</p>
-{% for c in checks %}<div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid #F0F0F0">
-<div><span class="tag t-{{ c.result }}">{{ {'fail':'Fix','warn':'Improve','pass':'Pass','na':'n/a'}[c.result] }}</span><div class="note" style="margin-top:6px;font-weight:600">{{ c.id }}</div></div>
-<div><div>{{ c.message }}</div><div class="note">Found: {{ c.found }}</div></div></div>
-{% else %}<p class="empty">Not checked yet.</p>{% endfor %}{% endif %}</section>
+<td><a href="?page={{ r.page_id }}{{ q }}" style="font-weight:600;color:#000;overflow-wrap:anywhere">{{ r.url|path }}</a><br>
+<span class="note">{{ r.type }} · {{ r.keyword or 'no keyword yet' }}{% if r.kw_source=='auto' %} (from data){% endif %}</span></td>
+<td class="r">{% if not r.checked_at %}<span class="note">–</span>{% elif r.fails %}<span class="tag t-fail">{{ r.fails }}</span>{% else %}<span class="tag t-pass">0</span>{% endif %}</td>
+<td class="r"><b>{{ r.score if r.score is not none else '–' }}</b></td></tr>
+{% else %}<tr><td colspan="3" class="empty">{% if show=='unchecked' %}Every page in this view has been checked.{% else %}No checked pages in this view yet. Press Find and check pages now.{% endif %}</td></tr>{% endfor %}
+</table></section>
+
+<section style="display:flex;flex-direction:column;gap:12px;min-width:0">
+{% if selected %}
+<div class="card"><div class="top" style="align-items:flex-start"><div style="min-width:0">
+  <span class="note">{{ selected.type }} · keyword: <b>{{ selected.keyword or 'not set' }}</b>{% if selected.kw_source=='auto' %} (top non-branded search for this page){% endif %}</span>
+  <h2 style="overflow-wrap:anywhere;margin-top:4px"><a href="{{ selected.url }}" target="_blank" rel="noopener" style="color:#000">{{ selected.url|path }}</a></h2>
+  {% if audit.checked_at %}<span class="note">Checked {{ audit.checked_at.strftime('%d %b %Y') }} · {{ audit.words|n }} words on the page</span>{% endif %}</div>
+  <div style="text-align:right"><div style="font-size:34px;font-weight:800;line-height:1">{{ selected.score if selected.score is not none else '–' }}</div><span class="note">out of 100</span></div></div>
+  {% if audit.checked_at %}
+  <div style="margin-top:14px;padding:14px 16px;border:1px solid #E5E5E5;border-radius:10px">
+    <span class="note">How it can look in Google</span>
+    <div style="font-size:12px;color:#3D3D3D;margin-top:6px">{{ client.domain }} › {{ (selected.url|path)[1:]|replace('/', ' › ') }}</div>
+    <div style="font-size:18px;color:#1A0DAB;line-height:1.3;margin:2px 0">{{ audit.title[:60] }}{% if audit.title|length > 60 %}…{% endif %}{% if not audit.title %}<span class="mute">No title</span>{% endif %}</div>
+    <div style="font-size:13px;color:#3D3D3D">{{ audit.description[:160] }}{% if audit.description|length > 160 %}…{% endif %}{% if not audit.description %}<span class="mute">No description: Google picks text from the page.</span>{% endif %}</div>
+    <div class="note" style="margin-top:8px">H1 on the page: {{ audit.h1 or 'none' }}</div>
+  </div>{% endif %}
+</div>
+{% if not audit.checked_at %}<div class="card empty">Not checked yet. It is checked in a later run, by priority.</div>{% endif %}
+{% for g in audit.groups %}
+<div class="card" style="padding:16px 20px">
+  <div class="top" style="align-items:center"><div><h2>{{ g.label }}</h2><span class="note">{{ g.about }}</span></div>
+  <div>{% if g.fails %}<span class="tag t-fail">{{ g.fails }} to fix</span> {% endif %}{% if g.warns %}<span class="tag t-warn">{{ g.warns }} to improve</span> {% endif %}{% if not g.fails and not g.warns %}<span class="tag t-pass">All good</span>{% endif %}</div></div>
+  {% for i in g.checks if i.result in ('fail','warn') %}
+  <div style="display:grid;grid-template-columns:86px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid #F0F0F0;margin-top:10px">
+    <div><span class="tag t-{{ i.result }}">{{ 'Fix' if i.result=='fail' else 'Improve' }}</span><div class="note" style="margin-top:6px">{{ i.id }}</div></div>
+    <div><b>{{ i.name }}</b><div>{{ i.message }}</div><div class="note">Now: {{ i.found }}</div></div></div>
+  {% endfor %}
+  {% set ok = g.checks|selectattr('result','equalto','pass')|list %}
+  {% if ok %}<details style="margin-top:8px"><summary class="note" style="cursor:pointer">{{ ok|length }} passing</summary>
+  {% for i in ok %}<div class="note" style="padding:4px 0">✓ {{ i.name }} · {{ i.found }}</div>{% endfor %}</details>{% endif %}
+</div>
+{% endfor %}
+{% else %}<div class="card empty">Pick a page on the left.</div>{% endif %}
+</section>
 </div>
 {% else %}
 <section class="card empty"><h2 style="margin-bottom:8px">No pages yet</h2>
 <p>Press <b>Find and check pages now</b>. The tool reads {{ client.domain }}'s sitemap, adds every collection, product, blog and page,
 gives each a keyword from Search Console, and checks the top 100 by priority. It also runs every Monday on its own.</p></section>
 {% endif %}
+
 <details class="card"><summary style="cursor:pointer;font-weight:600">Optional: set keywords from a CSV</summary>
-<p class="note">Columns: url, page_type, primary_keyword, secondary_keywords (separated by ;), search_volume, intent. Existing URLs are updated.</p>
+<p class="note">Columns: url, page_type, primary_keyword, secondary_keywords (separated by ;), search_volume, intent. Keywords set this way are never replaced automatically.</p>
 <form method="post" enctype="multipart/form-data" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="file" name="csv" accept=".csv" required aria-label="Pages CSV"><button class="btn ln">Import CSV</button></form></details>
 {% endblock %}

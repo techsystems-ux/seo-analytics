@@ -1,6 +1,7 @@
 """Read-side queries for the dashboard screens. Every function takes an open connection and a client_id and returns
 plain dicts, so screens stay thin and the numbers can be tested without a browser."""
-import datetime as dt
+import datetime as dt, os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seo"))
 
 BANDS = [(80, "Leader"), (60, "Competitive"), (40, "Emerging"), (0, "Not shortlisted")]
 def band(s): return None if s is None else next(n for f, n in BANDS if float(s) >= f)
@@ -183,17 +184,56 @@ def semrush_units(conn, client_id=None, days=30):
 
 # ------------------------------------------------------------------ pages and runs
 def page_summary(conn, client_id):
-    return rows(conn.execute("""SELECT p.page_id, p.url, p.page_type, p.primary_keyword, p.status,
-                                       count(*) FILTER (WHERE c.result='fail'), count(*) FILTER (WHERE c.result='warn'),
-                                       count(*) FILTER (WHERE c.result='pass'), max(c.taken_at)
-                                FROM pages p LEFT JOIN page_latest_checks c USING (page_id) WHERE p.client_id=%s
-                                GROUP BY p.page_id ORDER BY 6 DESC, p.url""", [client_id]),
-                ["page_id", "url", "type", "keyword", "status", "fails", "warns", "passes", "checked_at"])
+    out = rows(conn.execute("""SELECT p.page_id, p.url, p.page_type::text, p.primary_keyword, p.intent,
+                                      count(*) FILTER (WHERE c.result='fail'), count(*) FILTER (WHERE c.result='warn'),
+                                      count(*) FILTER (WHERE c.result='pass'), max(c.taken_at)
+                               FROM pages p LEFT JOIN page_latest_checks c USING (page_id) WHERE p.client_id=%s
+                               GROUP BY p.page_id ORDER BY 6 DESC, 7 DESC, p.url""", [client_id]),
+               ["page_id", "url", "type", "keyword", "kw_source", "fails", "warns", "passes", "checked_at"])
+    for r in out:
+        n = r["fails"] + r["warns"] + r["passes"]
+        r["score"] = round(100 * (r["passes"] + 0.5 * r["warns"]) / n) if n else None
+    return out
 
-def page_checks(conn, client_id, page_id):
-    return rows(conn.execute("""SELECT check_id, result, found, message, source, taken_at FROM page_latest_checks WHERE client_id=%s AND page_id=%s
-                                ORDER BY CASE result WHEN 'fail' THEN 0 WHEN 'warn' THEN 1 WHEN 'pass' THEN 2 ELSE 3 END, check_id""",
-                             [client_id, page_id]), ["id", "result", "found", "message", "source", "taken_at"])
+def site_issues(conn, client_id):
+    """Most common problems across checked pages: one row per check, pages to fix and to improve."""
+    import checks as C
+    out = rows(conn.execute("""SELECT check_id, count(*) FILTER (WHERE result='fail'), count(*) FILTER (WHERE result='warn')
+                               FROM page_latest_checks WHERE client_id=%s GROUP BY check_id
+                               HAVING count(*) FILTER (WHERE result IN ('fail','warn')) > 0
+                               ORDER BY 2 DESC, 3 DESC""", [client_id]), ["id", "fails", "warns"])
+    groups = {g: label for g, label, _ in C.GROUPS}
+    for r in out:
+        g, r["name"] = C.info(r["id"]); r["group"] = groups[g]
+    return out
+
+def pages_with_issue(conn, client_id, check_id):
+    return {str(r[0]) for r in conn.execute("""SELECT page_id FROM page_latest_checks WHERE client_id=%s AND check_id=%s
+                                               AND result IN ('fail','warn')""", [client_id, check_id])}
+
+def page_audit(conn, client_id, page_id):
+    """One page: what Google shows, and every check grouped as on the SOP (fix, then improve, then pass)."""
+    import checks as C
+    snap = conn.execute("""SELECT content, taken_at, source FROM page_snapshots WHERE client_id=%s AND page_id=%s
+                           ORDER BY taken_at DESC LIMIT 1""", [client_id, page_id]).fetchone()
+    found = rows(conn.execute("""SELECT check_id, result, found, message FROM page_latest_checks WHERE client_id=%s AND page_id=%s""",
+                              [client_id, page_id]), ["id", "result", "found", "message"])
+    order = {"fail": 0, "warn": 1, "pass": 2, "na": 3}
+    groups = []
+    for g, label, about in C.GROUPS:
+        items = []
+        for f in found:
+            grp, name = C.info(f["id"])
+            if grp == g: items.append({**f, "name": name})
+        if not items: continue
+        items.sort(key=lambda x: (order[x["result"]], x["id"]))
+        groups.append({"key": g, "label": label, "about": about, "checks": items,
+                       "fails": sum(i["result"] == "fail" for i in items), "warns": sum(i["result"] == "warn" for i in items),
+                       "passes": sum(i["result"] == "pass" for i in items)})
+    c = (snap[0] if snap else None) or {}
+    return {"checked_at": snap[1] if snap else None, "source": snap[2] if snap else None, "groups": groups,
+            "title": c.get("title", ""), "description": c.get("description", ""), "h1": (c.get("h1s") or [""])[0],
+            "words": c.get("word_count"), "url": c.get("url")}
 
 def last_runs(conn, client_id):
     return rows(conn.execute("""SELECT DISTINCT ON (collector) collector, status, started_at, finished_at, error FROM collector_runs

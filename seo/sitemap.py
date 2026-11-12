@@ -73,7 +73,8 @@ def discover(session, domain):
 
 def fill_keywords(conn, client_id):
     """Primary keyword for pages that have none, from Search Console (non-branded, most clicks, 90 days), else Semrush."""
-    missing = conn.execute("SELECT page_id, url FROM pages WHERE client_id=%s AND primary_keyword IS NULL", [client_id]).fetchall()
+    missing = conn.execute("""SELECT page_id, url FROM pages WHERE client_id=%s AND (primary_keyword IS NULL OR intent='auto')""",
+                           [client_id]).fetchall()                  # keywords picked automatically are refreshed; a person's are kept
     if not missing: return 0
     best = {}
     for page, query, clicks in conn.execute("""SELECT page, query, sum(clicks) c FROM gsc_search_daily
@@ -89,7 +90,8 @@ def fill_keywords(conn, client_id):
     for pid, url in missing:
         hit = best.get(page_key(url))
         if hit:
-            conn.execute("UPDATE pages SET primary_keyword=%s, intent=coalesce(intent, 'auto') WHERE page_id=%s", [hit[0], pid]); n += 1
+            conn.execute("UPDATE pages SET primary_keyword=%s, intent='auto' WHERE page_id=%s AND primary_keyword IS DISTINCT FROM %s",
+                         [hit[0], pid, hit[0]]); n += 1
     return n
 
 def sync_pages(conn, client_id, session=None):
@@ -103,6 +105,12 @@ def sync_pages(conn, client_id, session=None):
             cur.execute("""INSERT INTO pages (client_id, url, page_type) VALUES (%s,%s,%s) ON CONFLICT (client_id, url) DO NOTHING""",
                         [client_id, u, classify(u)])
             added += cur.rowcount
+    try:                                                  # keep branded/non-branded labels current before picking keywords
+        import gsc
+        name, dom, aliases = conn.execute("SELECT name, domain, aliases FROM clients WHERE client_id=%s", [client_id]).fetchone()
+        gsc.relabel_branded(conn, client_id, gsc.brand_terms(name, dom, aliases))
+    except ImportError:
+        pass
     return {"found": len(urls), "added": added, "keywords": fill_keywords(conn, client_id)}
 
 def priority(conn, client_id):

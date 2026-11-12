@@ -66,7 +66,16 @@ def sync_client(conn, session, client_id, site_url, name, domain, aliases, days=
     with conn.cursor() as cur:
         cur.executemany(UPSERT, detail)
         cur.executemany(UPSERT_TOT, totals)
+    relabel_branded(conn, client_id, terms)
     return len(detail) + len(totals)
+
+def relabel_branded(conn, client_id, terms):
+    """Re-mark every stored query when the brand's names change (e.g. 'PNG' added), not just the days just pulled."""
+    pats = [f"%{t}%" for t in terms]
+    if not pats: return 0
+    return conn.execute("""UPDATE gsc_search_daily SET is_branded = (replace(lower(query),' ','') LIKE ANY (%s))
+                           WHERE client_id=%s AND is_branded IS DISTINCT FROM (replace(lower(query),' ','') LIKE ANY (%s))""",
+                        [pats, client_id, pats]).rowcount
 
 def clients_to_sync(conn, client_id=None):
     q = """SELECT c.client_id, i.gsc_site_url, c.name, c.domain, c.aliases, i.google_connection_id FROM clients c

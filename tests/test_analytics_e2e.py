@@ -151,7 +151,7 @@ checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Where Gargi stands", "Untapped k
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
           f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women"], f"/c/{cid}/settings?tab=data": ["Semrush is off", "disabled"],
           f"/c/{cid}/ai": ["Hovers Visibility Score", "#2", "Zaveri Pearls", "Failed"], f"/c/{cid}/ai/answer/{aid}": ["GIVA is the best known", "Read only"],
-          f"/c/{cid}/pages": ["Not checked", "silver mangalsutra"], f"/c/{cid}/settings": ["Gargi by PNG"],
+          f"/c/{cid}/pages": ["Pages found", "No checked pages in this view yet"], f"/c/{cid}/pages?show=unchecked": ["silver mangalsutra", "Not checked yet"], f"/c/{cid}/settings": ["Gargi by PNG"],
           f"/c/{cid}/settings?tab=prompts": ["best silver jewellery brands in India", "Approve all"]}
 for url, needles in checks.items():
     r = cl.get(url); body = r.get_data(as_text=True)

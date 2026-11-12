@@ -162,14 +162,22 @@ def answer(cid, aid):
 
 @bp.get("/c/<cid>/pages")
 def pages(cid):
+    t, show, issue = request.args.get("type", "all"), request.args.get("show", "checked"), request.args.get("issue")
     with connect() as conn:
         c = client_or_404(conn, cid)
         rows = A.page_summary(conn, cid)
-        sel = request.args.get("page") or (str(rows[0]["page_id"]) if rows else None)
-        checks = A.page_checks(conn, cid, sel) if sel else []
-    t = request.args.get("type", "all")
-    shown = [r for r in rows if t == "all" or r["type"] == t]
-    return view("pages.html", c, "pages", rows=shown, sel=sel, checks=checks, type=t, all_count=len(rows),
+        issues = A.site_issues(conn, cid)
+        with_issue = A.pages_with_issue(conn, cid, issue) if issue else None
+        shown = [r for r in rows if (t == "all" or r["type"] == t)
+                 and (bool(r["checked_at"]) == (show == "checked"))
+                 and (with_issue is None or str(r["page_id"]) in with_issue)]
+        sel = request.args.get("page") or (str(shown[0]["page_id"]) if shown else None)
+        audit = A.page_audit(conn, cid, sel) if sel else None
+    counts = {k: sum(1 for r in rows if r["type"] == k) for k in ("home", "collection", "product", "blog", "static")}
+    checked = [r for r in rows if r["checked_at"]]
+    return view("pages.html", c, "pages", rows=shown, sel=sel, audit=audit, type=t, show=show, issue=issue, issues=issues,
+                all_count=len(rows), counts=counts, checked_count=len(checked), fixes=sum(r["fails"] for r in checked),
+                issue_name=next((i["name"] for i in issues if i["id"] == issue), issue),
                 selected=next((r for r in rows if str(r["page_id"]) == sel), None))
 
 @bp.post("/c/<cid>/pages")

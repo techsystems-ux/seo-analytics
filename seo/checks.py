@@ -249,9 +249,11 @@ def check_writing(c, page, brand):
                  f"Remove or source these claims: {', '.join(claims)}." if claims else "No claims to avoid."))
     sp = brand.get("brand_spellings") or []
     if sp:
-        found = {m.group(0) for m in re.finditer(rf"(?<!\w){re.escape(sp[0]).replace(' ', '[ -]?')}(?!\w)", copy, re.I)}
-        found |= {v for v in sp[1:] if find_words(copy, [v])}
-        wrong_sp = sorted(f for f in found if f != sp[0])
+        # Every listed spelling is a valid name. A mistake is a listed name written in another case or spacing ("EaseLiving").
+        found = set()
+        for name in sp:
+            found |= {m.group(0) for m in re.finditer(rf"(?<!\w){re.escape(name).replace(r'\ ', '[ -]?')}(?!\w)", copy, re.I)}
+        wrong_sp = sorted(f for f in found if f not in sp)
         out.append(R("BR-01", "warn" if wrong_sp else "pass", ", ".join(wrong_sp) or sp[0],
                      f"Write the brand as \"{sp[0]}\", not {', '.join(wrong_sp)}." if wrong_sp else "Brand name is spelled right."))
     bad_hosts = brand.get("wrong_domains") or []
@@ -307,3 +309,29 @@ def score(results):
     s = [r for r in results if r["result"] != "na"]
     if not s: return None
     return round(100 * sum(1 if r["result"] == "pass" else 0.5 if r["result"] == "warn" else 0 for r in s) / len(s))
+
+# ------------------------------------------------------------------ how each check is grouped and named on screen
+GROUPS = [
+    ("snippet",  "How it shows in Google",  "URL, title and description: what a searcher sees before clicking."),
+    ("content",  "Content and structure",    "H1, headings, copy length, keyword use and FAQs on the page itself."),
+    ("links",    "Links and images",         "Image alt text and the links the page makes."),
+    ("schema",   "Schema",                   "Structured data that lets Google show price, rating and FAQs."),
+    ("brand",    "Brand and writing rules",  "The brand rules card and the SOP writing rules."),
+    ("site",     "Across the site",          "Clashes with other pages of the same site."),
+]
+CHECK_INFO = {   # check_id: (group, short name)
+    "META-01": ("snippet", "URL"), "META-02": ("snippet", "Meta title"), "META-03": ("snippet", "Meta description"),
+    "META-05": ("snippet", "Social sharing tags (OG)"), "META-07": ("snippet", "Year in title"),
+    "META-04": ("content", "H1 heading"), "COL-04": ("content", "Intro text under the H1"), "COL-05": ("content", "FAQs"),
+    "COL-06": ("content", "Read-more section"), "PDP-03": ("content", "Product description length"), "PDP-04": ("content", "Keyword use"),
+    "PDP-05": ("content", "FAQs"), "BLOG-03": ("content", "Blog length"), "BLOG-04": ("content", "Heading order"),
+    "BLOG-05": ("content", "Question-style headings"), "BLOG-09": ("content", "FAQs"),
+    "META-06": ("links", "Image alt text"), "BLOG-07": ("links", "Internal links"), "BLOG-08": ("links", "Source links (nofollow)"),
+    "BR-08": ("links", "Links to the right domain"),
+    "PDP-06": ("schema", "Product schema"), "BLOG-13": ("schema", "Article schema"),
+    "BR-01": ("brand", "Brand name spelling"), "BR-02": ("brand", "Product terms"), "BR-06": ("brand", "Claims not allowed"),
+    "WRITE-01": ("brand", "Em dashes"), "WRITE-02": ("brand", "Banned words"), "BLOG-11": ("brand", "Named author (E-E-A-T)"),
+    "META-08": ("site", "Unique title and description"), "KW-03": ("site", "Keyword shared with another page"),
+}
+def info(check_id):
+    return CHECK_INFO.get(check_id, ("content", check_id))
