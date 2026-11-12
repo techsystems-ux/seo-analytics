@@ -38,7 +38,7 @@ class Fake:
 
 with connect() as conn:
     conn.execute("DELETE FROM clients WHERE domain='gargi-sitemap-test.shop'")
-    cid = conn.execute("INSERT INTO clients (name, domain) VALUES ('Gargi test','gargi-sitemap-test.shop') RETURNING client_id").fetchone()[0]
+    cid = conn.execute("INSERT INTO clients (name, domain) VALUES ('Gargi','gargi-sitemap-test.shop') RETURNING client_id").fetchone()[0]
     fake = Fake({k.replace("gargi.shop", "gargi-sitemap-test.shop"): (c, t.replace("gargi.shop", "gargi-sitemap-test.shop")) for k, (c, t) in SITE.items()})
     day = dt.date.today() - dt.timedelta(days=5)
     with conn.cursor() as cur:
