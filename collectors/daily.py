@@ -25,7 +25,8 @@ def log(conn, client_id, name, fn):
         print(f"  {name}: FAILED {msg}", file=sys.stderr); traceback.print_exc(); return False
 
 def has_rows(conn, table, client_id):
-    return conn.execute(f"SELECT EXISTS (SELECT 1 FROM {table} WHERE client_id=%s)", [client_id]).fetchone()[0]
+    """True when the table already holds at least 60 days of history for this brand (otherwise pull 90 days)."""
+    return conn.execute(f"SELECT EXISTS (SELECT 1 FROM {table} WHERE client_id=%s AND date <= current_date - 60)", [client_id]).fetchone()[0]
 
 def weekly_due(conn, client_id, name, force):
     if force or dt.date.today().weekday() == 0: return True
