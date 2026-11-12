@@ -24,6 +24,9 @@ def log(conn, client_id, name, fn):
                      [(msg[:400] + "\n" + traceback.format_exc()[-1200:]), rid])
         print(f"  {name}: FAILED {msg}", file=sys.stderr); traceback.print_exc(); return False
 
+def has_rows(conn, table, client_id):
+    return conn.execute(f"SELECT EXISTS (SELECT 1 FROM {table} WHERE client_id=%s)", [client_id]).fetchone()[0]
+
 def weekly_due(conn, client_id, name, force):
     if force or dt.date.today().weekday() == 0: return True
     last = conn.execute("""SELECT max(started_at) FROM collector_runs WHERE client_id=%s AND collector=%s AND status='ok'""",
@@ -44,10 +47,12 @@ def main():
             print(name)
             if "gsc" in only:
                 for c, site, n, domain, aliases, gconn in gsc.clients_to_sync(conn, cid):
-                    ok &= log(conn, cid, "gsc", lambda: gsc.sync_client(conn, gpool["gsc"].get(gconn), c, site, n, domain, aliases, 7, 3))
+                    days = 7 if has_rows(conn, "gsc_search_daily", cid) else 90      # first pull: 90 days, so 28-day comparisons work
+                    ok &= log(conn, cid, "gsc", lambda: gsc.sync_client(conn, gpool["gsc"].get(gconn), c, site, n, domain, aliases, days, 3))
             if "ga4" in only:
                 for c, pid, n, gconn in ga4.clients_to_sync(conn, cid):
-                    ok &= log(conn, cid, "ga4", lambda: ga4.sync_client(conn, gpool["ga4"].get(gconn), c, pid, 7, 1))
+                    days = 7 if has_rows(conn, "ga4_organic_landing", cid) else 90
+                    ok &= log(conn, cid, "ga4", lambda: ga4.sync_client(conn, gpool["ga4"].get(gconn), c, pid, days, 1))
             # Semrush never runs on the schedule unless SEMRUSH_AUTO=1; a person starts it from Settings (credit limit)
             if "semrush" in only and os.environ.get("SEMRUSH_API_KEY") and (a.force_weekly or os.environ.get("SEMRUSH_AUTO") == "1") \
                and weekly_due(conn, cid, "semrush", a.force_weekly):

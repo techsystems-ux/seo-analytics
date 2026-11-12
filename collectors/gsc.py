@@ -34,11 +34,17 @@ def is_branded(query, terms):
     q = query.lower().replace(" ", "")
     return any(t in q for t in terms)
 
+def clip(s, max_bytes):
+    """Cut text to at most max_bytes of UTF-8 without splitting a character. Query + page form the table's key, and
+    Postgres caps a key entry at about 2,700 bytes; real queries and URLs are far shorter, spam queries sometimes are not."""
+    b = s.encode("utf-8")
+    return s if len(b) <= max_bytes else b[:max_bytes].decode("utf-8", "ignore")
+
 def parse_rows(rows, client_id, terms):
     out = []
     for r in rows:
         d, q, p, c, dev = r["keys"]
-        out.append((client_id, d, q, p[:2000], c, dev, int(r["clicks"]), int(r["impressions"]),
+        out.append((client_id, d, clip(q, 600), clip(p, 1600), c, dev, int(r["clicks"]), int(r["impressions"]),
                     r.get("ctr"), r.get("position"), is_branded(q, terms)))
     return out
 
