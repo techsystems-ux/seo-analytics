@@ -58,7 +58,7 @@ with connect() as conn:
     assert kw == {"https://www.gargi-sitemap-test.shop/collections/silver-earrings": "silver earrings",      # non-branded beats branded clicks
                   "https://www.gargi-sitemap-test.shop/products/item-3": "oxidised anklet",
                   "https://www.gargi-sitemap-test.shop/collections/silver-mangalsutra": "silver mangalsutra"}, kw   # from Semrush
-    conn.execute("UPDATE pages SET primary_keyword='silver jhumka' WHERE client_id=%s AND url LIKE '%%silver-earrings'", [cid])
+    conn.execute("UPDATE pages SET primary_keyword='silver jhumka', intent=NULL WHERE client_id=%s AND url LIKE '%%silver-earrings'", [cid])   # as a person's edit (CSV) saves it
     again = sitemap.sync_pages(conn, cid, session=fake)
     assert again["added"] == 0 and conn.execute("SELECT primary_keyword FROM pages WHERE client_id=%s AND url LIKE '%%silver-earrings'", [cid]).fetchone()[0] == "silver jhumka"
     order = [conn.execute("SELECT url FROM pages WHERE page_id=%s", [i]).fetchone()[0].rsplit("/", 1)[-1] for i in sitemap.priority(conn, cid)]

@@ -44,7 +44,8 @@ def import_pages(conn, client_id, rows):
                           secondary_keywords=EXCLUDED.secondary_keywords, search_volume=EXCLUDED.search_volume, intent=EXCLUDED.intent""",
                      [client_id, r["url"].strip(), r["page_type"].strip(), (r.get("primary_keyword") or "").strip() or None,
                       [s.strip() for s in (r.get("secondary_keywords") or "").split(";") if s.strip()],
-                      int(float(r["search_volume"])) if (r.get("search_volume") or "").strip() else None, (r.get("intent") or "").strip() or None])
+                      int(float(r["search_volume"])) if (r.get("search_volume") or "").strip() else None,
+                      ((r.get("intent") or "").strip() or None) if (r.get("intent") or "").strip().lower() != "auto" else None])   # a person's keyword: never replaced
         n += 1
     return n
 
