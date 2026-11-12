@@ -15,8 +15,13 @@ import requests
 from common import connect
 
 API = "https://api.semrush.com/"
-UNIT_COST = {"domain_organic": 10, "domain_organic_organic": 40, "domain_domains": 80}
-ORGANIC_COLS = "Ph,Po,Pp,Nq,Cp,Ur,Tr,Co,Kd,In"
+# Prices from Semrush's API docs. Per line unless listed in PER_REQUEST.
+UNIT_COST = {"domain_organic": 10, "domain_organic_organic": 40, "domain_domains": 80,
+             "phrase_questions": 40, "phrase_related": 40,
+             "backlinks_overview": 40, "backlinks_refdomains": 40, "backlinks_matrix": 40}
+PER_REQUEST = {"backlinks_overview"}
+BACKLINKS_API = "https://api.semrush.com/analytics/v1/"
+ORGANIC_COLS = "Ph,Po,Pp,Nq,Cp,Ur,Tr,Co,Kd,In,Fk,Fp"
 COMPETITOR_COLS = "Dn,Cr,Np,Or,Ot,Oc,Ad"
 INTENTS = {"0": "commercial", "1": "informational", "2": "navigational", "3": "transactional"}
 
@@ -27,29 +32,56 @@ TOTAL_CAP = int(os.environ.get("SEMRUSH_TOTAL_CAP", "500"))   # lifetime limit f
 def lifetime_units(conn):
     return conn.execute("SELECT coalesce(sum(units),0) FROM semrush_usage").fetchone()[0]
 
+def feature_units(conn, feature):
+    return conn.execute("SELECT coalesce(sum(units),0) FROM semrush_usage WHERE feature=%s", [feature]).fetchone()[0]
+
 class Semrush:
-    def __init__(self, key, conn, client_id, max_units, session=None):
-        self.key, self.conn, self.client_id = key, conn, client_id
-        self.max_units = max(0, min(max_units, TOTAL_CAP - lifetime_units(conn)))   # never past the lifetime cap
+    """Every Semrush call goes through here. A call is refused before it is made if its worst-case cost would pass
+    this run's budget, the lifetime cap (SEMRUSH_TOTAL_CAP) or the feature's own cap (SEMRUSH_CAP_<FEATURE>)."""
+    def __init__(self, key, conn, client_id, max_units, session=None, feature="keywords"):
+        self.key, self.conn, self.client_id, self.feature = key, conn, client_id, feature
+        left = TOTAL_CAP - lifetime_units(conn)
+        cap = os.environ.get(f"SEMRUSH_CAP_{feature.upper()}")
+        if cap is not None: left = min(left, int(cap) - feature_units(conn, feature))
+        self.max_units = max(0, min(max_units, left))
         self.s, self.spent = session or requests.Session(), 0
 
-    def call(self, report, limit, **params):
-        cost = UNIT_COST[report] * limit                       # worst case: every requested line comes back
+    def _guard(self, label, cost):
         if self.spent + cost > self.max_units:
-            raise BudgetExceeded(f"{report} could cost {cost} units; {self.max_units - self.spent} left (lifetime cap {TOTAL_CAP})")
-        q = {"type": report, "key": self.key, "display_limit": limit, **params}
-        r = self.s.get(API + "?" + urlencode(q), timeout=120)
+            raise BudgetExceeded(f"{label} could cost {cost} units; {self.max_units - self.spent} left (lifetime cap {TOTAL_CAP})")
+
+    def _log(self, report, lines, units):
+        self.spent += units
+        self.conn.execute("INSERT INTO semrush_usage (client_id, report, lines, units, feature) VALUES (%s,%s,%s,%s,%s)",
+                          [self.client_id, report, lines, units, self.feature])
+
+    def call(self, report, limit, **params):
+        per_request = report in PER_REQUEST
+        cost = UNIT_COST[report] * (1 if per_request else limit)           # worst case: every requested line comes back
+        self._guard(report, cost)
+        base = BACKLINKS_API if report.startswith("backlinks") else API
+        q = {"type": report, "key": self.key, **({} if per_request else {"display_limit": limit}), **params}
+        r = self.s.get(base + "?" + urlencode(q, doseq=True), timeout=120)
         text = r.text.strip()
         if r.status_code != 200 or text.startswith("ERROR"):
             if "NOTHING FOUND" in text: rows = []
             else: raise RuntimeError(f"Semrush {report}: {text[:200]}")    # the key is never echoed back in errors
         else:
             rows = list(csv.DictReader(io.StringIO(text), delimiter=";"))
-        units = UNIT_COST[report] * len(rows)
-        self.spent += units
-        self.conn.execute("INSERT INTO semrush_usage (client_id, report, lines, units) VALUES (%s,%s,%s,%s)",
-                          [self.client_id, report, len(rows), units])
+        self._log(report, len(rows), UNIT_COST[report] * (1 if per_request else len(rows)))
         return rows
+
+    def project_call(self, label, path, cost, method="GET", params=None, body=None, per_item=None):
+        """Projects API (Site Audit, Position Tracking): JSON. `cost` is the worst case checked before the call.
+        With per_item=(units, count_fn) the units logged are units x items returned, otherwise `cost`."""
+        self._guard(label, cost)
+        r = self.s.request(method, "https://api.semrush.com/" + path.lstrip("/") + "?" + urlencode({"key": self.key, **(params or {})}),
+                           json=body, timeout=180)
+        if r.status_code >= 400: raise RuntimeError(f"Semrush {label}: HTTP {r.status_code} {r.text[:200]}")
+        data = r.json()
+        n = per_item[1](data) if per_item else 1
+        self._log(label, n, min(cost, per_item[0] * n) if per_item else cost)
+        return data
 
 def num(v, cast=float):
     try: return cast(v) if v not in (None, "", "n/a") else None
@@ -68,7 +100,9 @@ def parse_organic(rows):
                     "prev_position": num(col(r, "Previous Position", "Pp"), int), "search_volume": num(col(r, "Search Volume", "Nq"), int),
                     "cpc": num(col(r, "CPC", "Cp")), "url": col(r, "Url", "Ur"), "traffic_pct": num(col(r, "Traffic (%)", "Tr")),
                     "competition": num(col(r, "Competition", "Co")), "kd": num(col(r, "Keyword Difficulty", "Kd")),
-                    "intent": ",".join(INTENTS.get(i.strip(), i.strip()) for i in intents if i.strip()) or None})
+                    "intent": ",".join(INTENTS.get(i.strip(), i.strip()) for i in intents if i.strip()) or None,
+                    "serp_features": col(r, "Keywords SERP Features", "SERP Features by Keyword", "Fk") or None,
+                    "serp_features_owned": col(r, "SERP Features", "SERP Features by Position", "Fp") or None})
     return [o for o in out if o["keyword"]]
 
 def parse_competitors(rows):
@@ -99,12 +133,13 @@ def gap_domains_param(client_domain, competitors):
 def store_keywords(conn, client_id, domain, database, day, kws):
     with conn.cursor() as cur:
         cur.executemany("""INSERT INTO semrush_keywords (client_id, domain, database, pulled_on, keyword, position, prev_position, search_volume,
-                             cpc, url, traffic_pct, competition, kd, intent)
+                             cpc, url, traffic_pct, competition, kd, intent, serp_features, serp_features_owned)
                            VALUES (%(c)s,%(d)s,%(db)s,%(day)s,%(keyword)s,%(position)s,%(prev_position)s,%(search_volume)s,%(cpc)s,%(url)s,
-                             %(traffic_pct)s,%(competition)s,%(kd)s,%(intent)s)
+                             %(traffic_pct)s,%(competition)s,%(kd)s,%(intent)s,%(serp_features)s,%(serp_features_owned)s)
                            ON CONFLICT (client_id, domain, database, pulled_on, keyword) DO UPDATE SET position=EXCLUDED.position,
-                             search_volume=EXCLUDED.search_volume, url=EXCLUDED.url, traffic_pct=EXCLUDED.traffic_pct""",
-                        [{**k, "c": client_id, "d": domain, "db": database, "day": day} for k in kws])
+                             search_volume=EXCLUDED.search_volume, url=EXCLUDED.url, traffic_pct=EXCLUDED.traffic_pct,
+                             serp_features=EXCLUDED.serp_features, serp_features_owned=EXCLUDED.serp_features_owned""",
+                        [{"serp_features": None, "serp_features_owned": None, **k, "c": client_id, "d": domain, "db": database, "day": day} for k in kws])
 
 STOP = {"by", "and", "the", "of", "for", "with", "shop", "store", "online", "india"}
 

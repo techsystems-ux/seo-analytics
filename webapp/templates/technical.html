@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% import "_semrush.html" as sm with context %}
+{% block body %}
+{% set h = summary.get('hovers') %}{% set s = summary.get('semrush') %}
+<div class="top"><div><span class="kicker">Work · Technical</span><h1>Technical health</h1>
+<p class="lead">A crawl of {{ client.domain }} that finds what stops Google reading the site: broken pages and links, redirects, missing tags, duplicates. Each issue type is one task with an owner and a due date. The next crawl checks the fix.</p></div>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Crawl site now (free)</button></form></div>
+
+<div class="grid">
+  <div class="card kpi"><div class="l">Health</div><div class="v">{{ h.health|n if h else '–' }}{% if h %}%{% endif %}</div><div class="s mute">pages with no error</div></div>
+  <div class="card kpi"><div class="l">Errors</div><div class="v">{{ counts.error }}</div><div class="s mute">issue types open · fix within 7 days</div></div>
+  <div class="card kpi"><div class="l">Warnings</div><div class="v">{{ counts.warning }}</div><div class="s mute">fix within 14 days</div></div>
+  <div class="card kpi"><div class="l">Notices</div><div class="v">{{ counts.notice }}</div><div class="s mute">fix within 30 days</div></div>
+  <div class="card kpi"><div class="l">Last crawl</div><div class="v" style="font-size:18px">{{ h.at.strftime('%d %b, %H:%M') if h else 'Not yet' }}</div><div class="s mute">{{ h.pages|n if h else '–' }} URLs · runs every Monday</div></div>
+</div>
+{% if s %}<p class="note">Semrush Site Audit, imported {{ s.at.strftime('%d %b %Y') }}: health {{ s.health|n }}%, {{ s.pages|n }} pages, {{ s.errors|n }} errors, {{ s.warnings|n }} warnings. Its issues are listed below with a Semrush tag.</p>{% endif %}
+
+<div class="grid2" style="grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)">
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+  <div class="top" style="align-items:center"><h2>Issues to fix</h2>
+  <div class="seg">{% for k,v in [('open','Open'),('fixed','Fixed'),('all','All')] %}<a class="{{ 'on' if show==k }}" href="?show={{ k }}">{{ v }}</a>{% endfor %}</div></div>
+  <div class="tw">{% if issues %}<table><tr><th>Issue</th><th class="r">Pages</th><th>Team</th><th>Status</th><th>Due</th></tr>
+  {% for i in issues %}<tr class="{{ 'sel' if i.code==code }}"><td><span class="tag t-sev-{{ i.severity }}">{{ i.severity }}</span> <a href="?show={{ show }}&issue={{ i.code|urlencode }}">{{ i.title }}</a>{% if i.source=='semrush' %} <span class="tag t-na">Semrush</span>{% endif %}</td>
+  <td class="r">{{ i.pages|n }}</td><td>{{ 'Developer' if i.team=='tech' else 'SEO' }}</td><td>{{ i.status|replace('_',' ') }}{% if i.owner %}<br><span class="note">{{ i.owner }}</span>{% endif %}</td>
+  <td>{% if i.due %}<span class="{{ 'down' if i.due < today and i.status in ('open','in_progress') }}">{{ i.due.strftime('%d %b') }}</span>{% else %}–{% endif %}</td></tr>{% endfor %}</table>
+  {% elif h or s %}<p class="empty">{{ 'Nothing open. Every issue from the last crawl is fixed.' if show=='open' else 'Nothing here.' }}</p>
+  {% else %}<p class="empty">No crawl yet. Press Crawl site now: it is free and takes 10 to 20 minutes for about 1,000 pages.</p>{% endif %}</div>
+</section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+{% if sel %}
+  <div><span class="tag t-sev-{{ sel.severity }}">{{ sel.severity }}</span><h2 style="margin-top:8px">{{ sel.title }}</h2>
+  <p class="note">First seen {{ sel.first_seen.strftime('%d %b %Y') }} · last seen {{ sel.last_seen.strftime('%d %b %Y') }}</p></div>
+  <div><label>How to fix</label><p style="margin:0">{{ sel.fix }}</p></div>
+  <form method="post" class="grid" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr));align-items:end"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="issue" value="{{ sel.code }}"><input type="hidden" name="show" value="{{ show }}">
+    <div><label for="st">Status</label><select id="st" name="status">{% for k,v in [('open','Open'),('in_progress','In progress'),('fixed','Fixed'),('verified','Verified')] %}<option value="{{ k }}" {{ 'selected' if sel.status==k }}>{{ v }}</option>{% endfor %}</select></div>
+    <div><label for="ow">Owner</label><input id="ow" type="text" name="owner" value="{{ sel.owner or '' }}"></div>
+    <div><label for="du">Due</label><input id="du" type="date" name="due" value="{{ sel.due.isoformat() if sel.due else '' }}" style="font:inherit;padding:7px;border:1px solid #000;border-radius:8px;width:100%"></div>
+    <div><button class="btn blk">Save</button></div></form>
+  <p class="note">Mark it Fixed when the change is live. The next crawl sets it to Verified if the issue is gone, or reopens it if not.</p>
+  <div class="tw">{% if pages %}<table><tr><th>Page ({{ pages|length }}{{ '+' if pages|length >= 200 }})</th><th>Detail</th></tr>
+  {% for p in pages %}<tr><td><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|path }}</a></td><td class="note">{{ p.detail or '' }}</td></tr>{% endfor %}</table>
+  {% elif sel.source=='semrush' %}<p class="note">Semrush lists the pages for the top error types only, to save credits. Open Site Audit in Semrush for the rest.</p>
+  {% else %}<p class="note">No pages in the latest crawl.</p>{% endif %}</div>
+{% else %}
+  <h2>What the crawl checks</h2>
+  <p class="note">Status codes and redirect chains, broken internal links, links through redirects, canonical and noindex tags, hreflang, missing or duplicate titles and descriptions, H1s, image alt text, http files on https pages, slow server responses, and sitemap pages nothing links to.</p>
+  <p class="note">Pick an issue on the left to see its pages and assign it.</p>
+  <h2 style="margin-top:8px">Semrush Site Audit</h2>
+  <p class="note">If the team already runs Site Audit in Semrush, its results can sit here too. The import reads the summary and the pages for the worst error types; it never calls the 10,000-credit snapshot report.</p>
+  {{ sm.run(actions.audit, 'Import Site Audit') }}
+{% endif %}
+</section>
+</div>
+{% endblock %}

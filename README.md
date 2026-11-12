@@ -74,3 +74,23 @@ Semrush never runs on the schedule (unless `SEMRUSH_AUTO=1`); it runs only from 
 
 `ADMIN_DATABASE_URL=postgresql://postgres@/postgres?host=/tmp python tests/test_analytics_e2e.py` runs the whole analytics flow against
 a throwaway database with fake Semrush and OpenAI responses; the other files in `tests/` cover page checks, collectors and sign-in.
+
+## Technical audit, rankings, content ideas, backlinks (migration 007)
+
+| Feature | Where | Data | Cost |
+|---|---|---|---|
+| Technical audit | Work → Technical | `seo/crawler.py`, every Monday and on the button | free |
+| Semrush Site Audit import | Work → Technical | `collectors/semrush_projects.py audit` (info + issue names + pages for top errors) | up to 700 credits |
+| Rankings | Search performance → Rankings | `collectors/rank.py` from stored Search Console rows, nightly | free |
+| Semrush Position Tracking import | Search performance → Rankings | `collectors/semrush_projects.py rank` | 100 per keyword |
+| Keyword gap | Competitors → Untapped keywords | `collectors/semrush_suite.py gap` | 80 per keyword |
+| Content ideas | Work → Content ideas | `collectors/semrush_suite.py ideas` (questions + related) | 40 per idea |
+| Backlinks and link prospects | Competitors → Backlinks | `collectors/semrush_suite.py backlinks` | 40 per line or request |
+| SERP features (AI Overview, featured snippet, ...) | Competitors → Your ranking keywords, Rankings | Fk/Fp columns on the keyword pull | no extra cost |
+
+Semrush features never run on the schedule. Each button shows its worst-case cost and is disabled when the key is missing,
+the project ID is missing (Site Audit, Position Tracking) or the cost passes what `SEMRUSH_TOTAL_CAP` leaves. Optional
+per-feature caps: `SEMRUSH_CAP_IDEAS`, `SEMRUSH_CAP_BACKLINKS`, `SEMRUSH_CAP_GAP`, `SEMRUSH_CAP_AUDIT`, `SEMRUSH_CAP_RANK`.
+The 10,000-credit Site Audit snapshot report is never called.
+
+Test: `DATABASE_URL=... python tests/test_semrush_suite.py` (fake site and fake Semrush, no credits).

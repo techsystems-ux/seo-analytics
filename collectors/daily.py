@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """The daily job (Render cron). For every active client:
   every day      Search Console and GA4 (last 7 days, re-pulled so late data settles), ChatGPT prompts
-  every Monday   page checks (or when never done)
+  every day      rankings for tracked keywords, from the Search Console data just pulled (free)
+  every Monday   page checks and the technical crawl (or when never done)
   on request     Semrush, from Settings only (lifetime credit cap, see semrush.py); SEMRUSH_AUTO=1 adds it to Mondays
 Each step is logged in collector_runs; one failure never stops the rest.
-Usage: python daily.py [--client-id UUID] [--only gsc,ga4,ai,semrush,pages] [--force-weekly]
+Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,crawl] [--force-weekly]
 """
 import argparse, datetime as dt, os, sys, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -35,8 +36,10 @@ def weekly_due(conn, client_id, name, force):
     return last is None
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,ai,semrush,pages")
+    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl")
     ap.add_argument("--force-weekly", action="store_true")
+    ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")
+    ap.add_argument("--seeds", default="", help="topics for semrush_ideas, separated by ;")
     a = ap.parse_args(); only = set(a.only.split(",")); ok = True
     import gsc, ga4
     from google_auth import SessionPool
@@ -54,12 +57,15 @@ def main():
                 for c, pid, n, gconn in ga4.clients_to_sync(conn, cid):
                     days = 7 if has_rows(conn, "ga4_organic_landing", cid) else 90
                     ok &= log(conn, cid, "ga4", lambda: ga4.sync_client(conn, gpool["ga4"].get(gconn), c, pid, days, 1))
+            if "rank" in only:
+                import rank
+                ok &= log(conn, cid, "rank", lambda: rank.sync_client(conn, cid))
             # Semrush never runs on the schedule unless SEMRUSH_AUTO=1; a person starts it from Settings (credit limit)
             if "semrush" in only and os.environ.get("SEMRUSH_API_KEY") and (a.force_weekly or os.environ.get("SEMRUSH_AUTO") == "1") \
                and weekly_due(conn, cid, "semrush", a.force_weekly):
                 import semrush
                 ok &= log(conn, cid, "semrush", lambda: semrush.sync_client(conn, cid, os.environ["SEMRUSH_API_KEY"],
-                          max_units=int(os.environ.get("SEMRUSH_MAX_UNITS", "500"))))
+                          max_units=a.max_units or int(os.environ.get("SEMRUSH_MAX_UNITS", "500"))))
             if "ai" in only and os.environ.get("OPENAI_API_KEY"):
                 import ai_visibility
                 ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, os.environ["OPENAI_API_KEY"],
@@ -70,6 +76,22 @@ def main():
                           **sitemap.sync_pages(conn, cid)))
                 limit = int(os.environ.get("PAGES_PER_RUN", "100"))
                 ok &= log(conn, cid, "pages", lambda: f"{len(run_checks.check_live(conn, cid, pause=0.5, limit=limit))} pages checked (top {limit} by priority)")
+            # Manual Semrush features: only when named in --only, with an explicit budget (Settings shows the cost first)
+            key = os.environ.get("SEMRUSH_API_KEY")
+            manual = [f for f in ("semrush_ideas", "semrush_backlinks", "semrush_gap", "semrush_audit", "semrush_rank") if f in only]
+            if manual and key and a.max_units > 0:
+                import semrush_suite as ss, semrush_projects as sp
+                seeds = [x.strip() for x in a.seeds.split(";") if x.strip()] or None
+                steps = {"semrush_ideas": lambda: ss.sync_ideas(conn, cid, key, seeds, max_units=a.max_units),
+                         "semrush_backlinks": lambda: ss.sync_backlinks(conn, cid, key, max_units=a.max_units),
+                         "semrush_gap": lambda: ss.sync_gap(conn, cid, key, max_units=a.max_units),
+                         "semrush_audit": lambda: sp.import_audit(conn, cid, key, max_units=a.max_units),
+                         "semrush_rank": lambda: sp.import_positions(conn, cid, key, max_units=a.max_units)}
+                for f in manual: ok &= log(conn, cid, f, steps[f])
+            if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
+                import crawler
+                ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(
+                          **crawler.run(conn, cid, limit=int(os.environ.get("CRAWL_LIMIT", "1500")), pause=0.3)))
     return 0 if ok else 1
 
 if __name__ == "__main__":

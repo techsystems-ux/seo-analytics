@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_semrush.html" as sm with context %}
 {% block body %}
 <div class="top"><div><span class="kicker">Analytics · Search performance</span><h1>Google organic search</h1>
 <p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the 28 days before. Branded queries contain the brand name.</p></div></div>
@@ -18,11 +19,29 @@
     <div class="seg" role="tablist">
       <a class="{{ 'on' if tab=='queries' }}" href="?tab=queries&kind={{ kind }}">Queries</a>
       <a class="{{ 'on' if tab=='pages' }}" href="?tab=pages">Pages</a>
-      <a class="{{ 'on' if tab=='revenue' }}" href="?tab=revenue">Revenue by landing page</a></div>
+      <a class="{{ 'on' if tab=='revenue' }}" href="?tab=revenue">Revenue by landing page</a>
+      <a class="{{ 'on' if tab=='rankings' }}" href="?tab=rankings">Rankings</a></div>
     {% if tab=='queries' %}<div class="seg"><a class="{{ 'on' if kind=='nonbranded' }}" href="?tab=queries&kind=nonbranded">Non-branded</a><a class="{{ 'on' if kind=='branded' }}" href="?tab=queries&kind=branded">Branded</a><a class="{{ 'on' if kind=='all' }}" href="?tab=queries&kind=all">All</a></div>{% endif %}
   </div>
   <div class="tw">
-  {% if not data %}<p class="empty">No data for this view yet.</p>
+  {% if tab=='rankings' %}
+    <p class="note">Daily Google position for each tracked keyword, from Search Console (free, average across devices and pages). Change compares with 7 days earlier. A Semrush column appears if the brand's Semrush Position Tracking is imported.</p>
+    {% if trend %}<div class="card" style="padding:14px"><div class="top" style="align-items:center"><h2>{{ kw }}</h2><a href="?tab=rankings">Close</a></div><p class="note">Position by day, last 90 days (lower is better).</p>{{ trend }}</div>{% endif %}
+    {% if data %}<table><tr><th>Keyword</th><th class="r">Position</th><th class="r">7-day change</th><th class="r">Best (28 days)</th><th class="r">Clicks (28 days)</th><th>Ranking page</th><th>On Google's page</th>{% if data|selectattr('semrush')|list %}<th class="r">Semrush</th>{% endif %}<th></th></tr>
+    {% for r in data %}<tr><td><a href="?tab=rankings&kw={{ r.keyword|urlencode }}">{{ r.keyword }}</a>{% if 'auto' in r.tags %} <span class="tag t-na">auto</span>{% endif %}</td>
+    <td class="r"><b>{{ r.position if r.position is not none else '–' }}</b></td>
+    <td class="r">{% if r.change is none %}<span class="mute">–</span>{% elif r.change > 0 %}<span class="up">up {{ r.change }}</span>{% elif r.change < 0 %}<span class="down">down {{ -r.change }}</span>{% else %}<span class="mute">same</span>{% endif %}</td>
+    <td class="r">{{ r.best if r.best is not none else '–' }}</td><td class="r">{{ r.clicks|n }}</td>
+    <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|path }}</a>{% if r.off_target %}<br><span class="down note">not the target page {{ r.target|path }}</span>{% endif %}{% else %}<span class="mute">not ranking in the last 28 days</span>{% endif %}</td>
+    <td style="max-width:220px">{{ sm.features(r.features[:3]) }}</td>
+    {% if data|selectattr('semrush')|list %}<td class="r">{{ r.semrush|n if r.semrush else '–' }}</td>{% endif %}
+    <td><form method="post" action="{{ url_for('dash.rankings_save', cid=client.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="remove" value="{{ r.keyword }}"><button class="btn ln" aria-label="Stop tracking {{ r.keyword }}">Remove</button></form></td></tr>{% endfor %}</table>
+    {% else %}<p class="empty">No tracked keywords yet. They start automatically after the next Search Console pull, or add them below.</p>{% endif %}
+    <form method="post" action="{{ url_for('dash.rankings_save', cid=client.id) }}" style="margin-top:14px"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="kws">Track keywords, one per line. Optional target page after a |, e.g. silver anklets | https://{{ client.domain }}/collections/anklets</label>
+    <textarea id="kws" name="keywords" rows="3"></textarea><div style="margin-top:10px"><button class="btn red">Track</button></div></form>
+    <div style="margin-top:14px">{{ sm.run(actions.rank, 'Import Semrush Position Tracking') }}</div>
+  {% elif not data %}<p class="empty">No data for this view yet.</p>
   {% elif tab=='queries' %}<table><tr><th>Query</th><th class="r">Clicks</th><th class="r">Impressions</th><th class="r">CTR</th><th class="r">Position</th><th class="r">Position change</th></tr>
     {% for r in data %}<tr><td>{{ r.query }}</td><td class="r">{{ r.clicks|n }}</td><td class="r">{{ r.impressions|n }}</td><td class="r">{{ r.ctr }}%</td><td class="r">{{ r.position }}</td>
     <td class="r">{% if r.position_gain is none %}<span class="mute">new</span>{% elif r.position_gain > 0 %}<span class="up">up {{ r.position_gain }}</span>{% elif r.position_gain < 0 %}<span class="down">down {{ -r.position_gain }}</span>{% else %}<span class="mute">same</span>{% endif %}</td></tr>{% endfor %}</table>

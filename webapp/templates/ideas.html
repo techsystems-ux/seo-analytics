@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% import "_semrush.html" as sm with context %}
+{% block body %}
+<div class="top"><div><span class="kicker">Work · Content ideas</span><h1>What shoppers ask</h1>
+<p class="lead">Questions and related searches around the topics {{ client.name }} sells, with monthly searches and difficulty. Questions suit blogs and FAQ blocks; related searches suit new collections or read-more sections. Plan the ones worth writing.</p></div></div>
+
+<section class="card" style="display:flex;flex-direction:column;gap:10px">
+  <h2>Find ideas</h2>
+  <p class="note">Leave topics empty to use the brand's top collection keywords{% if seeds %}: <b>{{ seeds|join(', ') }}</b>{% endif %}. Each topic returns up to 10 questions and 10 related searches.</p>
+  {{ sm.run(actions.ideas, 'Find ideas', seeds=True) }}
+</section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+  <div class="top" style="align-items:center">
+    <div class="seg"><a class="{{ 'on' if not kind }}" href="?status={{ status }}">All</a><a class="{{ 'on' if kind=='question' }}" href="?kind=question&status={{ status }}">Questions</a><a class="{{ 'on' if kind=='related' }}" href="?kind=related&status={{ status }}">Related searches</a></div>
+    <div class="seg">{% for k,v in [('new','New'),('planned','Planned'),('done','Written'),('dismissed','Dismissed'),('all','All')] %}<a class="{{ 'on' if status==k }}" href="?{{ 'kind=' ~ kind ~ '&' if kind }}status={{ k }}">{{ v }}</a>{% endfor %}</div></div>
+  <div class="tw">{% if rows %}<table><tr><th>Idea</th><th>Topic</th><th class="r">Monthly searches</th><th class="r">Difficulty</th><th>On Google's page</th><th></th></tr>
+  {% for r in rows %}<tr><td><b>{{ r.keyword }}</b><br><span class="note">{{ 'Question' if r.kind=='question' else 'Related search' }}{{ ' · ' ~ r.intent if r.intent }}</span></td><td>{{ r.seed }}</td>
+  <td class="r">{{ r.volume|n }}</td><td class="r">{{ r.kd|n }}</td><td style="max-width:260px">{{ sm.features(r.features[:4]) }}</td>
+  <td><form method="post" style="display:flex;gap:6px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="kind" value="{{ r.kind }}"><input type="hidden" name="keyword" value="{{ r.keyword }}">
+  <input type="hidden" name="f_kind" value="{{ kind or '' }}"><input type="hidden" name="f_status" value="{{ status }}">
+  {% if r.status!='planned' %}<button class="btn red" name="status" value="planned">Plan</button>{% endif %}
+  {% if r.status=='planned' %}<button class="btn blk" name="status" value="done">Written</button>{% endif %}
+  {% if r.status!='dismissed' %}<button class="btn ln" name="status" value="dismissed">Dismiss</button>{% else %}<button class="btn ln" name="status" value="new">Restore</button>{% endif %}</form></td></tr>{% endfor %}</table>
+  {% else %}<p class="empty">{{ 'No ideas yet. Find ideas above (Semrush credits).' if status=='new' and not kind else 'Nothing in this view.' }}</p>{% endif %}</div>
+  <p class="note">Difficulty is Semrush's 0–100 estimate of how hard it is to reach the top 10. AI Overview or People also ask on the page means a clear, direct answer in the copy has a chance to be quoted.</p>
+</section>
+{% endblock %}

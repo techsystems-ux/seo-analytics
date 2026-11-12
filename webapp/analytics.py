@@ -167,9 +167,12 @@ def semrush_keywords(conn, client_id, limit=50):
     dom = dom.lower().replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
     last = conn.execute("SELECT max(pulled_on) FROM semrush_keywords WHERE client_id=%s AND domain=%s", [client_id, dom]).fetchone()[0]
     if not last: return None, []
-    return last, rows(conn.execute("""SELECT keyword, position, prev_position, search_volume, url, traffic_pct, kd, intent FROM semrush_keywords
-                                      WHERE client_id=%s AND domain=%s AND pulled_on=%s ORDER BY traffic_pct DESC NULLS LAST, search_volume DESC LIMIT %s""",
-                                   [client_id, dom, last, limit]), ["keyword", "position", "prev", "volume", "url", "traffic_pct", "kd", "intent"])
+    out = rows(conn.execute("""SELECT keyword, position, prev_position, search_volume, url, traffic_pct, kd, intent, serp_features, serp_features_owned
+                               FROM semrush_keywords WHERE client_id=%s AND domain=%s AND pulled_on=%s
+                               ORDER BY traffic_pct DESC NULLS LAST, search_volume DESC LIMIT %s""",
+                            [client_id, dom, last, limit]), ["keyword", "position", "prev", "volume", "url", "traffic_pct", "kd", "intent", "fk", "fp"])
+    for k in out: k["features"] = serp_features(k["fk"], k["fp"])
+    return last, out
 
 def semrush_budget(conn):
     """Lifetime Semrush credits used against the hard cap (all brands, all pulls, including seeded data)."""
@@ -238,3 +241,98 @@ def page_audit(conn, client_id, page_id):
 def last_runs(conn, client_id):
     return rows(conn.execute("""SELECT DISTINCT ON (collector) collector, status, started_at, finished_at, error FROM collector_runs
                                 WHERE client_id=%s ORDER BY collector, started_at DESC""", [client_id]), ["collector", "status", "started", "finished", "note"])
+
+
+# ------------------------------------------------------------------ SERP features (Semrush codes)
+SERP = {"0": "Instant answer", "1": "Knowledge panel", "2": "Carousel", "3": "Local pack", "4": "Top stories", "5": "Image pack",
+        "6": "Sitelinks", "7": "Reviews", "9": "Video", "11": "Featured snippet", "16": "Shopping ads", "20": "Video carousel",
+        "21": "People also ask", "22": "FAQ", "34": "Popular products", "36": "Related searches", "38": "Short videos",
+        "41": "Buying guide", "43": "Things to know", "45": "Discussions and forums", "46": "Explore brands",
+        "47": "Questions and answers", "48": "Popular stores", "50": "People also search", "52": "AI Overview"}
+SERP_FIRST = ["52", "11", "21", "34", "5", "9", "38", "3", "16"]          # shown first: what an SEO can act on
+
+def serp_features(fk, fp=None):
+    """'5,11,52', '5' -> [{name, owned}] with AI Overview, featured snippet and People also ask first."""
+    codes = [c.strip() for c in (fk or "").split(",") if c.strip()]
+    owned = {c.strip() for c in (fp or "").split(",") if c.strip()}
+    codes.sort(key=lambda c: (SERP_FIRST.index(c) if c in SERP_FIRST else 99, int(c) if c.isdigit() else 999))
+    return [{"code": c, "name": SERP.get(c, f"Feature {c}"), "owned": c in owned} for c in codes]
+
+def semrush_by_feature(conn):
+    return dict(conn.execute("SELECT coalesce(feature, 'keywords'), sum(units) FROM semrush_usage GROUP BY 1").fetchall())
+
+# ------------------------------------------------------------------ rankings
+def rankings(conn, client_id, days=28):
+    """Tracked keywords: latest Search Console position (and Semrush's when tracked there), change over 7 days, 28-day clicks."""
+    out = rows(conn.execute("""
+        WITH g AS (SELECT keyword, date, position, url, clicks, impressions FROM rank_positions WHERE client_id=%(c)s AND source='gsc'
+                   AND date > current_date - %(d)s),
+             last AS (SELECT DISTINCT ON (keyword) keyword, date, position, url FROM g ORDER BY keyword, date DESC),
+             wk AS (SELECT DISTINCT ON (keyword) keyword, position FROM g WHERE date <= (SELECT max(date) FROM g) - 7 ORDER BY keyword, date DESC),
+             tot AS (SELECT keyword, sum(clicks) clicks, sum(impressions) impressions, min(position) best FROM g GROUP BY keyword),
+             sm AS (SELECT DISTINCT ON (keyword) keyword, position, date FROM rank_positions WHERE client_id=%(c)s AND source='semrush'
+                    ORDER BY keyword, date DESC)
+        SELECT k.keyword, k.tags, k.target_url, last.position, last.date, last.url, wk.position, tot.clicks, tot.impressions, tot.best, sm.position, sm.date
+        FROM rank_keywords k LEFT JOIN last USING (keyword) LEFT JOIN wk USING (keyword) LEFT JOIN tot USING (keyword) LEFT JOIN sm USING (keyword)
+        WHERE k.client_id=%(c)s ORDER BY last.position IS NULL, tot.clicks DESC NULLS LAST, k.keyword""", {"c": client_id, "d": days}),
+        ["keyword", "tags", "target", "position", "date", "url", "week_ago", "clicks", "impressions", "best", "semrush", "semrush_date"])
+    feats = {r[0].lower(): (r[1], r[2]) for r in conn.execute("""SELECT DISTINCT ON (keyword) keyword, serp_features, serp_features_owned
+                                                                FROM semrush_keywords WHERE client_id=%s ORDER BY keyword, pulled_on DESC""", [client_id])}
+    for r in out:
+        r["change"] = round(float(r["week_ago"]) - float(r["position"]), 1) if r["position"] is not None and r["week_ago"] is not None else None
+        r["features"] = serp_features(*feats.get(r["keyword"].lower(), (None, None)))
+        r["off_target"] = bool(r["target"] and r["url"] and r["url"].rstrip("/").split("://")[-1].removeprefix("www.")
+                               != r["target"].rstrip("/").split("://")[-1].removeprefix("www."))
+    return out
+
+def rank_trend(conn, client_id, keyword, days=90):
+    return rows(conn.execute("""SELECT date, position FROM rank_positions WHERE client_id=%s AND keyword=%s AND source='gsc'
+                                AND date > current_date - %s ORDER BY date""", [client_id, keyword, days]), ["date", "position"])
+
+# ------------------------------------------------------------------ technical audit
+def tech_summary(conn, client_id):
+    last = {}
+    for src in ("hovers", "semrush"):
+        r = conn.execute("""SELECT finished_at, pages_crawled, health_score, errors, warnings, notices FROM tech_crawls
+                            WHERE client_id=%s AND source=%s AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1""", [client_id, src]).fetchone()
+        if r: last[src] = dict(zip(["at", "pages", "health", "errors", "warnings", "notices"], r))
+    return last
+
+def tech_issues(conn, client_id, show="open"):
+    where = {"open": "pages > 0 AND status IN ('open','in_progress')", "fixed": "status IN ('fixed','verified')", "all": "true"}[show]
+    return rows(conn.execute(f"""SELECT issue_code, source, title, severity, team, how_to_fix, status, owner, due_date, pages, first_seen, last_seen
+                                 FROM tech_issues WHERE client_id=%s AND {where}
+                                 ORDER BY array_position(ARRAY['error','warning','notice'], severity), pages DESC""", [client_id]),
+                ["code", "source", "title", "severity", "team", "fix", "status", "owner", "due", "pages", "first_seen", "last_seen"])
+
+def tech_issue_pages(conn, client_id, code, limit=200):
+    crawl = conn.execute("""SELECT crawl_id FROM tech_issue_pages WHERE client_id=%s AND issue_code=%s
+                            ORDER BY (SELECT finished_at FROM tech_crawls t WHERE t.crawl_id=tech_issue_pages.crawl_id) DESC NULLS LAST LIMIT 1""",
+                         [client_id, code]).fetchone()
+    if not crawl: return []
+    return rows(conn.execute("""SELECT url, detail FROM tech_issue_pages WHERE crawl_id=%s AND issue_code=%s ORDER BY url LIMIT %s""",
+                             [crawl[0], code, limit]), ["url", "detail"])
+
+# ------------------------------------------------------------------ content ideas
+def ideas(conn, client_id, kind=None, status="new"):
+    return rows(conn.execute("""SELECT kind, seed, keyword, search_volume, kd, intent, serp_features, status, pulled_on FROM keyword_ideas
+                                WHERE client_id=%s AND (%s::text IS NULL OR kind=%s) AND (%s='all' OR status=%s)
+                                ORDER BY search_volume DESC NULLS LAST LIMIT 300""", [client_id, kind, kind, status, status]),
+                ["kind", "seed", "keyword", "volume", "kd", "intent", "fk", "status", "pulled_on"])
+
+# ------------------------------------------------------------------ backlinks
+def backlinks(conn, client_id):
+    day = conn.execute("SELECT max(pulled_on) FROM backlink_overview WHERE client_id=%s", [client_id]).fetchone()[0]
+    if not day: return None
+    me = conn.execute("SELECT domain FROM clients WHERE client_id=%s", [client_id]).fetchone()[0]
+    me = me.lower().replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
+    ov = rows(conn.execute("""SELECT domain, ascore, backlinks, refdomains, follows, nofollows FROM backlink_overview
+                              WHERE client_id=%s AND pulled_on=%s ORDER BY domain = %s DESC, ascore DESC NULLS LAST""", [client_id, day, me]),
+              ["domain", "ascore", "backlinks", "refdomains", "follows", "nofollows"])
+    rday = conn.execute("SELECT max(pulled_on) FROM backlink_refdomains WHERE client_id=%s", [client_id]).fetchone()[0]
+    ref = rows(conn.execute("""SELECT domain, ascore, backlinks, first_seen, last_seen FROM backlink_refdomains WHERE client_id=%s AND pulled_on=%s
+                               ORDER BY ascore DESC NULLS LAST LIMIT 100""", [client_id, rday]), ["domain", "ascore", "backlinks", "first_seen", "last_seen"]) if rday else []
+    gday = conn.execute("SELECT max(pulled_on) FROM backlink_gap WHERE client_id=%s", [client_id]).fetchone()[0]
+    gap = rows(conn.execute("""SELECT domain, ascore, links_to, status FROM backlink_gap WHERE client_id=%s AND pulled_on=%s AND status <> 'dismissed'
+                               ORDER BY ascore DESC NULLS LAST LIMIT 200""", [client_id, gday]), ["domain", "ascore", "links_to", "status"]) if gday else []
+    return {"day": day, "me": me, "overview": ov, "refdomains": ref, "gap": gap, "gap_day": gday}

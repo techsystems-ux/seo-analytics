@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_semrush.html" as sm with context %}
 {% block body %}
 <div class="top"><div><span class="kicker">Analytics · Competitors</span><h1>Who {{ client.name }} competes with</h1>
 <p class="lead">Organic competitors from Semrush, and the brands ChatGPT names instead. Tracked competitors feed the keyword gap and the visibility score.</p></div>
@@ -9,18 +10,39 @@
 {% for b in vis.brands %}<tr><td>{% if b.brand=='' %}<b>{{ client.name }} (you)</b>{% else %}{{ b.brand }}{% endif %}</td><td class="r"><b>{{ b.score|n }}</b></td><td class="r">{{ b.mention_rate|pct }}</td><td class="r">{{ b.citation_rate|pct }}</td><td class="r">{{ b.avg_position|n if b.avg_position else '–' }}</td><td class="r">{{ b.sov|pct }}</td></tr>{% endfor %}</table></div></section>{% endif %}
 
 <section class="card" style="display:flex;flex-direction:column;gap:14px">
-<div class="seg"><a class="{{ 'on' if tab=='gap' }}" href="?tab=gap">Untapped keywords</a><a class="{{ 'on' if tab=='keywords' }}" href="?tab=keywords">Your ranking keywords</a><a class="{{ 'on' if tab=='list' }}" href="?tab=list">Competitor list</a></div>
+<div class="seg"><a class="{{ 'on' if tab=='gap' }}" href="?tab=gap">Untapped keywords</a><a class="{{ 'on' if tab=='keywords' }}" href="?tab=keywords">Your ranking keywords</a><a class="{{ 'on' if tab=='backlinks' }}" href="?tab=backlinks">Backlinks</a><a class="{{ 'on' if tab=='list' }}" href="?tab=list">Competitor list</a></div>
 <div class="tw">
 {% if tab=='gap' %}
   {% if gaps %}<p class="note">Keywords at least one tracked competitor ranks for and {{ client.name }} does not. Semrush, {{ gap_day.strftime('%d %b %Y') }}.</p>
   <table><tr><th>Keyword</th><th class="r">Monthly searches</th><th>Who ranks (position)</th></tr>
   {% for g in gaps %}<tr><td>{{ g.keyword }}</td><td class="r">{{ g.volume|n }}</td><td>{% for d,p in g.positions.items() if p %}<span class="tag t-pass">{{ d }} · {{ p }}</span> {% endfor %}</td></tr>{% endfor %}</table>
-  {% else %}<p class="empty">No keyword gap pulled. A gap costs 80 credits per keyword, so it is off while the credit limit is low.</p>{% endif %}
+  {% else %}<p class="empty">No keyword gap pulled yet.</p>{% endif %}
+  <div style="margin-top:12px">{{ sm.run(actions.gap, 'Pull keyword gap') }}</div>
 {% elif tab=='keywords' %}
   {% if kws %}<p class="note">Top keywords by traffic share. Semrush, {{ kw_day.strftime('%d %b %Y') }}.</p>
-  <table><tr><th>Keyword</th><th class="r">Position</th><th class="r">Before</th><th class="r">Monthly searches</th><th class="r">Difficulty</th><th>Intent</th><th>Ranking page</th></tr>
-  {% for k in kws %}<tr><td>{{ k.keyword }}</td><td class="r">{{ k.position }}</td><td class="r">{{ k.prev or '–' }}</td><td class="r">{{ k.volume|n }}</td><td class="r">{{ k.kd|n }}</td><td>{{ k.intent or '–' }}</td><td><a href="{{ k.url }}" target="_blank" rel="noopener">{{ k.url|path }}</a></td></tr>{% endfor %}</table>
+  <table><tr><th>Keyword</th><th class="r">Position</th><th class="r">Before</th><th class="r">Monthly searches</th><th class="r">Difficulty</th><th>Intent</th><th>Ranking page</th><th>On Google's page</th></tr>
+  {% for k in kws %}<tr><td>{{ k.keyword }}</td><td class="r">{{ k.position }}</td><td class="r">{{ k.prev or '–' }}</td><td class="r">{{ k.volume|n }}</td><td class="r">{{ k.kd|n }}</td><td>{{ k.intent or '–' }}</td><td><a href="{{ k.url }}" target="_blank" rel="noopener">{{ k.url|path }}</a></td>
+  <td style="max-width:240px">{{ sm.features(k.features) if k.features else '<span class="mute">–</span>'|safe }}</td></tr>{% endfor %}</table>
+  <p class="note">Black tags with ✓: {{ client.name }} appears in that feature. Grey: Google shows it but someone else holds it. AI Overview and Featured snippet are the ones to write answers for.</p>
   {% else %}<p class="empty">Appears after the first Semrush pull.</p>{% endif %}
+{% elif tab=='backlinks' %}
+  {% if bl %}<p class="note">Semrush backlinks, {{ bl.day.strftime('%d %b %Y') }}. Authority Score is Semrush's 0–100 measure of a site's link strength.</p>
+  <table><tr><th>Site</th><th class="r">Authority</th><th class="r">Linking sites</th><th class="r">Backlinks</th><th class="r">Follow share</th></tr>
+  {% for o in bl.overview %}<tr><td>{% if o.domain==bl.me %}<b>{{ client.name }} (you)</b>{% else %}{{ o.domain }}{% endif %}</td><td class="r"><b>{{ o.ascore|n }}</b></td><td class="r">{{ o.refdomains|n }}</td><td class="r">{{ o.backlinks|n }}</td>
+  <td class="r">{{ ((o.follows / o.backlinks)|pct) if o.backlinks and o.follows is not none else '–' }}</td></tr>{% endfor %}</table>
+  <div class="grid2" style="margin-top:16px">
+  <div><h2>Link prospects</h2><p class="note">Sites that link to competitors but not to {{ client.name }}: the off-page outreach list. Mark progress here.</p>
+  {% if bl.gap %}<table><tr><th>Site</th><th class="r">Authority</th><th>Links to</th><th></th></tr>
+  {% for g in bl.gap %}<tr><td><a href="https://{{ g.domain }}" target="_blank" rel="noopener">{{ g.domain }}</a></td><td class="r">{{ g.ascore|n }}</td><td>{% for d,n in g.links_to.items() %}<span class="tag t-pass">{{ d }}</span> {% endfor %}</td>
+  <td><form method="post" style="display:flex;gap:6px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="prospect" value="{{ g.domain }}">
+  <select name="status" aria-label="Outreach status for {{ g.domain }}" onchange="this.form.submit()">{% for k,v in [('new','New'),('contacted','Contacted'),('won','Link won'),('dismissed','Dismiss')] %}<option value="{{ k }}" {{ 'selected' if g.status==k }}>{{ v }}</option>{% endfor %}</select>
+  <noscript><button class="btn ln">Save</button></noscript></form></td></tr>{% endfor %}</table>
+  {% else %}<p class="empty">No prospects yet. They need at least one tracked competitor.</p>{% endif %}</div>
+  <div><h2>Strongest sites linking to you</h2>{% if bl.refdomains %}<table><tr><th>Site</th><th class="r">Authority</th><th class="r">Links</th><th>First seen</th></tr>
+  {% for r in bl.refdomains[:30] %}<tr><td>{{ r.domain }}</td><td class="r">{{ r.ascore|n }}</td><td class="r">{{ r.backlinks|n }}</td><td>{{ r.first_seen.strftime('%b %Y') if r.first_seen else '–' }}</td></tr>{% endfor %}</table>
+  {% else %}<p class="empty">Not pulled.</p>{% endif %}</div></div>
+  {% else %}<p class="empty">No backlink data yet.</p>{% endif %}
+  <div style="margin-top:12px">{{ sm.run(actions.backlinks, 'Pull backlinks') }}</div>
 {% else %}
   <table><tr><th>Competitor</th><th>Found by</th><th class="r">Shared keywords</th><th class="r">Their keywords</th><th class="r">Their traffic</th><th>Names ChatGPT may use</th><th></th></tr>
   {% for c in comps %}<tr><td><b>{{ c.name }}</b><br><span class="note">{{ c.domain or '' }}</span></td><td>{{ 'Semrush' if c.source=='semrush' else 'Added by hand' }}</td>

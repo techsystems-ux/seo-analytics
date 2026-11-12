@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -75,7 +75,7 @@ def main():
     load_seeds()
     if len(sys.argv) > 1 and sys.argv[1] == "collect":
         # Search Console, GA4, ChatGPT prompts (if OPENAI_API_KEY is in .env) and page checks. Never Semrush: that is a button in Settings.
-        subprocess.run([sys.executable, "daily.py", "--only", "gsc,ga4,ai,pages"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ))
+        subprocess.run([sys.executable, "daily.py", "--only", "gsc,ga4,rank,ai,pages,crawl"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ))
         return
     sys.path.insert(0, os.path.join(HERE, "webapp"))
     from app import app

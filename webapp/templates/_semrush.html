@@ -1,0 +1,9 @@
+{# One Semrush feature button: shows the worst-case credit cost; disabled with the reason when it cannot run. #}
+{% macro run(a, label=None, seeds=False) %}
+<form method="post" action="{{ url_for('dash.semrush_run', cid=client.id) }}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+<input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="feature" value="{{ a.key }}"><input type="hidden" name="back" value="{{ request.full_path }}">
+{% if seeds %}<input type="text" name="seeds" placeholder="topics, separated by ;" aria-label="Topics" style="max-width:280px" value="{{ seeds if seeds is string else '' }}">{% endif %}
+<button class="btn {{ 'red' if a.ready else 'ln' }}" {{ 'disabled' if not a.ready }}>{{ label or a.label }} · up to {{ a.cost|n }} credits</button>
+{% if not a.ready %}<span class="note">{{ a.why }}</span>{% endif %}</form>
+{% endmacro %}
+{% macro features(list) %}{% for f in list %}<span class="tag {{ 't-blk' if f.owned else 't-pass' }}" title="{{ 'You appear in it' if f.owned else 'Shown on the results page' }}">{{ f.name }}{{ ' ✓' if f.owned }}</span> {% endfor %}{% endmacro %}

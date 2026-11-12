@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_semrush.html" as sm with context %}
 {% block body %}
 <div class="top"><div><span class="kicker">Settings</span><h1>{{ client.name }} setup</h1>
 <p class="lead">What the checks and the analytics depend on. Set once per brand; the client signs off the brand rules.</p></div></div>
@@ -52,14 +53,21 @@
 <tr><td>OpenAI (ChatGPT)</td><td>{{ 'Key set' if keys.OPENAI_API_KEY else 'No key on the server' }}</td></tr>
 <tr><td>Semrush</td><td>{{ 'Key set' if keys.SEMRUSH_API_KEY else 'No key on the server' }} · {{ budget.used|n }} of {{ budget.cap|n }} credits used, {{ budget.left|n }} left (hard limit)</td></tr></table>
 <p class="note">Keys live in the server's settings, never in the app. Search Console and GA4 are linked from <a href="{{ url_for('connections') }}">Google connections</a>.</p></section>
-<section class="card"><h2>Pull data now</h2><p class="note">Search Console, GA4, ChatGPT and page checks also run on their own every night. Semrush runs only from here.</p>
+<section class="card"><h2>Pull data now</h2><p class="note">Search Console, GA4, rankings and ChatGPT also run every night; page checks and the technical crawl every Monday. Semrush runs only when someone presses a button below.</p>
 <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
 {% for only,label in [('gsc,ga4','Pull Search Console and GA4'),('ai','Ask ChatGPT all approved prompts'),('pages','Find and check pages')] %}
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run"><input type="hidden" name="only" value="{{ only }}"><button class="btn {{ 'red' if loop.first else 'ln' }}">{{ label }}</button></form>{% endfor %}
-<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run"><input type="hidden" name="only" value="semrush">
-<button class="btn ln" {{ 'disabled' if budget.left < 200 }}>Pull Semrush ({{ budget.left|n }} credits left)</button></form>
-{% if budget.left < 200 %}<p class="note">Semrush is off: a pull needs up to 200 credits and the hard limit leaves {{ budget.left|n }}. Raise SEMRUSH_TOTAL_CAP on the server only if you approve more spend.</p>{% endif %}</div></section>
+</div></section>
 </div>
+<section class="card" style="display:flex;flex-direction:column;gap:12px"><div class="top" style="align-items:center"><h2>Semrush</h2>
+<span class="note"><b>{{ budget.used|n }} of {{ budget.cap|n }}</b> credits used · {{ budget.left|n }} left under the hard limit</span></div>
+<p class="note">Nothing here runs on its own. Each button shows the most it can spend; the pull stops before it would pass the limit. Raise SEMRUSH_TOTAL_CAP on the server only for spend you have approved.</p>
+<div style="display:flex;flex-direction:column;gap:10px">{% for k in ['keywords','gap','backlinks','ideas','audit','rank'] %}{{ sm.run(actions[k]) }}{% endfor %}</div>
+{% if by_feature %}<p class="note">Spent so far: {% for f,u in by_feature.items() %}{{ f }} {{ u|n }}{{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+<form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--line);padding-top:12px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="semrush_project">
+<div style="flex:1 1 240px"><label for="pj">Semrush project ID (for Site Audit and Position Tracking)</label><input id="pj" type="text" name="project_id" value="{{ project or '' }}" placeholder="the number in the project's Semrush address"></div>
+<button class="btn blk">Save</button></form>
+<p class="note">Set the project up in Semrush itself (crawls and tracked keywords added there use the project's limits, not API credits). This tool only reads the results.</p></section>
 <section class="card"><h2>Last runs</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
 {% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '').split('\n')[0][:300] }}</span></td></tr>{% endfor %}</table>
 {% else %}<p class="empty">Nothing has run yet.</p>{% endif %}</section>

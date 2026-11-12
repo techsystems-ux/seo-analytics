@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 6
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 7
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -149,10 +149,14 @@ with connect() as conn:
 checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Where Gargi stands", "Untapped keywords", "silver anklets for women", "+50.0%"],
           f"/c/{cid}/search": ["Non-branded clicks", "silver mangalsutra"], f"/c/{cid}/search?tab=revenue": ["/collections/mangalsutra", "100.0%"],
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
-          f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women"], f"/c/{cid}/settings?tab=data": ["Semrush is off", "disabled"],
+          f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID"],
+          f"/c/{cid}/technical": ["Technical health", "No crawl yet", "Import Site Audit"], f"/c/{cid}/ideas": ["What shoppers ask", "No ideas yet"],
+          f"/c/{cid}/search?tab=rankings": ["silver mangalsutra", "Track"], f"/c/{cid}/competitors?tab=backlinks": ["No backlink data yet", "Pull backlinks"],
           f"/c/{cid}/ai": ["Hovers Visibility Score", "#2", "Zaveri Pearls", "Failed"], f"/c/{cid}/ai/answer/{aid}": ["GIVA is the best known", "Read only"],
           f"/c/{cid}/pages": ["Pages found", "No checked pages in this view yet"], f"/c/{cid}/pages?show=unchecked": ["silver mangalsutra", "Not checked yet"], f"/c/{cid}/settings": ["Gargi by PNG"],
           f"/c/{cid}/settings?tab=prompts": ["best silver jewellery brands in India", "Approve all"]}
+import rank
+with connect() as conn: rank.sync_client(conn, cid)                                 # tracked keywords start from Search Console data
 for url, needles in checks.items():
     r = cl.get(url); body = r.get_data(as_text=True)
     assert r.status_code == 200, (url, r.status_code, body[:500])
@@ -167,10 +171,22 @@ assert cl.post(f"/c/{cid}/settings", data={"what": "brand"}).status_code == 400 
 r = cl.post(f"/c/{cid}/competitors", data={"csrf": "tok", "add_name": "Zaveri Pearls"})
 with connect() as conn:
     assert conn.execute("SELECT tracked FROM competitors WHERE client_id=%s AND name='Zaveri Pearls'", [cid]).fetchone()[0] is True
-print("every screen renders; brand rules and competitor tracking save; CSRF enforced")
+r = cl.post(f"/c/{cid}/semrush", data={"csrf": "tok", "feature": "audit", "back": "https://evil.example/"})
+assert r.status_code == 302 and r.location.startswith(f"/c/{cid}/settings") and "msg=No+Semrush+key" in r.location, r.location    # not ready: nothing runs, no outside redirect
+with connect() as conn:
+    assert conn.execute("SELECT count(*) FROM collector_runs WHERE client_id=%s AND collector LIKE 'semrush_%%'", [cid]).fetchone()[0] == 0
+    conn.execute("""INSERT INTO tech_issues (client_id, issue_code, source, title, severity, pages) VALUES (%s,'page_4xx','hovers','Page returns a 4xx error','error',2)""", [cid])
+r = cl.post(f"/c/{cid}/technical", data={"csrf": "tok", "issue": "page_4xx", "status": "in_progress", "owner": "Dev", "due": "2026-12-01"})
+assert r.status_code == 302
+assert "Dev" in cl.get(f"/c/{cid}/technical?issue=page_4xx").get_data(as_text=True)
+r = cl.post(f"/c/{cid}/rankings", data={"csrf": "tok", "keywords": "Silver Toe Rings | https://gargi.shop/collections/toe-rings"})
+with connect() as conn:
+    assert conn.execute("SELECT target_url FROM rank_keywords WHERE client_id=%s AND keyword='silver toe rings'", [cid]).fetchone()[0].endswith("toe-rings")
+print("every screen renders; brand rules, competitor tracking, issue tracker and rank keywords save; CSRF enforced; Semrush buttons refuse when not ready")
 
 with psycopg.connect(owner, autocommit=True) as c:                                                 # a client session sees only itself
     c.execute("SET ROLE aeo_app"); c.execute("SELECT set_config('app.client_id', %s, false)", [str(other)])
-    for t in ("semrush_keywords", "keyword_gaps", "answers", "citations", "scores_daily", "ga4_organic_landing", "competitors"):
+    for t in ("semrush_keywords", "keyword_gaps", "answers", "citations", "scores_daily", "ga4_organic_landing", "competitors",
+              "tech_issues", "rank_keywords", "rank_positions", "keyword_ideas", "backlink_overview", "backlink_gap"):
         assert c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0, t
 print("tenant isolation holds for the new tables")
