@@ -9,7 +9,7 @@ Hard limit: SEMRUSH_TOTAL_CAP (default 500) units across all calls ever made, in
 Usage: python semrush.py --client-id UUID [--database in] [--keywords 20] [--competitors 5] [--gap 0] [--max-units 500]
 Env: SEMRUSH_API_KEY
 """
-import argparse, csv, datetime as dt, io, json, os, sys
+import argparse, csv, datetime as dt, io, json, os, re, sys
 from urllib.parse import urlencode
 import requests
 from common import connect
@@ -106,26 +106,48 @@ def store_keywords(conn, client_id, domain, database, day, kws):
                              search_volume=EXCLUDED.search_volume, url=EXCLUDED.url, traffic_pct=EXCLUDED.traffic_pct""",
                         [{**k, "c": client_id, "d": domain, "db": database, "day": day} for k in kws])
 
+STOP = {"by", "and", "the", "of", "for", "with", "shop", "store", "online", "india"}
+
+def brand_words(conn, client_id):
+    """Words that make a search branded (name, aliases, brand spellings): 'Gargi by PNG' -> gargi, png."""
+    name, aliases = conn.execute("SELECT name, aliases FROM clients WHERE client_id=%s", [client_id]).fetchone()
+    br = conn.execute("SELECT brand_spellings FROM brand_rules WHERE client_id=%s", [client_id]).fetchone()
+    words = re.findall(r"[a-z0-9]+", " ".join([name, *(aliases or []), *((br or [[]])[0] or [])]).lower())
+    return sorted({w for w in words if len(w) >= 3 and w not in STOP})[:20]
+
+def nonbranded_filter(words):
+    """Semrush display_filter excluding every keyword that contains a brand word: -|Ph|Co|gargi|-|Ph|Co|png"""
+    return "|".join(f"-|Ph|Co|{w}" for w in words)
+
 def sync_client(conn, client_id, key, database="in", n_keywords=20, n_competitors=5, n_gap=0, comp_keywords=0,
-                max_units=500, session=None, today=None):
+                max_units=500, session=None, today=None, nonbranded=True, competitor_refresh_days=30):
     day = today or dt.date.today()
     domain = conn.execute("SELECT domain FROM clients WHERE client_id=%s", [client_id]).fetchone()[0]
     domain = domain.lower().replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
     sm = Semrush(key, conn, client_id, max_units, session)
     done = []
     try:
+        extra = {}
+        words = brand_words(conn, client_id) if nonbranded else []
+        if words: extra["display_filter"] = nonbranded_filter(words)
         kws = parse_organic(sm.call("domain_organic", n_keywords, domain=domain, database=database,
-                                    export_columns=ORGANIC_COLS, display_sort="tr_desc"))
-        store_keywords(conn, client_id, domain, database, day, kws); done.append(f"{len(kws)} keywords")
+                                    export_columns=ORGANIC_COLS, display_sort="tr_desc", **extra))
+        store_keywords(conn, client_id, domain, database, day, kws)
+        done.append(f"{len(kws)} {'non-branded ' if words else ''}keywords")
 
-        comps = parse_competitors(sm.call("domain_organic_organic", n_competitors, domain=domain, database=database, export_columns=COMPETITOR_COLS))
+        recent = conn.execute("""SELECT count(*) FROM competitors WHERE client_id=%s AND source='semrush' AND pulled_on >= %s""",
+                              [client_id, day - dt.timedelta(days=competitor_refresh_days)]).fetchone()[0]
+        if recent and competitor_refresh_days:
+            n_competitors = 0; done.append("competitors already pulled this month")
+        comps = parse_competitors(sm.call("domain_organic_organic", n_competitors, domain=domain, database=database,
+                                          export_columns=COMPETITOR_COLS)) if n_competitors else []
         for c in comps:
             conn.execute("""INSERT INTO competitors (client_id, name, domain, source, tracked, relevance, common_keywords, organic_keywords, organic_traffic, pulled_on)
                             VALUES (%s,%s,%s,'semrush',false,%s,%s,%s,%s,%s)
                             ON CONFLICT (client_id, name) DO UPDATE SET relevance=EXCLUDED.relevance, common_keywords=EXCLUDED.common_keywords,
                               organic_keywords=EXCLUDED.organic_keywords, organic_traffic=EXCLUDED.organic_traffic, pulled_on=EXCLUDED.pulled_on""",
                          [client_id, c["domain"], c["domain"], c["relevance"], c["common_keywords"], c["organic_keywords"], c["organic_traffic"], day])
-        done.append(f"{len(comps)} competitors")
+        if n_competitors: done.append(f"{len(comps)} competitors")
 
         tracked = [r[0] for r in conn.execute("""SELECT domain FROM competitors WHERE client_id=%s AND tracked AND domain IS NOT NULL
                                                  ORDER BY common_keywords DESC NULLS LAST LIMIT 4""", [client_id])]

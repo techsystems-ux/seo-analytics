@@ -19,9 +19,10 @@ def log(conn, client_id, name, fn):
         conn.execute("UPDATE collector_runs SET finished_at=now(), status='ok', error=%s WHERE run_id=%s", [str(out)[:500], rid])
         print(f"  {name}: {out}"); return True
     except Exception as e:
+        msg = f"{type(e).__name__}: {e}"                                   # shown on screen; full traceback in the log
         conn.execute("UPDATE collector_runs SET finished_at=now(), status='error', error=%s WHERE run_id=%s",
-                     [traceback.format_exc()[-800:], rid])
-        print(f"  {name}: FAILED {e}", file=sys.stderr); return False
+                     [(msg[:400] + "\n" + traceback.format_exc()[-1200:]), rid])
+        print(f"  {name}: FAILED {msg}", file=sys.stderr); traceback.print_exc(); return False
 
 def weekly_due(conn, client_id, name, force):
     if force or dt.date.today().weekday() == 0: return True

@@ -65,13 +65,17 @@ with connect() as conn:                                     # the seed carries 4
 semrush.TOTAL_CAP = 100000                                 # lift the cap only to exercise parsing against the fake API
 fs = FakeSemrush()
 with connect() as conn:
-    out = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, session=fs, today=dt.date(2026, 11, 9))
-    assert "2 keywords" in out and "2 competitors" in out and "2 untapped keywords vs 2 competitors" in out and "(260 units)" in out, out
+    out = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, session=fs, today=dt.date(2026, 11, 9), competitor_refresh_days=0)
+    assert "2 non-branded keywords" in out and "2 competitors" in out and "2 untapped keywords vs 2 competitors" in out and "(260 units)" in out, out
     assert conn.execute("SELECT sum(units) FROM semrush_usage WHERE client_id=%s", [cid]).fetchone()[0] == 660
     assert conn.execute("SELECT tracked FROM competitors WHERE client_id=%s AND name='myntra.com'", [cid]).fetchone()[0] is False
-    stopped = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, max_units=100, session=FakeSemrush())
+    stopped = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, max_units=100, session=FakeSemrush(), competitor_refresh_days=0)
     assert "stopped" in stopped and "domain_domains could cost 160 units; 0 left" in stopped, stopped
     assert all("key=KEY" in u for u in fs.urls)
+    kw_url = next(u for u in fs.urls if "type=domain_organic&" in u)          # non-branded only: brand words excluded
+    assert "display_filter=-%7CPh%7CCo%7Cgadgil%7C-%7CPh%7CCo%7Cgargi%7C-%7CPh%7CCo%7Cpng" in kw_url, kw_url
+    again = FakeSemrush(); note = semrush.sync_client(conn, cid, "KEY", n_keywords=2, session=again, today=dt.date(2026, 11, 12))
+    assert "competitors already pulled this month" in note and not any("domain_organic_organic" in u for u in again.urls), note
 semrush.TOTAL_CAP = 500
 print("semrush: lifetime cap blocks with zero calls; keywords, competitors (suggested, not tracked), untapped keywords, unit log and budget stop")
 

@@ -242,6 +242,11 @@ def settings_save(cid):
     return redirect(url_for("dash.settings", cid=cid, tab="prompts"))
 
 def start_job(cid, only):
-    """Runs the daily job for one client in the background. Output goes to the run log, not the page."""
+    """Runs the daily job for one client in the background. Results go to the run log on screen; full output,
+    errors included, is appended to logs/jobs.log in the project folder."""
+    import datetime as dt
+    logdir = os.path.join(HERE, "..", "logs"); os.makedirs(logdir, exist_ok=True)
+    out = open(os.path.join(logdir, "jobs.log"), "a")
+    out.write(f"\n=== {dt.datetime.now():%Y-%m-%d %H:%M:%S} {only} for {cid}\n"); out.flush()
     subprocess.Popen([sys.executable, os.path.join(HERE, "..", "collectors", "daily.py"), "--client-id", cid, "--only", only, "--force-weekly"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                     stdout=out, stderr=subprocess.STDOUT, start_new_session=True)

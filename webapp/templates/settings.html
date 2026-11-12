@@ -61,7 +61,7 @@
 {% if budget.left < 200 %}<p class="note">Semrush is off: a pull needs up to 200 credits and the hard limit leaves {{ budget.left|n }}. Raise SEMRUSH_TOTAL_CAP on the server only if you approve more spend.</p>{% endif %}</div></section>
 </div>
 <section class="card"><h2>Last runs</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
-{% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '')[:300] }}</span></td></tr>{% endfor %}</table>
+{% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '').split('\n')[0][:300] }}</span></td></tr>{% endfor %}</table>
 {% else %}<p class="empty">Nothing has run yet.</p>{% endif %}</section>
 {% endif %}
 {% endblock %}
