@@ -105,14 +105,21 @@ def load(conn, cid, today=None):
     conn.execute("UPDATE clients SET sample_semrush=true WHERE client_id=%s", [cid])
     return "sample data loaded"
 
-def clear(conn, cid):
-    import sample_community
-    sample_community.clear(conn, cid)
-    for t in ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_refdomains", "backlink_gap", "tech_crawls", "tech_issues",
-              "rank_positions", "rank_keywords"):
-        conn.execute(f"DELETE FROM {t} WHERE client_id=%s AND sample", [cid])
-    conn.execute("UPDATE semrush_keywords SET serp_features=NULL, serp_features_owned=NULL, sample_features=false WHERE client_id=%s AND sample_features", [cid])
-    conn.execute("UPDATE clients SET sample_semrush=false WHERE client_id=%s", [cid])
+SOURCES = {"semrush": ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_refdomains", "backlink_gap", "tech_crawls", "tech_issues",
+                        "rank_positions", "rank_keywords", "research_lookups"),
+           "reddit": ("reddit_items",), "youtube": ("youtube_videos", "youtube_channels", "youtube_comments")}
+
+def clear(conn, cid, only=None):
+    """Removes sample rows: all of them, or only one source's (a real Reddit pull leaves the YouTube sample in place)."""
+    for src, tables in SOURCES.items():
+        if only and src != only: continue
+        for t in tables:
+            conn.execute(f"DELETE FROM {t} WHERE client_id=%s AND sample", [cid])
+        if src == "semrush":
+            conn.execute("""UPDATE semrush_keywords SET serp_features=NULL, serp_features_owned=NULL, sample_features=false
+                            WHERE client_id=%s AND sample_features""", [cid])
+    left = any(conn.execute(f"SELECT 1 FROM {t} WHERE client_id=%s AND sample LIMIT 1", [cid]).fetchone() for ts in SOURCES.values() for t in ts)
+    conn.execute("UPDATE clients SET sample_semrush=%s WHERE client_id=%s", [left, cid])
     return "sample data removed"
 
 if __name__ == "__main__":

@@ -378,7 +378,7 @@ def semrush_run(cid):
     sep = "&" if "?" in back else "?"
     if not a["ready"]: return redirect(back + sep + urlencode({"msg": a["why"]}))
     with connect() as conn:                       # a real pull replaces the sample rows, never mixes with them
-        import sample_semrush; sample_semrush.clear(conn, cid)
+        import sample_semrush; sample_semrush.clear(conn, cid, only='semrush')
     if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"])
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
@@ -498,7 +498,7 @@ def reddit_save(cid):
         if not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
         n = min(rd.RUN_ITEMS, rd.items_left(conn))
         if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Apify result limit is used up.")
-        import sample_semrush; sample_semrush.clear(conn, cid)
+        import sample_semrush; sample_semrush.clear(conn, cid, only='reddit')
     start_job(cid, "reddit", max_units=n)
     return back_with(url_for("dash.reddit_view", cid=cid), f"Reddit pull started: up to {n} results. Refresh in a few minutes.")
 
@@ -542,6 +542,6 @@ def youtube_save(cid):
             conn.execute("UPDATE clients SET youtube_channel_id=%s WHERE client_id=%s", [ch, cid])
             return back_with(url_for("dash.youtube_view", cid=cid), "Channel saved.")
         if not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "No YouTube API key on the server, so nothing was pulled.")
-        import sample_semrush; sample_semrush.clear(conn, cid)
+        import sample_semrush; sample_semrush.clear(conn, cid, only='youtube')
     start_job(cid, "youtube")
     return back_with(url_for("dash.youtube_view", cid=cid), "YouTube pull started (free daily quota). Refresh in a minute or two.")

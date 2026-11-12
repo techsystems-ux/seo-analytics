@@ -242,6 +242,12 @@ for url, needles in {f"/c/{cid}/ideas": ["Sample data", "how to clean silver ear
     page = cl.get(url).get_data(as_text=True)
     for n in needles: assert n in page, (url, n)
 assert "Sample data" not in cl.get(f"/c/{cid}/ai").get_data(as_text=True)
+sys.path.insert(0, os.path.join(ROOT, "scripts")); import sample_semrush
+with connect() as conn:                                    # a real YouTube pull removes only YouTube's sample rows
+    sample_semrush.clear(conn, cid, only="youtube")
+    assert conn.execute("SELECT count(*) FROM youtube_videos WHERE client_id=%s AND sample", [cid]).fetchone()[0] == 0
+    assert conn.execute("SELECT count(*) FROM reddit_items WHERE client_id=%s AND sample", [cid]).fetchone()[0] > 0
+    assert conn.execute("SELECT sample_semrush FROM clients WHERE client_id=%s", [cid]).fetchone()[0] is True
 cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "sample_clear"})
 with connect() as conn:
     assert conn.execute("SELECT coalesce(sum(units),0), count(*) FROM semrush_usage").fetchone() == used        # no credits, nothing logged

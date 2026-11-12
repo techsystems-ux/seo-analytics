@@ -72,7 +72,7 @@
 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px">
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="{{ 'sample_clear' if client.sample else 'sample_load' }}">
 <button class="btn {{ 'blk' if client.sample else 'ln' }}">{{ 'Remove sample data' if client.sample else 'Show sample data' }}</button></form>
-<span class="note">{{ 'Sample rows are showing on Competitors, Research, Reddit, YouTube, Content ideas, Technical and Rankings. A real Semrush pull removes them first.' if client.sample else 'Fills the Semrush, Reddit and YouTube sections with clearly marked sample rows to review the screens. No credits.' }}</span></div>
+<span class="note">{{ 'Sample rows are showing on Competitors, Research, Reddit, YouTube, Content ideas, Technical and Rankings. A real pull from Semrush, Reddit or YouTube removes the sample for that source first.' if client.sample else 'Fills the Semrush, Reddit and YouTube sections with clearly marked sample rows to review the screens. No credits.' }}</span></div>
 <p class="note">Set the project up in Semrush itself (crawls and tracked keywords added there use the project's limits, not API credits). This tool only reads the results.</p></section>
 <section class="card"><h2>Last runs</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
 {% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '').split('\n')[0][:300] }}</span></td></tr>{% endfor %}</table>
