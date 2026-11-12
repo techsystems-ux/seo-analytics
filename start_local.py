@@ -2,7 +2,8 @@
 Starts a private Postgres (pgserver) in ~/.hovers-connect/pgdata, applies the migrations once, then opens the Google connect page.
 
   python start_local.py            -> connect page at http://localhost:8080 (opens the browser)
-  python start_local.py collect    -> pull the last 7 days of Search Console and GA4 for every imported client
+  python start_local.py collect    -> pull Search Console, GA4 and ChatGPT for every brand, and check pages
+Optional keys in .env (they stay on this computer): OPENAI_API_KEY, SEMRUSH_API_KEY
 """
 import os, sys, glob, threading, webbrowser, subprocess
 from urllib.parse import urlparse, parse_qs, quote
@@ -57,20 +58,30 @@ def start_db():
     os.environ["DATABASE_URL"] = f"postgresql://aeo_app:change-me@/aeo?host={quote(host)}" if host else db_admin.replace("//postgres", "//aeo_app:change-me", 1)
     return srv
 
+def load_seeds():
+    """Brands in seeds/*.json (e.g. Gargi): added once, with draft prompts. Existing data is never changed."""
+    import json
+    sys.path[:0] = [os.path.join(HERE, "collectors"), os.path.join(HERE, "seo"), os.path.join(HERE, "scripts")]
+    import setup_brand
+    from common import connect
+    with connect() as conn:
+        for f in sorted(glob.glob(os.path.join(HERE, "seeds", "*.json"))):
+            cid, n = setup_brand.setup(conn, json.load(open(f)))
+            if n: print(f"Set up {os.path.basename(f)}: {n} draft prompts to approve in Settings")
+
 def main():
     load_env()
     srv = start_db()
+    load_seeds()
     if len(sys.argv) > 1 and sys.argv[1] == "collect":
-        env = dict(os.environ)
-        for script in ("gsc.py", "ga4.py"):
-            print(f"--- {script}")
-            subprocess.run([sys.executable, script, "--days", "7"], cwd=os.path.join(HERE, "collectors"), env=env)
+        # Search Console, GA4, ChatGPT prompts (if OPENAI_API_KEY is in .env) and page checks. Never Semrush: that is a button in Settings.
+        subprocess.run([sys.executable, "daily.py", "--only", "gsc,ga4,ai,pages"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ))
         return
     sys.path.insert(0, os.path.join(HERE, "webapp"))
     from app import app
     threading.Timer(2, lambda: webbrowser.open("http://localhost:8080")).start()
-    print("\nConnect page running at http://localhost:8080  (leave this window open; close it to stop)\n")
-    app.run(host="127.0.0.1", port=8080)
+    print("\nHovers AI Search is running at http://localhost:8080  (leave this window open; close it to stop)\n")
+    app.run(host="127.0.0.1", port=8080, threaded=True)
 
 if __name__ == "__main__":
     main()
