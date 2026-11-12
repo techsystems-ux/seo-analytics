@@ -81,10 +81,17 @@ def site_pass(conn, client_id):
                             [(p["snapshot_id"], client_id, p["page_id"], r["check_id"], r["result"], r["found"], r["message"]) for r in res[p["page_id"]]])
     return res
 
-def check_live(conn, client_id, only_url=None, session=None, pause=1.0):
+def check_live(conn, client_id, only_url=None, session=None, pause=1.0, limit=None):
+    """Checks one URL, or the brand's pages in priority order (home, collections, then by Search Console clicks), up to `limit`."""
     brand = load_brand(conn, client_id)
     q = "SELECT page_id, url, page_type, primary_keyword, secondary_keywords FROM pages WHERE client_id=%s"
-    rows = conn.execute(q + (" AND url=%s" if only_url else "") + " ORDER BY url", [client_id] + ([only_url] if only_url else [])).fetchall()
+    if only_url:
+        rows = conn.execute(q + " AND url=%s", [client_id, only_url]).fetchall()
+    else:
+        import sitemap
+        order = sitemap.priority(conn, client_id)[:limit] if limit else sitemap.priority(conn, client_id)
+        by_id = {r[0]: r for r in conn.execute(q, [client_id]).fetchall()}
+        rows = [by_id[i] for i in order if i in by_id]
     summary = []
     for page_id, url, ptype, kw, sec in rows:
         page = {"page_type": ptype, "primary_keyword": kw, "secondary_keywords": sec}

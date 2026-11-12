@@ -65,8 +65,11 @@ def main():
                 ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, os.environ["OPENAI_API_KEY"],
                           int(os.environ.get("AI_SAMPLES", "1")))[0])
             if "pages" in only and weekly_due(conn, cid, "pages", a.force_weekly):
-                import run_checks
-                ok &= log(conn, cid, "pages", lambda: f"{len(run_checks.check_live(conn, cid))} pages")
+                import run_checks, sitemap
+                ok &= log(conn, cid, "sitemap", lambda: "{found} pages in the sitemap, {added} new, {keywords} keywords assigned".format(
+                          **sitemap.sync_pages(conn, cid)))
+                limit = int(os.environ.get("PAGES_PER_RUN", "100"))
+                ok &= log(conn, cid, "pages", lambda: f"{len(run_checks.check_live(conn, cid, pause=0.5, limit=limit))} pages checked (top {limit} by priority)")
     return 0 if ok else 1
 
 if __name__ == "__main__":

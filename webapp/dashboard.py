@@ -183,7 +183,7 @@ def pages_save(cid):
             n = run_checks.import_pages(conn, cid, csv.DictReader(io.StringIO(f.read().decode("utf-8-sig"))))
             return redirect(url_for("dash.pages", cid=cid, msg=f"Imported {n} pages. Checks run with the next pull, or press Check pages now."))
     start_job(cid, "pages")
-    return redirect(url_for("dash.pages", cid=cid, msg="Checking pages. Refresh in a minute."))
+    return redirect(url_for("dash.pages", cid=cid, msg="Reading the sitemap and checking pages. The list fills in within a few minutes; refresh to see progress."))
 
 @bp.get("/c/<cid>/settings")
 def settings(cid):

@@ -26,7 +26,7 @@
 
 <section class="card"><h2>Data freshness</h2>
 {% if runs %}<div class="tw"><table><tr><th>Source</th><th>Last run</th><th>Result</th></tr>
-{% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'GA4','ai':'ChatGPT prompts','semrush':'Semrush','pages':'Page checks'}.get(r.collector, r.collector) }}</td>
+{% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'GA4','ai':'ChatGPT prompts','semrush':'Semrush','pages':'Page checks','sitemap':'Sitemap'}.get(r.collector, r.collector) }}</td>
 <td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{% if r.status=='ok' %}<span class="tag t-pass">OK</span> <span class="note">{{ r.note }}</span>{% elif r.status=='running' %}<span class="tag t-na">Running</span>{% else %}<span class="tag t-fail">Failed</span> <span class="note">{{ (r.note or '').split('\n')[0][:200] }}</span>{% endif %}</td></tr>{% endfor %}</table></div>
 {% else %}<p class="empty">Nothing pulled yet. Start a pull from Settings, Data.</p>{% endif %}</section>
 {% endblock %}
