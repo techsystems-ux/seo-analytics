@@ -460,9 +460,28 @@ def brand_cols(conn, cid):
     return [{"name": b["name"], "label": community.display_name(b), "is_client": b["is_client"]} for b in tracked_brands(conn, cid)]
 
 def topics_of(conn, cid):
-    import semrush_suite
-    t = conn.execute("SELECT community_topics FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
-    return list(t or []), semrush_suite.default_seeds(conn, cid)
+    import community
+    return community.topics(conn, cid)                    # (topics, found automatically?)
+
+AUTO_KEYS = {"reddit": "APIFY_TOKEN", "youtube": "YOUTUBE_API_KEY"}
+
+def auto_kick(conn, cid, source):
+    """Reddit and YouTube fill themselves: when the key is set and the data is missing or a week old, a pull starts in the
+    background the moment anyone opens the screen (or the app starts). Not again within an hour of a failure."""
+    import datetime as dt
+    if not os.environ.get(AUTO_KEYS[source]) or os.environ.get("COMMUNITY_AUTO", "1") == "0": return None
+    st = A.source_status(conn, cid, source)
+    now = dt.datetime.now(dt.timezone.utc)
+    if st["running"] or (st["error_at"] and now - st["error_at"] < dt.timedelta(hours=1)): return st
+    if st["last_ok"] and now - st["last_ok"] < dt.timedelta(days=7): return st
+    if source == "reddit":
+        import reddit as rd
+        if rd.items_left(conn) <= 0: return st
+    import sample_semrush; sample_semrush.clear(conn, cid, only=source)
+    conn.execute("INSERT INTO collector_runs (client_id, collector, status, error) VALUES (%s,%s,'running','started automatically')", [cid, f"{source}_auto"])
+    start_job(cid, source)
+    st["running"] = now
+    return st
 
 @bp.get("/c/<cid>/reddit")
 def reddit_view(cid):
@@ -477,13 +496,15 @@ def reddit_view(cid):
         if tab == "subreddits": data["subs"] = A.subreddit_map(conn, cid, [b["name"] for b in cols])
         if tab == "questions": data["groups"], data["pains"] = A.reddit_questions(conn, cid)
         if tab == "cited": data["cited"] = A.reddit_cited(conn, cid)
-        topics, defaults = topics_of(conn, cid)
+        topics, auto = topics_of(conn, cid)
+        status = auto_kick(conn, cid, "reddit") or A.source_status(conn, cid, "reddit")
+        comms = A.reddit_communities(conn, cid)
         left = rd.items_left(conn)
     labels = {b["name"]: b["label"] for b in cols}
     why = None if os.environ.get("APIFY_TOKEN") else "No Apify token on the server"
     if not why and left <= 0: why = "The Apify result limit is used up"
-    return view("reddit.html", c, "reddit", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, defaults=defaults,
-                run_items=min(rd.RUN_ITEMS, left), left=left, why=why, msg=request.args.get("msg"),
+    return view("reddit.html", c, "reddit", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, auto=auto, status=status,
+                comms=comms, auto_items=min(rd.AUTO_ITEMS, left), run_items=min(rd.RUN_ITEMS, left), left=left, why=why, msg=request.args.get("msg"),
                 brand=request.args.get("brand"), sentiment=request.args.get("sentiment"))
 
 @bp.post("/c/<cid>/reddit")
@@ -494,7 +515,7 @@ def reddit_save(cid):
         client_or_404(conn, cid)
         if request.form.get("what") == "topics":
             save_topics(conn, cid, request.form.get("topics", ""))
-            return back_with(url_for("dash.reddit_view", cid=cid, tab=request.form.get("tab", "overview")), "Topics saved for Reddit and YouTube.")
+            return back_with(url_for("dash.reddit_view", cid=cid, tab=request.form.get("tab", "overview")), "Topics saved for Reddit and YouTube." if request.form.get("topics", "").strip() else "Topics are automatic again.")
         if not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
         n = min(rd.RUN_ITEMS, rd.items_left(conn))
         if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Apify result limit is used up.")
@@ -503,6 +524,7 @@ def reddit_save(cid):
     return back_with(url_for("dash.reddit_view", cid=cid), f"Reddit pull started: up to {n} results. Refresh in a few minutes.")
 
 def save_topics(conn, cid, text):
+    """A person's topics replace the automatic ones; saving an empty box goes back to automatic."""
     topics = [t.strip().lower()[:80] for t in text.replace("\n", ",").split(",") if t.strip()][:8]
     conn.execute("UPDATE clients SET community_topics=%s WHERE client_id=%s", [topics, cid])
 
@@ -520,12 +542,13 @@ def youtube_view(cid):
         if tab == "creators": data["creators"] = A.youtube_creators(conn, cid)
         if tab == "comments": data["questions"], data["pains"] = A.youtube_comment_insights(conn, cid)
         if tab == "cited": data["cited"] = A.youtube_cited(conn, cid)
-        topics, defaults = topics_of(conn, cid)
+        topics, auto = topics_of(conn, cid)
+        status = auto_kick(conn, cid, "youtube") or A.source_status(conn, cid, "youtube")
         channel = conn.execute("SELECT youtube_channel_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         quota = yt.used_today(conn)
     labels = {b["name"]: b["label"] for b in cols}
     why = None if os.environ.get("YOUTUBE_API_KEY") else "No YouTube API key on the server"
-    return view("youtube.html", c, "youtube", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, defaults=defaults,
+    return view("youtube.html", c, "youtube", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, auto=auto, status=status,
                 channel=channel, quota=quota, daily=yt.DAILY, why=why, msg=request.args.get("msg"), brand=request.args.get("brand"))
 
 @bp.post("/c/<cid>/youtube")

@@ -94,6 +94,10 @@ def run(conn, client_id, key, per_search=25, comment_videos=10, session=None, to
                      [client_id, v["id"], sn.get("title"), (sn.get("description") or "")[:3000], sn.get("channelId"), sn.get("channelTitle"),
                       sn.get("publishedAt"), st.get("viewCount"), st.get("likeCount"), st.get("commentCount"),
                       duration_s(v.get("contentDetails", {}).get("duration")), found_by, q, rank, cm.brands_in(text, brands), own, today])
+    if not own_id:                                       # the brand's own channel, found on its own: the channel named after the brand
+        hit = conn.execute("""SELECT channel_id FROM youtube_videos WHERE client_id=%s AND own_channel AND channel_id IS NOT NULL
+                              GROUP BY 1 ORDER BY count(*) DESC LIMIT 1""", [client_id]).fetchone()
+        if hit: conn.execute("UPDATE clients SET youtube_channel_id=%s WHERE client_id=%s AND youtube_channel_id IS NULL", [hit[0], client_id])
     # comments on the most watched topic and brand videos: what viewers ask and complain about
     top = conn.execute("""SELECT video_id FROM youtube_videos WHERE client_id=%s AND found_by IN ('topic','brand') AND pulled_on=%s
                           AND coalesce(comments,0) > 0 ORDER BY views DESC NULLS LAST LIMIT %s""", [client_id, today, comment_videos]).fetchall()

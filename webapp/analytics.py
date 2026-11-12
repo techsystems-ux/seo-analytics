@@ -241,7 +241,8 @@ def page_audit(conn, client_id, page_id):
 
 def last_runs(conn, client_id):
     return rows(conn.execute("""SELECT DISTINCT ON (collector) collector, status, started_at, finished_at, error FROM collector_runs
-                                WHERE client_id=%s ORDER BY collector, started_at DESC""", [client_id]), ["collector", "status", "started", "finished", "note"])
+                                WHERE client_id=%s AND collector NOT LIKE '%%\\_auto' ORDER BY collector, started_at DESC""", [client_id]),
+                ["collector", "status", "started", "finished", "note"])
 
 
 # ------------------------------------------------------------------ SERP features (Semrush codes)
@@ -379,6 +380,13 @@ def subreddit_map(conn, client_id, brand_names):
                                       count(*) FILTER (WHERE is_question)
                                FROM reddit_items WHERE client_id=%s AND subreddit IS NOT NULL GROUP BY subreddit ORDER BY count(*) DESC LIMIT 40""", [client_id]),
                ["subreddit", "posts", "cited", "last", "upvotes", "questions"])
+    members = {n.lower(): (n, m, rel) for n, m, rel in conn.execute("SELECT name, members, relevance FROM reddit_communities WHERE client_id=%s", [client_id])}
+    seen = {r["subreddit"].lower() for r in out}
+    for r in out:
+        r["members"] = members.get(r["subreddit"].lower(), (None, None))[1]
+    for low, (n, m, rel) in sorted(members.items(), key=lambda x: -(x[1][2] or 0)):
+        if low not in seen:                       # found for the topics, nothing about the brands there yet: a place to start
+            out.append({"subreddit": n, "posts": 0, "cited": 0, "last": None, "upvotes": 0, "questions": 0, "members": m})
     per = {}
     for sub, b, n in conn.execute("""SELECT subreddit, b, count(*) FROM reddit_items, unnest(brands) b WHERE client_id=%s GROUP BY 1, 2""", [client_id]):
         per.setdefault(sub, {})[b] = n
@@ -487,3 +495,19 @@ def youtube_cited(conn, client_id):
                                 FROM youtube_videos v LEFT JOIN citations c ON c.client_id=v.client_id AND (c.url LIKE '%%' || v.video_id || '%%')
                                 WHERE v.client_id=%s AND (v.found_by='cited' OR c.url IS NOT NULL) GROUP BY 1,2,3,4,5, v.sample ORDER BY 6 DESC""", [client_id]),
                 ["id", "title", "channel", "views", "brands", "times"])
+
+def source_status(conn, client_id, name):
+    """Last runs of one collector: when it last worked, whether one is running, and the last error."""
+    r = conn.execute("""SELECT max(finished_at) FILTER (WHERE status='ok' AND collector NOT LIKE '%%\\_auto'),
+                               max(started_at) FILTER (WHERE (collector=%s AND status='running' AND started_at > now() - interval '1 hour')
+                                                         OR (collector=%s || '_auto' AND started_at > now() - interval '3 minutes')),
+                               (array_agg(error ORDER BY started_at DESC) FILTER (WHERE status='error'))[1],
+                               max(started_at) FILTER (WHERE status='error')
+                        FROM collector_runs WHERE client_id=%s AND collector IN (%s, %s || '_auto')""", [name, name, client_id, name, name]).fetchone()
+    return {"last_ok": r[0], "running": r[1], "error": (r[2] or "").split("\n")[0] if r[3] and (not r[0] or r[3] > r[0]) else None, "error_at": r[3]}
+
+def reddit_communities(conn, client_id, limit=12):
+    return rows(conn.execute("""SELECT c.name, c.title, c.members, c.relevance, c.found_for,
+                                       (SELECT count(*) FROM reddit_items i WHERE i.client_id=c.client_id AND i.subreddit=c.name)
+                                FROM reddit_communities c WHERE c.client_id=%s ORDER BY c.relevance DESC NULLS LAST, c.members DESC NULLS LAST LIMIT %s""",
+                             [client_id, limit]), ["name", "title", "members", "relevance", "found_for", "posts"])

@@ -1,0 +1,26 @@
+{# The automatic status card for Reddit and YouTube: what is tracked (found on its own), when it last ran, and an optional manual override. #}
+{% macro card(source, status, topics, auto, cols, why, cost_note, refresh_label, comms=None) %}
+<section class="card" style="display:flex;flex-direction:column;gap:12px">
+  <div class="top" style="align-items:center">
+    <div style="display:flex;gap:10px;align-items:center">
+      {% if status.running %}<span class="tag t-blk">Pulling now</span><span class="note">started {{ status.running.strftime('%H:%M') }} · refresh in a few minutes</span>
+      {% elif why %}<span class="tag t-na">Waiting for a key</span><span class="note">{{ why }}. Once it is added, this fills itself.</span>
+      {% elif status.last_ok %}<span class="tag t-pass">Automatic</span><span class="note">updated {{ status.last_ok.strftime('%d %b, %H:%M') }} · refreshes itself every week</span>
+      {% else %}<span class="tag t-pass">Automatic</span><span class="note">the first pull starts on its own</span>{% endif %}
+    </div>
+    {% if not why %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run">
+      <button class="btn ln" {{ 'disabled' if status.running }}>{{ refresh_label }}</button></form>{% endif %}
+  </div>
+  {% if status.error and not status.running %}<p class="note down" style="margin:0">Last pull failed: {{ status.error }}. It retries on its own after an hour.</p>{% endif %}
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="note">Tracking:</span>
+    <span class="tag t-blk">{{ client.name }}</span>{% for b in cols[1:] %}<span class="tag t-pass">{{ b.label }}</span>{% endfor %}
+    <span class="note" style="margin-left:6px">Topics{{ ' (found from your site and searches)' if auto }}:</span>{% for t in topics %}<span class="tag t-pass">{{ t }}</span>{% else %}<span class="note">found after the first Search Console pull</span>{% endfor %}
+  </div>
+  {% if comms %}<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="note">Communities found:</span>{% for c in comms[:8] %}<a class="tag t-pass" href="https://www.reddit.com/r/{{ c.name }}/" target="_blank" rel="noopener">r/{{ c.name }}{{ ' · ' ~ (c.members|n) if c.members }}</a>{% endfor %}</div>{% endif %}
+  <p class="note" style="margin:0">{{ cost_note }}</p>
+  <details><summary class="note" style="cursor:pointer">Adjust topics (optional)</summary>
+    <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:8px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="topics">
+      <div style="flex:1 1 360px"><label for="tp">Topics, comma separated (leave empty to go back to automatic)</label><input id="tp" type="text" name="topics" value="{{ '' if auto else topics|join(', ') }}" placeholder="{{ topics|join(', ') }}"></div>
+      <button class="btn blk">Save</button></form></details>
+</section>
+{% endmacro %}

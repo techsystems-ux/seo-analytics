@@ -1,16 +1,12 @@
 {% extends "base.html" %}
+{% import "_autopilot.html" as ap with context %}
 {% block body %}
 <div class="top"><div><span class="kicker">Community · Reddit</span><h1>What Reddit says</h1>
 <p class="lead">Where {{ client.name }} and its competitors come up on Reddit, in which communities, with what tone; what people ask and complain about in the category; and the Reddit threads ChatGPT cites when it answers your prompts. Those threads are where a helpful reply can shape AI answers.</p></div></div>
 
-<section class="card" style="display:flex;flex-direction:column;gap:12px">
-<form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="topics"><input type="hidden" name="tab" value="{{ tab }}">
-  <div style="flex:1 1 360px"><label for="tp">Topics searched, besides brand names (comma separated, up to 8; shared with YouTube)</label>
-  <input id="tp" type="text" name="topics" value="{{ topics|join(', ') }}" placeholder="{{ defaults|join(', ') }}"></div><button class="btn blk">Save topics</button></form>
-<form method="post" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run">
-  <button class="btn {{ 'red' if not why else 'ln' }}" {{ 'disabled' if why }}>Pull Reddit · up to {{ run_items|n }} results</button>
-  <span class="note">{{ why ~ '. ' if why }}Searches: {{ client.name }}, {% for b in cols[1:] %}{{ b.label }}, {% endfor %}{{ (topics or defaults)|join(', ') }}, plus threads ChatGPT cited. Apify charges per result; {{ left|n }} results left under the limit.</span></form>
-</section>
+{{ ap.card("reddit", status, topics, auto, cols, why,
+     "Each week: finds the communities for these topics, searches Reddit for the brand, each competitor and each topic, reads inside the top communities and the threads ChatGPT cites. Apify charges per result: up to " ~ (auto_items|n) ~ " a week; " ~ (left|n) ~ " left under the limit.",
+     "Refresh now", comms) }}
 
 {% if summ %}
 {% set mine = summ.brands|selectattr('is_client')|first %}
@@ -41,9 +37,9 @@
 {% else %}<p class="empty">No mentions for this filter.</p>{% endif %}
 
 {% elif tab=='subreddits' %}
-<p class="note">Communities where the category is discussed, and how often each brand is named in them. Cited = threads from that community ChatGPT used as a source.</p>
-{% if data.subs %}<div class="tw"><table><tr><th>Community</th><th class="r">Posts and comments</th>{% for b in cols %}<th class="r">{{ 'You' if b.is_client else b.label }}</th>{% endfor %}<th class="r">Questions</th><th class="r">Cited</th><th>Last active</th></tr>
-{% for s in data.subs %}<tr><td><a href="https://www.reddit.com/r/{{ s.subreddit }}/" target="_blank" rel="noopener"><b>r/{{ s.subreddit }}</b></a></td><td class="r">{{ s.posts|n }}</td>
+<p class="note">Communities found for {{ client.name }}'s topics and in the results, and how often each brand is named in them. Cited = threads ChatGPT used as a source.</p>
+{% if data.subs %}<div class="tw"><table><tr><th>Community</th><th class="r">Members</th><th class="r">Posts and comments</th>{% for b in cols %}<th class="r">{{ 'You' if b.is_client else b.label }}</th>{% endfor %}<th class="r">Questions</th><th class="r">Cited</th><th>Last active</th></tr>
+{% for s in data.subs %}<tr><td><a href="https://www.reddit.com/r/{{ s.subreddit }}/" target="_blank" rel="noopener"><b>r/{{ s.subreddit }}</b></a></td><td class="r">{{ s.members|n }}</td><td class="r">{{ s.posts|n }}</td>
 {% for n in s.by_brand %}<td class="r">{% if n %}<b class="{{ 'down' if loop.first }}">{{ n }}</b>{% else %}<span class="mute">0</span>{% endif %}</td>{% endfor %}
 <td class="r">{{ s.questions|n }}</td><td class="r">{{ s.cited or '–' }}</td><td>{{ s.last.strftime('%b %Y') if s.last else '–' }}</td></tr>{% endfor %}</table></div>
 <p class="note">A community where competitors are named and {{ client.name }} is not is a gap worth a presence.</p>
@@ -72,6 +68,6 @@
 {% endif %}
 </section>
 {% else %}
-<section class="card"><p class="empty">No Reddit data yet. Add an Apify token on the server and press Pull Reddit, or show the sample in Settings → Data.</p></section>
+<section class="card"><p class="empty">{{ 'The first Reddit pull is running. It finds the communities and threads for ' ~ client.name ~ ' on its own; refresh in a few minutes.' if status.running else ('No Reddit data yet. It fills itself once an Apify token is on the server.' if why else 'No Reddit data yet.') }}</p></section>
 {% endif %}
 {% endblock %}

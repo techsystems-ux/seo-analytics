@@ -46,6 +46,27 @@ with connect() as conn:
     assert sp2 == 0 and len(f.urls) == n and "stopped" in conn.execute("SELECT result FROM research_lookups WHERE lookup_id=%s", [lid2]).fetchone()[0]
     assert conn.execute("SELECT query FROM research_lookups WHERE lookup_id=%s", [lid2]).fetchone()[0] == "rival.in"
     del os.environ["SEMRUSH_CAP_RESEARCH_DOMAIN"]
+# ---------------------------------------------------------------- topics found on their own
+import community as cm2
+with connect() as conn:
+    conn.execute("DELETE FROM clients WHERE domain='autotopic-test.shop'")
+    t = conn.execute("INSERT INTO clients (name, domain, aliases) VALUES ('Gargi','autotopic-test.shop','{PNG}') RETURNING client_id").fetchone()[0]
+    conn.execute("INSERT INTO competitors (client_id, name, domain, tracked, aliases) VALUES (%s,'pngbrothers.com','pngbrothers.com',true,'{PNG Brothers}')", [t])
+    for slug in ("silver-anklets", "silver-earrings", "all", "new-arrivals", "under-999", "gargi-specials", "silver-mangalsutra", "toe-rings"):
+        conn.execute("INSERT INTO pages (client_id, url, page_type) VALUES (%s,%s,'collection')", [t, f"https://autotopic-test.shop/collections/{slug}"])
+    day = dt.date.today() - dt.timedelta(days=3)
+    for q, imp in (("silver anklets for women", 900), ("silver anklet", 400), ("silver earrings", 700), ("toe rings silver", 300),
+                   ("png brothers anklets", 5000), ("gargi earrings", 9000)):
+        conn.execute("INSERT INTO gsc_search_daily VALUES (%s,%s,%s,'https://autotopic-test.shop/','ind','MOBILE',1,%s,0.1,5,%s)", [t, day, q, imp, q.startswith("gargi")])
+    auto = cm2.auto_topics(conn, t)
+    assert auto[:3] == ["silver anklets", "silver earrings", "toe rings"] and "silver mangalsutra" in auto, auto     # ranked by searches; no brand, sale or price pages
+    assert not any("gargi" in a or "png" in a or a in ("all", "new arrivals") for a in auto), auto
+    assert cm2.topics(conn, t) == (auto, True)
+    conn.execute("UPDATE clients SET community_topics='{anklets}' WHERE client_id=%s", [t])
+    assert cm2.topics(conn, t) == (["anklets"], False)
+    conn.execute("DELETE FROM clients WHERE client_id=%s", [t])
+print("topics: found from collections ranked by non-branded searches, without brand, competitor, sale or price pages; a person can override")
+
 print("research: keyword lookup stored with every section, columns cleaned, billed per line, feature cap stops before any call")
 
 # ---------------------------------------------------------------- Reddit through Apify
@@ -58,6 +79,14 @@ class FakeApify:
     def post(s, url, params=None, json=None, headers=None, timeout=None):
         assert headers["Authorization"] == "Bearer TOKEN" and "TOKEN" not in url
         s.calls.append(json)
+        if json.get("searchCommunities"):
+            return R(200, js=[{"dataType": "community", "name": "r/IndianFashionAddicts", "title": "Indian fashion", "numberOfMembers": 520000,
+                               "description": "silver and gold jewellery, sarees"}, {"dataType": "community", "name": "r/nsfwthing", "over18": True},
+                              {"dataType": "community", "name": "r/pune", "numberOfMembers": 240000, "description": "city"}][:json["maxItems"]])
+        if json.get("startUrls") and "/search/" in json["startUrls"][0]["url"]:
+            assert "restrict_sr=1" in json["startUrls"][0]["url"] and "silver%20anklets" in json["startUrls"][0]["url"], json
+            return R(200, js=[{"dataType": "post", "id": f"in{i}", "url": f"https://www.reddit.com/r/IndianFashionAddicts/comments/in{i}/x/",
+                               "parsedCommunityName": "IndianFashionAddicts", "title": "Do silver anklets turn black?", "upVotes": 5} for i in range(json["maxItems"])])
         if json.get("startUrls"):
             return R(200, js=[{"dataType": "post", "parsedId": "t3_abc12", "url": "https://www.reddit.com/r/IndianFashionAddicts/comments/abc12/where_to_buy/",
                                "parsedCommunityName": "IndianFashionAddicts", "title": "Where to buy real silver?", "body": "PNG Brothers or Zavya?",
@@ -81,15 +110,19 @@ with connect() as conn:
     base = reddit.items_used(conn); reddit.TOTAL_ITEMS = base + 60     # usage logs cannot be deleted by the app: test against what is there
     fa = FakeApify()
     out = reddit.run(conn, cid, "TOKEN", max_items=40, session=fa)
-    assert fa.calls[0]["startUrls"][0]["url"].endswith("/abc12/where_to_buy/"), fa.calls[0]
-    searched = [c["searches"][0] for c in fa.calls[1:]]
+    assert fa.calls[0]["searchCommunities"] and fa.calls[0]["searches"] == ["silver anklets"], fa.calls[0]
+    assert fa.calls[1]["startUrls"][0]["url"].endswith("/abc12/where_to_buy/"), fa.calls[1]
+    searched = [c["searches"][0] for c in fa.calls[2:] if c.get("searches")]
+    comms = dict(conn.execute("SELECT name, members FROM reddit_communities WHERE client_id=%s", [cid]).fetchall())
+    assert comms == {"IndianFashionAddicts": 520000, "pune": 240000}, comms                       # adult communities skipped
+    assert conn.execute("SELECT count(*) FROM reddit_items WHERE client_id=%s AND item_id LIKE 'in%%'", [cid]).fetchone()[0] > 0   # read inside the top community
     assert searched[:4] == ["Gargi", "Gargi by PNG", "PNG Brothers", "Zavya"] and "silver anklets" in searched, searched
     items = {r[0]: r[1:] for r in conn.execute("SELECT item_id, brands, sentiment, found_by, is_question, pain_point FROM reddit_items WHERE client_id=%s", [cid])}
     assert set(items["abc12"][0]) == {"pngbrothers.com", "Zavya"} and items["abc12"][2] == "cited", items["abc12"]      # PNG Brothers is not Gargi
     assert items["c1"][1:] == ("negative", "cited", False, "Tarnish and care"), items["c1"]
     assert items["gar5x0"][0] == ["Gargi"] and items["gar5x0"][1] == "positive" and items["gar5x0"][3], items["gar5x0"]
     used = reddit.items_used(conn) - base
-    assert used <= 40 and "Reddit posts" in out, (used, out)
+    assert used <= 40 and "Reddit results: 2 communities found" in out, (used, out)
     # lifetime limit: 60 in total, so the second run gets at most 20 and then stops
     fa2 = FakeApify(); o2 = reddit.run(conn, cid, "TOKEN", max_items=40, session=fa2)
     assert reddit.items_used(conn) - base == 60 and all(c["maxItems"] <= 60 - used for c in fa2.calls), reddit.items_used(conn)

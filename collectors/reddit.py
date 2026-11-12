@@ -3,12 +3,14 @@
 the questions and pain points in the category, and the threads ChatGPT cites in the brand's answers.
 
 Apify charges per result, so every run is capped before it starts: APIFY_MAX_ITEMS per run (default 300) and
-APIFY_TOTAL_ITEMS for the product's lifetime (default 1000), counted in apify_usage. Nothing runs on a schedule.
+APIFY_TOTAL_ITEMS for the product's lifetime (default 1000), counted in apify_usage. It runs by itself weekly
+(APIFY_AUTO_ITEMS a run, default 150) once the token is set; topics and communities are found automatically.
 The token (APIFY_TOKEN) is sent in a header, never in a URL, and never stored.
 
   python reddit.py --client-id UUID --max-items 200
 """
-import datetime as dt, os, re, sys
+import datetime as dt, math, os, re, sys
+from urllib.parse import quote
 import requests
 import community as cm
 from ai_visibility import tracked_brands
@@ -17,6 +19,7 @@ ACTOR = os.environ.get("APIFY_REDDIT_ACTOR", "trudax~reddit-scraper-lite")
 API = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
 TOTAL_ITEMS = int(os.environ.get("APIFY_TOTAL_ITEMS", "1000"))
 RUN_ITEMS = int(os.environ.get("APIFY_MAX_ITEMS", "300"))
+AUTO_ITEMS = int(os.environ.get("APIFY_AUTO_ITEMS", "150"))     # the weekly automatic run
 
 class LimitReached(Exception): pass
 
@@ -65,31 +68,73 @@ def save(conn, client_id, items, found_by, query, brands, today):
         n += 1
     return n
 
+def community_relevance(c, topic_words):
+    text = f"{c.get('name', '')} {c.get('title', '')} {c.get('description', '')}".lower()
+    hits = sum(1 for w in topic_words if w in text)
+    return round(hits * 2 + math.log10(max(c.get("members") or 1, 1)), 2)
+
+def save_communities(conn, client_id, rows, found_for, topic_words, today):
+    out = []
+    for r in rows:
+        if str(r.get("dataType", "")).lower() not in ("community", "subreddit") or r.get("over18"): continue
+        name = (r.get("parsedName") or r.get("name") or r.get("communityName") or "").replace("r/", "").strip("/") or None
+        if not name: continue
+        c = {"name": name, "title": r.get("title"), "description": (r.get("description") or "")[:500],
+             "members": r.get("numberOfMembers") or r.get("members") or r.get("subscribers")}
+        c["relevance"] = community_relevance(c, topic_words)
+        conn.execute("""INSERT INTO reddit_communities (client_id, name, title, description, members, found_for, relevance, pulled_on)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (client_id, name) DO UPDATE SET members=EXCLUDED.members,
+                        title=EXCLUDED.title, description=EXCLUDED.description, relevance=greatest(reddit_communities.relevance, EXCLUDED.relevance),
+                        pulled_on=EXCLUDED.pulled_on""",
+                     [client_id, name, c["title"], c["description"], c["members"], found_for, c["relevance"], today])
+        out.append(c)
+    return out
+
 def run(conn, client_id, token, max_items=None, session=None, today=None):
+    """One pass, nothing typed by anyone: find the communities for the brand's topics, read the threads ChatGPT cites,
+    search Reddit for the brand, each competitor and each topic, then search inside the most relevant communities."""
     today = today or dt.date.today()
     s = session or requests.Session()
     budget = min(max_items or RUN_ITEMS, RUN_ITEMS, items_left(conn))
     if budget <= 0: return "stopped: the Apify result limit is used up (0 results)"
     brands = tracked_brands(conn, client_id)
-    cited = [u for u in cm.cited_urls(conn, client_id, ["reddit.com"]) if thread_id(u)][:20]
+    tps = cm.topics(conn, client_id)[0]
+    topic_words = sorted({w for t in tps for w in t.split() if len(w) > 3})
+    cited = [u for u in cm.cited_urls(conn, client_id, ["reddit.com"]) if thread_id(u)][:10]
     searches = cm.searches(conn, client_id)
-    per = max(5, (budget - len(cited) * 5) // max(len(searches), 1))
-    got, notes = 0, []
+    got, notes, comms = 0, [], []
+    left = lambda: budget - got
     try:
-        if cited:            # the threads ChatGPT cites, with their top comments
-            n = min(len(cited) * 5, budget)
-            rows = call_actor(s, token, conn, client_id, {"startUrls": [{"url": u} for u in cited], "maxComments": 4, "skipComments": False}, n)
+        disc = cm.discovery_queries(conn, client_id)
+        if disc:                                                # 1. which communities discuss the category
+            n = min(15, max(5, budget // 10))
+            rows = call_actor(s, token, conn, client_id, {"searches": disc, "searchCommunities": True, "searchPosts": False,
+                                                          "searchComments": False, "includeNSFW": False}, n)
+            comms = save_communities(conn, client_id, rows, ", ".join(disc), topic_words, today)
+            got += len(rows)
+        if cited and left() > 0:                                # 2. the threads ChatGPT cites, with their top comments
+            n = min(len(cited) * 4, max(4, budget // 5), left())
+            rows = call_actor(s, token, conn, client_id, {"startUrls": [{"url": u} for u in cited], "maxComments": 3, "skipComments": False}, n)
             got += save(conn, client_id, [normalise(r) for r in rows], "cited", None, brands, today)
-        for found_by, q in searches:
-            n = min(per, budget - got)
+        top = sorted(comms, key=lambda c: -c["relevance"])[:3]
+        per = max(3, int(left() * (0.7 if top else 1.0)) // max(len(searches), 1))
+        for found_by, q in searches:                            # 3. brand, competitors, topics across Reddit
+            n = min(per, left())
             if n <= 0: notes.append("result limit reached"); break
             rows = call_actor(s, token, conn, client_id, {"searches": [q], "searchPosts": True, "searchComments": True, "searchCommunities": False,
                                                           "sort": "relevance", "time": "year", "maxComments": 0, "skipComments": True,
                                                           "includeNSFW": False}, n)
             got += save(conn, client_id, [normalise(r) for r in rows], found_by, q, brands, today)
+        for c in top:                                           # 4. inside the most relevant communities
+            n = min(max(3, left() // max(len(top), 1)), left())
+            if n <= 0 or not tps: break
+            url = f"https://www.reddit.com/r/{c['name']}/search/?q={quote(tps[0])}&restrict_sr=1&sort=relevance&t=year"
+            rows = call_actor(s, token, conn, client_id, {"startUrls": [{"url": url}], "maxComments": 0, "skipComments": True}, n)
+            got += save(conn, client_id, [normalise(r) for r in rows], "topic", tps[0], brands, today)
     except LimitReached as e:
         notes.append(f"stopped: {e}")
-    return f"{got} Reddit posts and comments from {len(searches)} searches and {len(cited)} cited threads" + (f" ({'; '.join(notes)})" if notes else "")
+    return (f"{got} Reddit results: {len(comms)} communities found, {len(searches)} searches, {len(cited)} cited threads"
+            + (f" ({'; '.join(notes)})" if notes else ""))
 
 if __name__ == "__main__":
     import argparse

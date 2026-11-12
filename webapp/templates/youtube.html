@@ -1,20 +1,12 @@
 {% extends "base.html" %}
+{% import "_autopilot.html" as ap with context %}
 {% block body %}
 <div class="top"><div><span class="kicker">Community · YouTube</span><h1>What YouTube shows</h1>
 <p class="lead">Who shows up when people search the category on YouTube, which videos and creators name {{ client.name }} or its competitors, what viewers ask in the comments, and the videos ChatGPT cites in its answers.</p></div></div>
 
-<section class="card" style="display:flex;flex-direction:column;gap:12px">
-<div class="grid2">
-<form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="topics">
-  <div style="flex:1 1 240px"><label for="tp">Topics searched (comma separated; shared with Reddit)</label><input id="tp" type="text" name="topics" value="{{ topics|join(', ') }}" placeholder="{{ defaults|join(', ') }}"></div>
-  <button class="btn blk">Save</button></form>
-<form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="channel">
-  <div style="flex:1 1 200px"><label for="ch">{{ client.name }}'s YouTube channel ID (optional)</label><input id="ch" type="text" name="channel" value="{{ channel or '' }}" placeholder="starts with UC…"></div>
-  <button class="btn blk">Save</button></form></div>
-<form method="post" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run">
-  <button class="btn {{ 'red' if not why else 'ln' }}" {{ 'disabled' if why }}>Pull YouTube · free quota</button>
-  <span class="note">{{ why ~ '. ' if why }}Uses Google's free daily quota ({{ quota|n }} of {{ daily|n }} used today); a full pull uses about 1,000–1,500. Runs every Monday on its own once the key is set.</span></form>
-</section>
+{{ ap.card("youtube", status, topics, auto, cols, why,
+     "Each week: searches YouTube in India for the brand, each competitor and each topic, finds " ~ client.name ~ "'s own channel" ~ (" (found)" if channel else "") ~ ", reads stats and top comments, and the videos ChatGPT cites. Free: uses Google's daily quota (" ~ (quota|n) ~ " of " ~ (daily|n) ~ " used today).",
+     "Refresh now") }}
 
 {% if summ %}
 {% set mine = summ.brands|selectattr('is_client')|first %}
@@ -72,6 +64,6 @@
 {% endif %}
 </section>
 {% else %}
-<section class="card"><p class="empty">No YouTube data yet. Add a YouTube API key on the server and press Pull YouTube, or show the sample in Settings → Data.</p></section>
+<section class="card"><p class="empty">{{ 'The first YouTube pull is running; refresh in a minute or two.' if status.running else ('No YouTube data yet. It fills itself once a YouTube API key is on the server.' if why else 'No YouTube data yet.') }}</p></section>
 {% endif %}
 {% endblock %}

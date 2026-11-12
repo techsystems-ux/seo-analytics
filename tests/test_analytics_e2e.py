@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 10
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 11
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -214,6 +214,23 @@ assert "own brands, never tracked" in cl.get(f"/c/{cid}/competitors?tab=list").g
 cl.post(f"/c/{cid}/competitors", data={"csrf": "tok", "own_brand": str(zid)})
 with connect() as conn:
     assert "zavya.co" not in conn.execute("SELECT sister_domains FROM brand_rules WHERE client_id=%s", [cid]).fetchone()[0]
+# ------------------------------------------------------------------ Reddit and YouTube start on their own once a key is set
+import dashboard
+started = []
+dashboard.start_job = lambda cid_, only, **k: started.append(only)
+os.environ["APIFY_TOKEN"] = "x"; os.environ["YOUTUBE_API_KEY"] = "x"
+page = cl.get(f"/c/{cid}/reddit").get_data(as_text=True)
+assert started == ["reddit"] and "Pulling now" in page and "Waiting for a key" not in page, (started, page[:200])
+cl.get(f"/c/{cid}/reddit"); assert started == ["reddit"]                     # not started twice
+assert "Pulling now" in cl.get(f"/c/{cid}/youtube").get_data(as_text=True) and started == ["reddit", "youtube"]
+with connect() as conn:                                                     # a finished run this week: nothing starts
+    conn.execute("DELETE FROM collector_runs WHERE client_id=%s AND collector LIKE '%%_auto'", [cid])
+    conn.execute("INSERT INTO collector_runs (client_id, collector, status, finished_at) VALUES (%s,'reddit','ok',now())", [cid])
+assert "Automatic" in cl.get(f"/c/{cid}/reddit").get_data(as_text=True) and started == ["reddit", "youtube"]
+del os.environ["APIFY_TOKEN"], os.environ["YOUTUBE_API_KEY"]
+with connect() as conn: conn.execute("DELETE FROM collector_runs WHERE client_id=%s AND collector IN ('reddit','reddit_auto','youtube_auto')", [cid])
+print("reddit and youtube: the first pull starts by itself when a key is set and the screen opens, once; weekly after that")
+
 print("sister brands: P N Gadgil & Sons is Gargi's own, PNG Brothers and PNG Exclusive searches and mentions are not Gargi's")
 
 # ------------------------------------------------------------------ sample data for reviewing the Semrush screens

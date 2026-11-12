@@ -3,6 +3,7 @@
   every day      Search Console and GA4 (last 7 days, re-pulled so late data settles), ChatGPT prompts
   every day      rankings for tracked keywords, from the Search Console data just pulled (free)
   every Monday   page checks and the technical crawl (or when never done)
+  first, weekly  Reddit (Apify) and YouTube, on their own once their keys are set
   on request     Semrush, from Settings only (lifetime credit cap, see semrush.py); SEMRUSH_AUTO=1 adds it to Mondays
 Each step is logged in collector_runs; one failure never stops the rest.
 Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,crawl] [--force-weekly]
@@ -35,8 +36,15 @@ def weekly_due(conn, client_id, name, force):
                         [client_id, name]).fetchone()[0]
     return last is None
 
+def due(conn, client_id, name, days):
+    """True when the last successful run is older than `days` (or there is none) and none has been running in the last hour."""
+    last_ok, running = conn.execute("""SELECT max(started_at) FILTER (WHERE status='ok'),
+                                              bool_or(status='running' AND started_at > now() - interval '1 hour')
+                                       FROM collector_runs WHERE client_id=%s AND collector=%s""", [client_id, name]).fetchone()
+    return not running and (last_ok is None or last_ok < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days))
+
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl,youtube")
+    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl,youtube,reddit")
     ap.add_argument("--force-weekly", action="store_true")
     ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")
     ap.add_argument("--seeds", default="", help="topics for semrush_ideas, separated by ;")
@@ -94,11 +102,12 @@ def main():
                 import semrush_research as sr
                 tool, _, q = a.research.partition(":")
                 ok &= log(conn, cid, f"research_{tool}", lambda: "{} units".format(sr.run(conn, cid, key, tool, q, max_units=a.max_units)[1]))
-            if "reddit" in only and os.environ.get("APIFY_TOKEN") and a.max_units > 0:
+            # Reddit and YouTube run on their own once a key is set: right away the first time, then weekly.
+            # Reddit (Apify, paid per result) uses APIFY_AUTO_ITEMS a run, inside the lifetime APIFY_TOTAL_ITEMS limit.
+            if "reddit" in only and os.environ.get("APIFY_TOKEN") and (a.max_units > 0 or due(conn, cid, "reddit", 7)):
                 import reddit
-                ok &= log(conn, cid, "reddit", lambda: reddit.run(conn, cid, os.environ["APIFY_TOKEN"], a.max_units))
-            # YouTube: free daily quota, so it runs weekly on its own once a key is set
-            if "youtube" in only and os.environ.get("YOUTUBE_API_KEY") and weekly_due(conn, cid, "youtube", a.force_weekly):
+                ok &= log(conn, cid, "reddit", lambda: reddit.run(conn, cid, os.environ["APIFY_TOKEN"], a.max_units or reddit.AUTO_ITEMS))
+            if "youtube" in only and os.environ.get("YOUTUBE_API_KEY") and (a.force_weekly or due(conn, cid, "youtube", 7)):
                 import youtube
                 ok &= log(conn, cid, "youtube", lambda: youtube.run(conn, cid, os.environ["YOUTUBE_API_KEY"]))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):

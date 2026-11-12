@@ -105,11 +105,15 @@ be sent to Rankings (Track) or Content ideas (Plan content).
 Side panel → **Community**:
 - **Reddit** (`collectors/reddit.py`, Apify, `APIFY_TOKEN`): brand vs competitor mentions and tone, subreddit map with
   each brand's mentions per community, questions and pain points, and the Reddit threads ChatGPT cites. Paid per
-  result, capped by `APIFY_MAX_ITEMS` (per run, default 300) and `APIFY_TOTAL_ITEMS` (lifetime, default 1000). Manual only.
+  result, capped by `APIFY_MAX_ITEMS` (per run, default 300) and `APIFY_TOTAL_ITEMS` (lifetime, default 1000).
   Actor: `APIFY_REDDIT_ACTOR` (default `trudax~reddit-scraper-lite`).
 - **YouTube** (`collectors/youtube.py`, YouTube Data API, `YOUTUBE_API_KEY`): share of voice in topic searches, videos
   naming each brand, creators, questions and pain points from comments, videos ChatGPT cites. Free daily quota
   (`YOUTUBE_DAILY_QUOTA`, default 10,000; a run stops at 90%). Runs every Monday once the key is set.
 
-Topics searched on Reddit and YouTube are set on either screen (default: the brand's top collection keywords).
+Nothing is typed in: topics are found from the brand's collections, ranked by non-branded Search Console searches
+(brand and competitor names, sale and price pages left out); Reddit communities are found for those topics; the
+brand's own YouTube channel is found by name. Once a key is set, the first pull starts by itself (when the app starts
+or the screen opens) and then refreshes weekly; Reddit's automatic run uses `APIFY_AUTO_ITEMS` (default 150) results.
+`COMMUNITY_AUTO=0` turns this off. Topics can still be overridden under "Adjust topics".
 Settings → Data → Show sample data fills all of these screens with marked sample rows.

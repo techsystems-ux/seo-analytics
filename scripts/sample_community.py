@@ -135,6 +135,14 @@ def reddit(conn, cid, labels, rnd, today):
                              brands, sentiment, is_question, pain_point, topic, pulled_on, sample)
                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,true) ON CONFLICT DO NOTHING""", rows)
 
+def communities(conn, cid, today):
+    with conn.cursor() as cur:
+        cur.executemany("""INSERT INTO reddit_communities (client_id, name, title, members, found_for, relevance, pulled_on, sample)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,true) ON CONFLICT DO NOTHING""",
+                        [(cid, n, t, m, "silver anklets, silver earrings", r, today) for n, t, m, r in
+                         [("IndianFashionAddicts", "Indian fashion", 520000, 8.7), ("jewelry", "Jewelry", 310000, 7.5), ("weddingsIndia", "Weddings in India", 64000, 6.8),
+                          ("IndianJewellery", "Indian jewellery (sample)", 21000, 6.3), ("pune", "Pune", 240000, 5.4), ("TwoXIndia", "TwoXIndia", 180000, 5.3)]])
+
 def youtube(conn, cid, labels, rnd, today):
     brands = tracked_brands(conn, cid)
     me, cs = labels[0], (labels[1:] + ["Competitor A", "Competitor B", "Competitor C"])[:3]
@@ -177,6 +185,7 @@ def load(conn, cid, me_domain, comps, today=None):
     pages = [r[0] for r in conn.execute("SELECT url FROM pages WHERE client_id=%s ORDER BY page_type, url LIMIT 20", [cid])] or [f"https://{me_domain}/"]
     research(conn, cid, me_domain, comps, kws, pages, rnd)
     reddit(conn, cid, labels, rnd, today)
+    communities(conn, cid, today)
     youtube(conn, cid, labels, rnd, today)
 
 def clear(conn, cid):

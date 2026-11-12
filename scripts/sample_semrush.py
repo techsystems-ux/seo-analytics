@@ -107,7 +107,7 @@ def load(conn, cid, today=None):
 
 SOURCES = {"semrush": ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_refdomains", "backlink_gap", "tech_crawls", "tech_issues",
                         "rank_positions", "rank_keywords", "research_lookups"),
-           "reddit": ("reddit_items",), "youtube": ("youtube_videos", "youtube_channels", "youtube_comments")}
+           "reddit": ("reddit_items", "reddit_communities"), "youtube": ("youtube_videos", "youtube_channels", "youtube_comments")}
 
 def clear(conn, cid, only=None):
     """Removes sample rows: all of them, or only one source's (a real Reddit pull leaves the YouTube sample in place)."""
