@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 8
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 9
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -212,6 +212,30 @@ cl.post(f"/c/{cid}/competitors", data={"csrf": "tok", "own_brand": str(zid)})
 with connect() as conn:
     assert "zavya.co" not in conn.execute("SELECT sister_domains FROM brand_rules WHERE client_id=%s", [cid]).fetchone()[0]
 print("sister brands: P N Gadgil & Sons is Gargi's own, PNG Brothers and PNG Exclusive searches and mentions are not Gargi's")
+
+# ------------------------------------------------------------------ sample data for reviewing the Semrush screens
+with connect() as conn:
+    used = conn.execute("SELECT coalesce(sum(units),0), count(*) FROM semrush_usage").fetchone()
+    real_feats = conn.execute("SELECT count(*) FROM semrush_keywords WHERE client_id=%s AND serp_features IS NOT NULL", [cid]).fetchone()[0]
+cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "sample_load"})
+for url, needles in {f"/c/{cid}/ideas": ["Sample data", "how to clean silver earrings at home"],
+                     f"/c/{cid}/competitors?tab=backlinks": ["Sample data", "vogue-style.example", "Strongest sites"],
+                     f"/c/{cid}/competitors?tab=keywords": ["AI Overview"], f"/c/{cid}/competitors?tab=gap": ["silver toe rings"],
+                     f"/c/{cid}/technical": ["Duplicate title tags", "Semrush Site Audit, imported"],
+                     f"/c/{cid}/technical?issue=semrush:4": ["Broken internal links"],
+                     f"/c/{cid}/search?tab=rankings": ["Semrush"], f"/c/{cid}/settings?tab=data": ["Remove sample data"]}.items():
+    page = cl.get(url).get_data(as_text=True)
+    for n in needles: assert n in page, (url, n)
+assert "Sample data" not in cl.get(f"/c/{cid}/ai").get_data(as_text=True)
+cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "sample_clear"})
+with connect() as conn:
+    assert conn.execute("SELECT coalesce(sum(units),0), count(*) FROM semrush_usage").fetchone() == used        # no credits, nothing logged
+    for t in ("keyword_ideas", "keyword_gaps", "backlink_overview", "backlink_gap", "tech_crawls", "tech_issues", "rank_positions"):
+        assert conn.execute(f"SELECT count(*) FROM {t} WHERE client_id=%s AND sample", [cid]).fetchone()[0] == 0, t
+    assert conn.execute("SELECT count(*) FROM semrush_keywords WHERE client_id=%s AND serp_features IS NOT NULL", [cid]).fetchone()[0] == real_feats
+    assert conn.execute("SELECT count(*) FROM tech_issues WHERE client_id=%s AND issue_code='page_4xx'", [cid]).fetchone()[0] == 1   # real rows kept
+assert "Sample data" not in cl.get(f"/c/{cid}/ideas").get_data(as_text=True)
+print("sample data: every Semrush screen fills with marked rows, no credits logged, one click removes only the sample")
 
 with psycopg.connect(owner, autocommit=True) as c:                                                 # a client session sees only itself
     c.execute("SET ROLE aeo_app"); c.execute("SELECT set_config('app.client_id', %s, false)", [str(other)])

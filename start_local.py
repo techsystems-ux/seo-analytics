@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -69,10 +69,25 @@ def load_seeds():
             cid, n = setup_brand.setup(conn, json.load(open(f)))
             if n: print(f"Set up {os.path.basename(f)}: {n} draft prompts to approve in Settings")
 
+def load_sample_once():
+    """If load-sample.flag sits next to this file, fill every brand's Semrush screens with marked sample rows, then remove the flag."""
+    flag = os.path.join(HERE, "load-sample.flag")
+    if not os.path.exists(flag): return
+    sys.path.insert(0, os.path.join(HERE, "scripts"))
+    import sample_semrush
+    from common import connect
+    with connect() as conn:
+        for (cid,) in conn.execute("SELECT client_id FROM clients").fetchall():
+            sample_semrush.load(conn, cid)
+    print("Sample Semrush data loaded (remove it any time in Settings → Data)")
+    try: os.remove(flag)
+    except OSError: pass
+
 def main():
     load_env()
     srv = start_db()
     load_seeds()
+    load_sample_once()
     if len(sys.argv) > 1 and sys.argv[1] == "collect":
         # Search Console, GA4, ChatGPT prompts (if OPENAI_API_KEY is in .env) and page checks. Never Semrush: that is a button in Settings.
         subprocess.run([sys.executable, "daily.py", "--only", "gsc,ga4,rank,ai,pages,crawl"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ))

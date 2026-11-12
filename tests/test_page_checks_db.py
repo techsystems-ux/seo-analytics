@@ -10,7 +10,7 @@ admin = os.environ["ADMIN_DATABASE_URL"]
 with psycopg.connect(admin, autocommit=True) as c:
     migrate(c); migrate(c)                                         # second run must be a no-op
     c.execute("ALTER ROLE aeo_app LOGIN PASSWORD 'change-me'")        # as start_local.py does for a local trial
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 8
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 9
 print("migrations apply once")
 
 os.environ["DATABASE_URL"] = admin.replace("postgres@", "aeo_app:change-me@", 1)

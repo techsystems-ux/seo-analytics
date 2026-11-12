@@ -4,7 +4,7 @@ import os, sys, json, secrets, subprocess, csv, io
 from flask import Blueprint, render_template, request, redirect, url_for, session, abort
 from markupsafe import Markup, escape
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo")]
+sys.path[:0] = [os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo"), os.path.join(HERE, "..", "scripts")]
 from common import connect
 import analytics as A
 
@@ -25,9 +25,9 @@ def check_csrf():
 def _gate(): staff_required()
 
 def client_or_404(conn, cid):
-    r = conn.execute("SELECT client_id, name, domain FROM clients WHERE client_id::text=%s", [cid]).fetchone()
+    r = conn.execute("SELECT client_id, name, domain, sample_semrush FROM clients WHERE client_id::text=%s", [cid]).fetchone()
     if not r: abort(404)
-    return {"id": str(r[0]), "name": r[1], "domain": r[2]}
+    return {"id": str(r[0]), "name": r[1], "domain": r[2], "sample": r[3]}
 
 def view(tpl, client=None, active=None, **ctx):
     return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES, **ctx)
@@ -281,6 +281,10 @@ def settings_save(cid):
             conn.execute("UPDATE prompts SET approved = true WHERE client_id=%s AND active", [cid])
         elif what == "prompt_delete":
             conn.execute("DELETE FROM prompts WHERE client_id=%s AND prompt_id::text=%s", [cid, request.form["id"]])
+        elif what in ("sample_load", "sample_clear"):
+            import sample_semrush
+            msg = sample_semrush.load(conn, cid) if what == "sample_load" else sample_semrush.clear(conn, cid)
+            return redirect(url_for("dash.settings", cid=cid, tab="data", msg=msg[0].upper() + msg[1:] + "."))
         elif what == "semrush_project":
             pid = "".join(ch for ch in request.form.get("project_id", "") if ch.isdigit()) or None
             conn.execute("UPDATE clients SET semrush_project_id=%s WHERE client_id=%s", [pid, cid])
@@ -373,6 +377,8 @@ def semrush_run(cid):
     if not a: abort(400)
     sep = "&" if "?" in back else "?"
     if not a["ready"]: return redirect(back + sep + urlencode({"msg": a["why"]}))
+    with connect() as conn:                       # a real pull replaces the sample rows, never mixes with them
+        import sample_semrush; sample_semrush.clear(conn, cid)
     if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"])
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))

@@ -35,7 +35,7 @@
   {% if bl.gap %}<table><tr><th>Site</th><th class="r">Authority</th><th>Links to</th><th></th></tr>
   {% for g in bl.gap %}<tr><td><a href="https://{{ g.domain }}" target="_blank" rel="noopener">{{ g.domain }}</a></td><td class="r">{{ g.ascore|n }}</td><td>{% for d,n in g.links_to.items() %}<span class="tag t-pass">{{ d }}</span> {% endfor %}</td>
   <td><form method="post" style="display:flex;gap:6px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="prospect" value="{{ g.domain }}">
-  <select name="status" aria-label="Outreach status for {{ g.domain }}" onchange="this.form.submit()">{% for k,v in [('new','New'),('contacted','Contacted'),('won','Link won'),('dismissed','Dismiss')] %}<option value="{{ k }}" {{ 'selected' if g.status==k }}>{{ v }}</option>{% endfor %}</select>
+  <select name="status" aria-label="Outreach status for {{ g.domain }}" onchange="this.form.submit()" style="min-width:130px">{% for k,v in [('new','New'),('contacted','Contacted'),('won','Link won'),('dismissed','Dismiss')] %}<option value="{{ k }}" {{ 'selected' if g.status==k }}>{{ v }}</option>{% endfor %}</select>
   <noscript><button class="btn ln">Save</button></noscript></form></td></tr>{% endfor %}</table>
   {% else %}<p class="empty">No prospects yet. They need at least one tracked competitor.</p>{% endif %}</div>
   <div><h2>Strongest sites linking to you</h2>{% if bl.refdomains %}<table><tr><th>Site</th><th class="r">Authority</th><th class="r">Links</th><th>First seen</th></tr>

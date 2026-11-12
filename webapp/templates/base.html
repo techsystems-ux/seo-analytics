@@ -36,7 +36,8 @@ td{padding:10px;border-bottom:1px solid #F0F0F0;vertical-align:top}td.r,th.r{tex
 .tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
 .t-fail{background:var(--red);color:#fff}.t-warn{border:1px solid var(--red);color:var(--red)}.t-pass{background:#F0F0F0}.t-blk{background:#000;color:#fff}.t-na{color:var(--mute);border:1px solid var(--line)}
 .t-sev-error{background:var(--red);color:#fff}.t-sev-warning{border:1px solid var(--red);color:var(--red)}.t-sev-notice{background:#F0F0F0}
-tr.sel td{background:#FBF3F2}.btn[disabled]{opacity:.45;cursor:not-allowed}
+tr.sel td{background:#FBF3F2}
+.samplebar{border:1px dashed var(--red);background:#FFF8F7;border-radius:10px;padding:10px 14px;font-size:13px}.btn[disabled]{opacity:.45;cursor:not-allowed}
 .btn{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;border:0;font:600 13px Montserrat,sans-serif;cursor:pointer;text-decoration:none}
 .btn.red{background:var(--red);color:#fff}.btn.blk{background:#000;color:#fff}.btn.ln{background:#fff;color:#000;box-shadow:inset 0 0 0 1px #000}
 input[type=text],input[type=number],textarea,select{font:inherit;padding:8px 10px;border:1px solid #000;border-radius:8px;width:100%;background:#fff}
@@ -69,6 +70,7 @@ label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:upperca
 </nav>
 <main>
 {% if request.args.get('msg') %}<div class="msg">{{ request.args.get('msg') }}</div>{% endif %}
+{% if client and client.sample and active in ('competitors','ideas','technical','search','settings') %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush sections of this screen, for reviewing the layout. Nothing came from Semrush and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
 {% block body %}{% endblock %}
 </main>
 </div>
