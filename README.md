@@ -132,3 +132,16 @@ verified technical issues, content ideas marked written, pages audited, crawls);
 ideas, slipping pages and open technical issues. Analysts can edit both on the screen; edits are saved per month.
 GA4 now also stores new users and organic product sales; the first pull after this update fetches 14 months of GA4
 (same-month-last-year comparisons) and 7 months of Search Console (the branded chart).
+
+## Client sign-in (migration 014)
+
+Staff list a brand's people in Settings, Client access. They sign in at `<site>/portal` with Google or an emailed link and
+see that brand only, read-only: Overview, Search performance, AI visibility, Competitors, Reddit, YouTube and the monthly
+report download. Every form, pull, credit figure and staff screen is refused to them by the server, and their database
+session is narrowed to their brand (not staff), so another brand's rows cannot appear even through a query mistake.
+
+- Google: a second OAuth client (Google Cloud, OAuth consent screen External, scopes openid/email/profile only, so no
+  Google review). Env `CLIENT_OAUTH_CLIENT_ID`, `CLIENT_OAUTH_CLIENT_SECRET`; redirect URI `<site>/portal/auth/google/callback`.
+- Email link: a Resend account with the sending domain verified. Env `RESEND_API_KEY`, `MAIL_FROM` (e.g. `Hovers <reports@hovers.in>`).
+  Links work once, for 15 minutes, at most 5 an hour per email; the page answers the same whether or not the email has access.
+- Removing an email in Settings ends that person's access on their next click.

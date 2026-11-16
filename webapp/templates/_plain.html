@@ -1,0 +1,34 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Sign in{% endblock %} | SEO and AI search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0F0F0F;--red:#B20F00;--grey:#6E6E6E;--mid:#A9A9A9;--tint:#FBEDEE;--hair:#E4E1DE;
+  --fh:'Montserrat',Arial,sans-serif;--fb:'Inter',Calibri,Arial,sans-serif;--fn:'JetBrains Mono','Courier New',monospace}
+*{box-sizing:border-box}body{margin:0;font:400 14px/1.55 var(--fb);color:var(--ink);background:#fff;min-height:100vh;display:flex;flex-direction:column}
+a{color:var(--ink)}
+.bar0{height:60px;border-bottom:1px solid var(--hair);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 32px;font:600 13px var(--fh)}
+.bar0 img{height:20px;display:block}.chip{font:500 11px var(--fn);color:var(--grey);border:1px solid var(--hair);border-radius:3px;padding:4px 9px}
+.wrap{width:100%;max-width:440px;margin:0 auto;padding:64px 24px 32px;display:flex;flex-direction:column;gap:16px;flex:1}
+.wrap.wide{max-width:720px}
+.kicker{display:block;font:700 10.5px var(--fh);letter-spacing:.18em;text-transform:uppercase;color:var(--grey)}
+.kicker::after{content:"";display:block;width:28px;height:2px;background:var(--ink);margin-top:12px}
+h1{font:700 1.75rem/1.2 var(--fh);letter-spacing:-.01em;margin:0}p.m{color:var(--grey);margin:0}
+.card{border:1px solid var(--hair);border-radius:6px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.btn{appearance:none;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:3px;padding:10px 14px;font:600 13px var(--fh);cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--ink);color:#fff}.blk{background:var(--ink);color:#fff}.blk:hover{background:#333}
+.btn.inline{display:inline-flex;width:auto}
+label{display:block;font:600 11px var(--fh);color:var(--grey);margin-bottom:6px}
+input[type=email]{font:inherit;padding:9px 11px;border:1px solid var(--hair);border-radius:3px;width:100%}
+input:focus{outline:2px solid var(--ink);outline-offset:-1px}
+.or{display:flex;align-items:center;gap:10px;color:var(--mid);font:600 11px var(--fh);letter-spacing:.12em}.or::before,.or::after{content:"";flex:1;height:1px;background:var(--hair)}
+.msg{background:#F5F5F5;border-left:3px solid var(--ink);border-radius:3px;padding:12px 14px}.err{background:var(--tint);border-left:3px solid var(--red);border-radius:3px;padding:12px 14px;color:var(--red)}
+.brand{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--hair);border-radius:6px;text-decoration:none}
+.brand:hover{border-color:var(--ink)}.brand img{width:28px;height:28px;border-radius:50%}.brand b{font:700 14px var(--fh)}.brand span{color:var(--grey);font-size:12px}
+.foot{border-top:1px solid var(--hair);padding:18px 32px;display:flex;justify-content:space-between;font:700 10.5px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--grey)}
+@media (max-width:600px){.bar0,.foot{padding-left:16px;padding-right:16px}.wrap{padding-top:40px}}
+</style></head><body>
+<header class="bar0"><img src="{{ url_for('static', filename='hovers-logo.svg') }}" alt="Hovers">{% block right %}<span class="chip">Client sign-in</span>{% endblock %}</header>
+{% block body %}{% endblock %}
+<footer class="foot"><span>Hovers® — SEO and AI search</span><span>Confidential</span></footer>
+</body></html>

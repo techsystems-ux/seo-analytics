@@ -1,0 +1,8 @@
+{% extends "_plain.html" %}
+{% block title %}Your brands{% endblock %}
+{% block right %}<form method="post" action="{{ url_for('portal.logout') }}" style="display:flex;gap:10px;align-items:center"><span class="chip">{{ email }}</span><button class="btn inline">Sign out</button></form>{% endblock %}
+{% block body %}
+<main class="wrap wide"><span class="kicker">Your brands</span><h1>Choose a brand</h1>
+{% for b in brands %}<a class="brand" href="{{ url_for('dash.overview', cid=b[0]) }}"><img src="https://www.google.com/s2/favicons?domain={{ b[2] }}&sz=64" alt="" onerror="this.remove()"><div><b>{{ b[1] }}</b><br><span>{{ b[2] }}</span></div></a>{% endfor %}
+</main>
+{% endblock %}

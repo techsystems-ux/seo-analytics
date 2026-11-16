@@ -1,12 +1,29 @@
 """Staff dashboard: Overview, Search performance, Competitors, AI visibility, Pages, Settings. One client at a time.
 Registered by app.py. Every screen reads through analytics.py."""
 import os, sys, json, secrets, subprocess, csv, io
-from flask import Blueprint, render_template, request, redirect, url_for, session, abort
+from flask import Blueprint, render_template, request, redirect, url_for, session, abort, has_request_context
 from markupsafe import Markup, escape
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo"), os.path.join(HERE, "..", "scripts")]
-from common import connect
+from common import connect as _staff_connect
 import analytics as A
+
+# Screens a client may open for their own brand (read-only). Everything else, and every form, is staff only.
+VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.answer", "dash.reddit_view",
+                  "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download"}
+
+def is_viewer():
+    return has_request_context() and not session.get("staff_email") and bool(session.get("viewer_email"))
+
+def connect():
+    """A staff request sees every brand. A client's request is narrowed in the database itself: not staff, and only the
+    brand in the address, so a mistake in any query still cannot show another brand's rows."""
+    conn = _staff_connect()
+    if is_viewer():
+        cid = (request.view_args or {}).get("cid", "")
+        if cid not in (session.get("viewer_clients") or []): cid = ""      # not theirs: the session sees no brand at all
+        conn.execute("SELECT set_config('app.is_staff', 'false', false), set_config('app.client_id', %s, false)", [cid])
+    return conn
 
 bp = Blueprint("dash", __name__)
 STAGES = {"awareness": "Discovery", "consideration": "Research", "decision": "Decision"}
@@ -22,7 +39,13 @@ def check_csrf():
     if not request.form.get("csrf") or request.form.get("csrf") != session.get("csrf"): abort(400, "Form expired. Reload the page and try again.")
 
 @bp.before_request
-def _gate(): staff_required()
+def _gate():
+    if session.get("staff_email"): return
+    if session.get("viewer_email"):
+        cid = (request.view_args or {}).get("cid")
+        if request.method == "GET" and request.endpoint in VIEWER_SCREENS and cid in (session.get("viewer_clients") or []): return
+        abort(redirect(url_for("portal.home")))
+    staff_required()
 
 def client_or_404(conn, cid):
     r = conn.execute("SELECT client_id, name, domain, sample_semrush FROM clients WHERE client_id::text=%s", [cid]).fetchone()
@@ -52,6 +75,7 @@ def intel_for(cid):
 def view(tpl, client=None, active=None, **ctx):
     info = intel_for(client["id"]) if client else None
     return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES,
+                           viewer=session.get("viewer_email") if is_viewer() else None, viewer_brands=len(session.get("viewer_clients") or []),
                            intel=info, data_to=info["data_to"] if info else None, **ctx)
 
 # ------------------------------------------------------------------ formatting helpers for templates
@@ -269,9 +293,12 @@ def settings(cid):
         runs, budget = A.last_runs(conn, cid), A.semrush_budget(conn)
         project = conn.execute("SELECT semrush_project_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         actions, by_feature = semrush_actions(conn, cid), A.semrush_by_feature(conn)
+        viewers = conn.execute("SELECT email, added_by, added_at, last_login FROM client_viewers WHERE client_id=%s ORDER BY email", [cid]).fetchall()
     keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
+    login = {"google": bool(os.environ.get("CLIENT_OAUTH_CLIENT_ID")), "email": bool(os.environ.get("RESEND_API_KEY"))}
     return view("settings.html", c, "settings", tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
-                msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature)
+                msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature, viewers=viewers, login=login,
+                portal_url=request.host_url.rstrip("/") + "/portal")
 
 LIST_FIELDS = ["brand_spellings", "product_names", "usps", "usp_markers", "banned_words", "title_banned_words", "claims_to_avoid",
                "region_words", "wrong_domains", "sister_domains"]
@@ -307,6 +334,19 @@ def settings_save(cid):
             conn.execute("UPDATE prompts SET approved = NOT approved WHERE client_id=%s AND prompt_id::text=%s", [cid, request.form["id"]])
         elif what == "prompt_approve_all":
             conn.execute("UPDATE prompts SET approved = true WHERE client_id=%s AND active", [cid])
+        elif what in ("viewer_add", "viewer_remove"):
+            import re
+            emails = [e.strip().lower() for e in re.split(r"[,;\s]+", request.form.get("emails", "")) if e.strip()]
+            bad = [e for e in emails if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[a-z]{2,}", e)]
+            if bad: return redirect(url_for("dash.settings", cid=cid, tab="access", msg="Not an email address: " + ", ".join(bad[:3])))
+            for e in emails:
+                if what == "viewer_add":
+                    conn.execute("INSERT INTO client_viewers (client_id, email, added_by) VALUES (%s,%s,%s) ON CONFLICT DO NOTHING",
+                                 [cid, e, session.get("staff_email")])
+                else:
+                    conn.execute("DELETE FROM client_viewers WHERE client_id=%s AND email=%s", [cid, e])
+            msg = (f"{len(emails)} added. Share the client sign-in address with them." if what == "viewer_add" else "Access removed.") if emails else "No email given."
+            return redirect(url_for("dash.settings", cid=cid, tab="access", msg=msg))
         elif what == "prompt_delete":
             conn.execute("DELETE FROM prompts WHERE client_id=%s AND prompt_id::text=%s", [cid, request.form["id"]])
         elif what in ("sample_load", "sample_clear"):
@@ -541,7 +581,7 @@ def auto_kick(conn, cid, source):
     """Reddit and YouTube fill themselves: when the key is set and the data is missing or a week old, a pull starts in the
     background the moment anyone opens the screen (or the app starts). Not again within an hour of a failure."""
     import datetime as dt
-    if ONLINE or not os.environ.get(AUTO_KEYS[source]) or os.environ.get("COMMUNITY_AUTO", "1") == "0": return None
+    if ONLINE or is_viewer() or not os.environ.get(AUTO_KEYS[source]) or os.environ.get("COMMUNITY_AUTO", "1") == "0": return None
     st = A.source_status(conn, cid, source)
     now = dt.datetime.now(dt.timezone.utc)
     if st["running"] or (st["error_at"] and now - st["error_at"] < dt.timedelta(hours=1)): return st

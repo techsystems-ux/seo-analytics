@@ -14,7 +14,8 @@ import google_auth as ga
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 5 * 1024 * 1024        # CSV uploads
 app.secret_key = os.environ["FLASK_SECRET"]
-app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True,
+import datetime as _dt
+app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True, PERMANENT_SESSION_LIFETIME=_dt.timedelta(days=14),
                   SESSION_COOKIE_SECURE=(os.environ.get("OAUTH_REDIRECT_URI") or os.environ.get("RENDER_EXTERNAL_URL", "")).startswith("https://"))
 
 @app.get("/healthz")
@@ -116,6 +117,7 @@ def page(title, body_tpl, **ctx):
 
 @app.get("/")
 def home():
+    if not staff() and session.get("viewer_email"): return redirect(url_for("portal.home"))
     if not staff():
         return page("Sign in", """<h1>Connect Google</h1>
 <p class="m">Sign in with the Google account that has access to your clients' Search Console and Google Analytics. We will list every site and property it can see, and you choose which to import as clients.</p>
@@ -249,3 +251,5 @@ def logout():
 
 from dashboard import bp as dashboard_bp                   # Overview, Search, Competitors, AI visibility, Pages, Settings
 app.register_blueprint(dashboard_bp)
+from portal import bp as portal_bp                         # client sign-in: read-only view of their own brand
+app.register_blueprint(portal_bp)

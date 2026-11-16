@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 13
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 14
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -351,3 +351,67 @@ with connect() as conn:
     rows = conn.execute("SELECT label, exit_code, finished_at IS NOT NULL FROM pull_queue ORDER BY pull_id").fetchall()
 assert rows[-2:] == [("youtube", 0, True), ("nightly", 0, True)], rows
 print("online copy: pulls queue for the Mac, which runs them one at a time and the daily pull once a day")
+
+# ------------------------------------------------------------------ client sign-in: read-only, own brand only
+import portal, flask
+r = cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "viewer_add", "emails": "Marketing@Gargi.shop, not-an-email"})
+assert "Not+an+email" in r.headers["Location"]
+cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "viewer_add", "emails": "Marketing@Gargi.shop"})
+assert "marketing@gargi.shop" in cl.get(f"/c/{cid}/settings?tab=access").get_data(as_text=True)
+os.environ["RESEND_API_KEY"] = "test"
+sent = []
+portal.send_link = lambda email, link: sent.append((email, link))
+vc = webapp.app.test_client()
+assert "Email me a sign-in link" in vc.get("/portal/login").get_data(as_text=True)
+with vc.session_transaction() as s: tok = s["csrf"]
+body = vc.post("/portal/login", data={"csrf": tok, "email": "stranger@else.com"}).get_data(as_text=True)
+assert "If this email has access" in body and not sent                  # same answer, nothing sent
+vc.post("/portal/login", data={"csrf": tok, "email": "marketing@gargi.shop"})
+assert len(sent) == 1 and sent[0][0] == "marketing@gargi.shop"
+link = sent[0][1].split("localhost", 1)[1]
+r = vc.get(link); assert r.status_code == 302 and r.headers["Location"].endswith("/portal")
+assert vc.get(link).headers["Location"].find("expired") > 0                # a link works once
+r = vc.get("/portal"); assert r.status_code == 302 and r.headers["Location"].endswith(f"/c/{cid}")
+for path in ("", "/search", "/ai", "/competitors", "/reddit", "/youtube", "/report"):
+    r = vc.get(f"/c/{cid}{path}"); assert r.status_code == 200, (path, r.status_code)
+    page = r.get_data(as_text=True)
+    assert 'class="viewer"' in page and "marketing@gargi.shop" in page and "Google connections" not in page and "Keyword research" not in page, path
+for path in (f"/c/{cid}/settings", f"/c/{cid}/pages", f"/c/{cid}/technical", f"/c/{cid}/research/keyword", "/c", f"/c/{other}", f"/c/{other}/search"):
+    r = vc.get(path); assert r.status_code == 302 and r.headers["Location"].endswith("/portal"), (path, r.status_code)
+for path, data in ((f"/c/{cid}/settings", {"what": "viewer_add", "emails": "x@y.com"}), (f"/c/{cid}/youtube", {}), (f"/c/{cid}/report", {})):
+    with vc.session_transaction() as s: data["csrf"] = s["csrf"]
+    r = vc.post(path, data=data); assert r.status_code == 302 and r.headers["Location"].endswith("/portal"), path
+assert vc.get("/connections").status_code == 302
+with webapp.app.test_request_context(f"/c/{other}"):                        # the database itself narrows a client's session
+    flask.session["viewer_email"] = "marketing@gargi.shop"; flask.session["viewer_clients"] = [cid]
+    flask.request.view_args = {"cid": str(other)}
+    with dashboard.connect() as conn:
+        assert conn.execute("SELECT count(*) FROM clients").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM client_viewers").fetchone()[0] == 0
+    flask.request.view_args = {"cid": cid}
+    with dashboard.connect() as conn:
+        assert [str(r[0]) for r in conn.execute("SELECT client_id FROM clients")] == [cid]
+r = vc.get(f"/c/{cid}/report/{dt.date(2026, 10, 1):%Y-%m}.pptx"); assert r.status_code == 200 and r.data[:2] == b"PK"
+cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "viewer_remove", "emails": "marketing@gargi.shop"})
+r = vc.get("/portal"); assert "no+longer+has+access" in r.headers["Location"]  # removal takes effect at once
+assert vc.get(f"/c/{cid}").status_code == 302
+# Google sign-in for clients: only a verified email on the list gets in; it never becomes a staff session
+os.environ.update(CLIENT_OAUTH_CLIENT_ID="cid", CLIENT_OAUTH_CLIENT_SECRET="sec")
+cl.post(f"/c/{cid}/settings", data={"csrf": "tok", "what": "viewer_add", "emails": "founder@gargi.shop"})
+class _R:
+    def __init__(s, j, code=200): s._j, s.status_code = j, code
+    def json(s): return s._j
+gc = webapp.app.test_client()
+def google_as(email, verified=True):
+    r = gc.get("/portal/auth/google"); assert "scope=openid+email+profile" in r.headers["Location"] and "webmasters" not in r.headers["Location"]
+    with gc.session_transaction() as s: st = s["portal_state"]
+    portal.requests.post = lambda *a, **k: _R({"access_token": "a"})
+    portal.requests.get = lambda *a, **k: _R({"email": email, "email_verified": verified})
+    return gc.get(f"/portal/auth/google/callback?state={st}&code=x")
+assert "has+no+access" in google_as("someone@gargi.shop").headers["Location"]
+assert "did+not+confirm" in google_as("founder@gargi.shop", verified=False).headers["Location"]
+assert google_as("founder@gargi.shop").headers["Location"].endswith("/portal")
+with gc.session_transaction() as s: assert s["viewer_email"] == "founder@gargi.shop" and "staff_email" not in s
+assert gc.get(f"/c/{cid}/ai").status_code == 200 and gc.get(f"/c/{cid}/settings").status_code == 302
+for k in ("RESEND_API_KEY", "CLIENT_OAUTH_CLIENT_ID", "CLIENT_OAUTH_CLIENT_SECRET"): del os.environ[k]
+print("client sign-in: email link (once, generic answer) and Google (verified, listed), read-only screens, own brand only in the database, removal at once")

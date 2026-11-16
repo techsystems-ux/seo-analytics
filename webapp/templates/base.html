@@ -125,9 +125,13 @@ svg text{font-family:var(--fb)}
 
 @media (max-width:820px){.shell{grid-template-columns:1fr}nav.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--hair)}.intel{display:none}
   main{padding:24px 18px}.topbar{padding:0 18px}.meta .chip:first-child{display:none}.grid2{grid-template-columns:1fr}}
+/* client view: read-only. Every form that changes something, and links to staff screens, are hidden (the server refuses them too) */
+.viewer main form[method=post],.viewer main form[method=POST],.viewer .staff-only,.viewer main details,
+.viewer main a[href*="/settings"],.viewer main a[href*="/research/"],.viewer main a[href*="/technical"],.viewer main a[href*="/ideas"],.viewer main a[href*="/pages"]{display:none!important}
+.linkbtn{appearance:none;background:none;border:0;padding:0;font:inherit;color:var(--ink);text-decoration:underline;cursor:pointer}
 </style>
 </head>
-<body>
+<body class="{{ 'viewer' if viewer }}">
 {% set I = {
  'overview':'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
  'search':'<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
@@ -148,7 +152,24 @@ svg text{font-family:var(--fb)}
 {% macro navlink(key, label, href) %}<a class="tab{{ ' on' if active==key }}" href="{{ href }}"{{ ' aria-current="page"' if active==key }}><svg viewBox="0 0 24 24" aria-hidden="true">{{ I[key]|safe }}</svg>{{ label }}</a>{% endmacro %}
 <div class="shell">
 <nav class="side" aria-label="Main menu">
-  {% if client %}
+  {% if client and viewer %}
+  <a class="client" href="{{ url_for('portal.home') }}"{% if viewer_brands > 1 %} title="Switch brand"{% endif %}>
+    <span class="bm"><span>{{ client.name[:1] }}</span><img src="https://www.google.com/s2/favicons?domain={{ client.domain }}&sz=128" alt="" onerror="this.remove()"></span>
+    <span><b>{{ client.name }}</b><span class="s">{{ client.domain }}{{ ' · Switch brand' if viewer_brands > 1 }}</span></span></a>
+  {{ navlink('overview', 'Overview', url_for('dash.overview', cid=client.id)) }}
+  <div class="ng">Analytics</div>
+  {{ navlink('search', 'Search performance', url_for('dash.search', cid=client.id)) }}
+  {{ navlink('ai', 'AI visibility', url_for('dash.ai', cid=client.id)) }}
+  {{ navlink('competitors', 'Competitors', url_for('dash.competitors', cid=client.id)) }}
+  <div class="ng">Community</div>
+  {{ navlink('reddit', 'Reddit', url_for('dash.reddit_view', cid=client.id)) }}
+  {{ navlink('youtube', 'YouTube', url_for('dash.youtube_view', cid=client.id)) }}
+  <div class="ng">Reports</div>
+  {{ navlink('report', 'Monthly report', url_for('dash.monthly_report', cid=client.id)) }}
+  <div class="intel"><div class="t"><span class="pulse"></span>Prepared by Hovers</div>
+    {% if intel %}Reading <b>{{ intel.queries|n }}</b> searches{% if intel.prompts %} and <b>{{ intel.prompts }}</b> ChatGPT prompts{% endif %}, refreshed daily.{% endif %}
+    <form method="post" action="{{ url_for('portal.logout') }}" style="margin-top:8px">{{ viewer }} · <button class="linkbtn">Sign out</button></form></div>
+  {% else %}{% if client %}
   <a class="client" href="{{ url_for('dash.clients') }}" title="Switch brand">
     <span class="bm"><span>{{ client.name[:1] }}</span><img src="https://www.google.com/s2/favicons?domain={{ client.domain }}&sz=128" alt="" onerror="this.remove()"></span>
     <span><b>{{ client.name }}</b><span class="s">{{ client.domain }} · Switch brand</span></span></a>
@@ -180,15 +201,17 @@ svg text{font-family:var(--fb)}
   <div class="intel"><div class="t"><span class="pulse"></span>Intelligence layer</div>
     {% if client and intel %}Reading <b>{{ intel.queries|n }}</b> searches and <b>{{ intel.pages|n }}</b> pages{% if intel.prompts %}, <b>{{ intel.prompts }}</b> ChatGPT prompts{% endif %}, refreshed every night.{% else %}Search Console, GA4, ChatGPT, Semrush, Reddit and YouTube in one place.{% endif %}
     <div style="margin-top:8px">{{ staff }} · <a href="{{ url_for('connections') }}">Google connections</a></div></div>
+  {% endif %}
 </nav>
 <div class="mainwrap">
 <header class="topbar">
-  <div class="crumb"><a href="{{ url_for('dash.clients') }}">Hovers</a> <span>/</span> <b>{{ client.name ~ ' · SEO and AI search' if client else 'Brands' }}</b></div>
+  <div class="crumb"><a href="{{ url_for('portal.home') if viewer else url_for('dash.clients') }}">Hovers</a> <span>/</span> <b>{{ client.name ~ ' · SEO and AI search' if client else 'Brands' }}</b></div>
   <div class="meta">{% if client %}<span class="chip">{{ client.domain }}</span>{% if data_to %}<span class="chip">Data to {{ data_to.strftime('%d %b %Y') }}</span>{% endif %}{% endif %}</div>
 </header>
 <main>
 {% if request.args.get('msg') %}<div class="msg" role="status">{{ request.args.get('msg') }}</div>{% endif %}
-{% if client and client.sample and (active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_')) %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush, Reddit and YouTube sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
+{% if client and client.sample and viewer %}<div class="samplebar" role="status"><b>Placeholder figures</b> appear in some Semrush, Reddit and YouTube sections while your Hovers team completes the setup.</div>{% endif %}
+{% if client and client.sample and not viewer and (active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_')) %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush, Reddit and YouTube sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
 {% block body %}{% endblock %}
 <footer class="foot"><span>Hovers® — {{ client.name ~ ' · ' if client }}SEO and AI search</span><span class="dots" aria-hidden="true"></span><span>Confidential</span></footer>
 </main>

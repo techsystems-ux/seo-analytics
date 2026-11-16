@@ -3,7 +3,7 @@
 {% block body %}
 <div class="top"><div><span class="kicker">Settings</span><h1>{{ client.name }} setup</h1>
 <p class="lead">What the checks and the analytics depend on. Set once per brand; the client signs off the brand rules.</p></div></div>
-<div class="seg">{% for k,v in [('brand','Brand rules'),('prompts','Prompts'),('data','Data and integrations')] %}<a class="{{ 'on' if tab==k }}" href="?tab={{ k }}">{{ v }}</a>{% endfor %}</div>
+<div class="seg">{% for k,v in [('brand','Brand rules'),('prompts','Prompts'),('data','Data and integrations'),('access','Client access')] %}<a class="{{ 'on' if tab==k }}" href="?tab={{ k }}">{{ v }}</a>{% endfor %}</div>
 
 {% if tab=='brand' %}
 <form method="post" class="grid2"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="brand">
@@ -45,7 +45,7 @@
 <label for="st">Buying stage</label><select id="st" name="stage">{% for k,v in stages.items() %}<option value="{{ k }}" {{ 'selected' if k=='consideration' }}>{{ v }}</option>{% endfor %}</select>
 <div style="margin-top:14px"><button class="btn red">Add prompts</button></div></form></section>
 
-{% else %}
+{% elif tab!='access' %}
 <div class="grid2">
 <section class="card"><h2>Connections</h2><table>
 <tr><td>Search Console</td><td>{{ integ[0] if integ and integ[0] else 'Not linked' }}</td></tr>
@@ -77,5 +77,22 @@
 <section class="card"><h2>Last runs</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
 {% for r in runs %}<tr><td>{{ r.collector }}</td><td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{{ r.status }} <span class="note">{{ (r.note or '').split('\n')[0][:300] }}</span></td></tr>{% endfor %}</table>
 {% else %}<p class="empty">Nothing has run yet.</p>{% endif %}</section>
+{% else %}
+<section class="card" style="display:flex;flex-direction:column;gap:10px"><h2>Who at {{ client.name }} can view</h2>
+  <p class="note" style="margin:0">People listed here sign in at <b>{{ portal_url }}</b> and see {{ client.name }} only, read-only: Overview,
+  Search performance, AI visibility, Competitors, Reddit, YouTube and the monthly report download. They never see Settings, credits,
+  pull buttons, other brands or your work notes.</p>
+  <p class="note" style="margin:0">Sign-in options on: {% if login.google %}<span class="tag t-pass">Google</span>{% else %}<span class="tag t-na">Google · not set up</span>{% endif %}
+  {% if login.email %}<span class="tag t-pass">Email link</span>{% else %}<span class="tag t-na">Email link · not set up</span>{% endif %}</p>
+  {% if client.sample %}<div class="samplebar"><b>Sample data is loaded</b> for this brand. Clients would see placeholder figures (marked as such). <a href="?tab=data">Remove it in Data and integrations</a> before giving access.</div>{% endif %}
+  <form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="viewer_add">
+    <div style="flex:1;min-width:240px"><label for="ve">Emails, separated by commas</label><input id="ve" type="text" name="emails" placeholder="marketing@brand.com, founder@brand.com"></div>
+    <button class="btn blk">Give access</button></form>
+  <div class="tw">{% if viewers %}<table><tr><th>Email</th><th>Added</th><th>Last sign-in</th><th></th></tr>
+  {% for v in viewers %}<tr><td>{{ v[0] }}</td><td>{{ v[2].strftime('%d %b %Y') }}{% if v[1] %}<br><span class="note">{{ v[1] }}</span>{% endif %}</td>
+  <td>{{ v[3].strftime('%d %b %Y, %H:%M') if v[3] else 'Not yet' }}</td>
+  <td class="r"><form method="post" style="display:inline"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="viewer_remove"><input type="hidden" name="emails" value="{{ v[0] }}"><button class="btn ln">Remove</button></form></td></tr>{% endfor %}</table>
+  {% else %}<p class="empty">Nobody from {{ client.name }} has access yet.</p>{% endif %}</div>
+</section>
 {% endif %}
 {% endblock %}

@@ -2,7 +2,7 @@
 {% block body %}
 {% set t = R.search.cur %}{% set g = R.traffic.cur %}{% set rk = R.rank.cur %}
 <div class="top"><div><span class="kicker">Reports · Monthly report</span><h1>Monthly SEO report</h1>
-<p class="lead">The client deck for the month, built from the data already in the tool: keyword rankings, search performance, organic traffic and revenue, branded vs non-branded, top pages, work done and next month's plan. Pick the month and download. Nothing is spent.</p></div></div>
+<p class="lead">{% if viewer %}The month's SEO report from your Hovers team: keyword rankings, search performance, organic traffic and revenue, top pages, work done and next month's plan. Pick a month and download the PowerPoint.{% else %}The client deck for the month, built from the data already in the tool: keyword rankings, search performance, organic traffic and revenue, branded vs non-branded, top pages, work done and next month's plan. Pick the month and download. Nothing is spent.{% endif %}</p></div></div>
 
 <section class="card" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between">
   <form method="get" style="display:flex;gap:8px;align-items:flex-end">
@@ -18,7 +18,7 @@
   <div class="card kpi"><div class="l">Organic revenue</div><div class="v md">{{ fmt.inr(R.revenue.cur) }}</div><div class="s mute">{{ ('vs ' ~ fmt.inr(R.revenue.prev)) if R.revenue.prev is not none else '–' }}</div></div>
 </div>
 
-<section class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Data for this month</h2>
+<section class="card staff-only" style="display:flex;flex-direction:column;gap:8px"><h2>Data for this month</h2>
   {% for label, have, need in ready %}<p style="margin:0">{% if have >= need %}<span class="tag t-pass">complete</span>{% elif have %}<span class="tag t-na">{{ have }} of {{ need }} days</span>{% else %}<span class="tag t-sev-error">missing</span>{% endif %} {{ label }}</p>{% endfor %}
   <p class="note" style="margin:0">Same month last year: {{ 'GA4 data found, so traffic and revenue compare with ' ~ R.ly.strftime('%B %Y') if R.traffic.ly else 'not stored yet; the first GA4 pull after this update fetches 14 months' }}.
   {% if not R.products %}Product sales: not available from GA4 for this property yet, so revenue is shown by landing page.{% endif %}</p>
