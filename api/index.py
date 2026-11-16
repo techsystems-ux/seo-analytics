@@ -19,19 +19,26 @@ def _migrate():
             setup_brand.setup(conn, json.load(open(f)))
 
 NEEDED = ["DATABASE_URL", "FLASK_SECRET", "TOKEN_KEY", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "OAUTH_REDIRECT_URI"]
-missing = [k for k in NEEDED if not os.environ.get(k)]
-if missing:
-    # Until every setting is in place, show which are missing (names only) instead of a server error.
+
+def _setup_pending(missing):
+    """Until every setting is in place, show which are missing (names only) instead of a server error."""
     from flask import Flask
-    app = Flask(__name__)
-    @app.route("/", defaults={"path": ""})
-    @app.route("/<path:path>")
-    def setup_pending(path):
+    pending = Flask(__name__)
+    @pending.route("/", defaults={"path": ""})
+    @pending.route("/<path:path>")
+    def page(path):
         items = "".join(f"<li><code>{k}</code></li>" for k in missing)
         return (f"<!doctype html><meta name=viewport content='width=device-width'><title>Setup | Hovers AI Search</title>"
                 f"<body style='font:15px/1.6 Arial;max-width:640px;margin:60px auto;padding:0 16px;color:#0F0F0F'>"
                 f"<p style='letter-spacing:.18em;font-size:11px;color:#6E6E6E'>HOVERS AI SEARCH · SETUP</p><h1>Almost there</h1>"
                 f"<p>Add these in Vercel, Project Settings, Environment Variables, then redeploy:</p><ul>{items}</ul></body>", 503)
-else:
+    return pending
+
+def _load():
+    missing = [k for k in NEEDED if not os.environ.get(k)]
+    if missing: return _setup_pending(missing)
     _migrate()
-    from app import app  # noqa: E402
+    from app import app as flask_app
+    return flask_app
+
+app = _load()
