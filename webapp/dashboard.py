@@ -406,16 +406,28 @@ def semrush_run(cid):
     if not a: abort(400)
     sep = "&" if "?" in back else "?"
     if not a["ready"]: return redirect(back + sep + urlencode({"msg": a["why"]}))
+    pulls_blocked()
     with connect() as conn:                       # a real pull replaces the sample rows, never mixes with them
         import sample_semrush; sample_semrush.clear(conn, cid, only='semrush')
     if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"])
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
 
+ONLINE = bool(os.environ.get("VERCEL"))     # the online copy on Vercel: pages only, no long background pulls
+PULLS_OFF = "Pulls do not run on the online copy yet. It shows the data copied from the Mac."
+
+def pulls_blocked():
+    """On Vercel a request cannot outlive its response, so a background pull would be cut off. Say so instead."""
+    if not ONLINE: return
+    from urllib.parse import urlencode
+    back = (request.referrer or url_for("dash.clients")).split("#")[0]
+    abort(redirect(back + ("&" if "?" in back else "?") + urlencode({"msg": PULLS_OFF})))
+
 def start_job(cid, only, max_units=None, seeds="", research=""):
     """Runs the daily job for one client in the background. Results go to the run log on screen; full output,
     errors included, is appended to logs/jobs.log in the project folder."""
     import datetime as dt
+    pulls_blocked()
     logdir = os.path.join(HERE, "..", "logs"); os.makedirs(logdir, exist_ok=True)
     out = open(os.path.join(logdir, "jobs.log"), "a")
     out.write(f"\n=== {dt.datetime.now():%Y-%m-%d %H:%M:%S} {only} for {cid}\n"); out.flush()
@@ -527,7 +539,7 @@ def auto_kick(conn, cid, source):
     """Reddit and YouTube fill themselves: when the key is set and the data is missing or a week old, a pull starts in the
     background the moment anyone opens the screen (or the app starts). Not again within an hour of a failure."""
     import datetime as dt
-    if not os.environ.get(AUTO_KEYS[source]) or os.environ.get("COMMUNITY_AUTO", "1") == "0": return None
+    if ONLINE or not os.environ.get(AUTO_KEYS[source]) or os.environ.get("COMMUNITY_AUTO", "1") == "0": return None
     st = A.source_status(conn, cid, source)
     now = dt.datetime.now(dt.timezone.utc)
     if st["running"] or (st["error_at"] and now - st["error_at"] < dt.timedelta(hours=1)): return st
@@ -577,6 +589,7 @@ def reddit_save(cid):
         if not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
         n = min(rd.RUN_ITEMS, rd.items_left(conn))
         if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Apify result limit is used up.")
+        pulls_blocked()
         import sample_semrush; sample_semrush.clear(conn, cid, only='reddit')
     start_job(cid, "reddit", max_units=n)
     return back_with(url_for("dash.reddit_view", cid=cid), f"Reddit pull started: up to {n} results. Refresh in a few minutes.")
@@ -623,6 +636,7 @@ def youtube_save(cid):
             conn.execute("UPDATE clients SET youtube_channel_id=%s WHERE client_id=%s", [ch, cid])
             return back_with(url_for("dash.youtube_view", cid=cid), "Channel saved.")
         if not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "No YouTube API key on the server, so nothing was pulled.")
+        pulls_blocked()
         import sample_semrush; sample_semrush.clear(conn, cid, only='youtube')
     start_job(cid, "youtube")
     return back_with(url_for("dash.youtube_view", cid=cid), "YouTube pull started (free daily quota). Refresh in a minute or two.")

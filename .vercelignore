@@ -1,0 +1,10 @@
+tests
+logs
+vendor-wheels
+*.tar.gz
+.env
+pgdata
+__pycache__
+Dockerfile
+docker-compose.yml
+render.yaml
