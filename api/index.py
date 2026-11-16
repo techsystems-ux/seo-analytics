@@ -18,6 +18,11 @@ def _migrate():
         for f in sorted(glob.glob(os.path.join(ROOT, "seeds", "*.json"))):
             setup_brand.setup(conn, json.load(open(f)))
 
+# Neon on Vercel sets DATABASE_URL to its pooler (PgBouncer, transaction mode), which does not keep a session's role
+# and settings between statements. Row-level security relies on those, so use the direct address Neon also provides.
+if os.environ.get("DATABASE_URL_UNPOOLED"):
+    os.environ["DATABASE_URL"] = os.environ["DATABASE_URL_UNPOOLED"]
+
 NEEDED = ["DATABASE_URL", "FLASK_SECRET", "TOKEN_KEY", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "OAUTH_REDIRECT_URI"]
 
 def _setup_pending(missing):
