@@ -76,7 +76,7 @@ New sites added to the Google account later: open the connect page and press **R
 
 ## Run it online (Vercel + Neon, pulls from the Mac)
 
-The online copy is the Vercel project **hovers-ai-search** (Singapore), deployed from `main` on every push. It reads and
+The online copy is the Vercel project **orbit** at https://orbit-hovers.vercel.app (Singapore), deployed from `main` on every push. It reads and
 writes a Neon Postgres database. Vercel cannot run long jobs, so data pulls run on the Hovers Mac:
 
 1. **Database.** Vercel, project, Storage, Neon (Singapore), connected to the project: this sets `DATABASE_URL`.

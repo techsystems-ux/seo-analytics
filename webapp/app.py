@@ -18,6 +18,14 @@ import datetime as _dt
 app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True, PERMANENT_SESSION_LIFETIME=_dt.timedelta(days=14),
                   SESSION_COOKIE_SECURE=(os.environ.get("OAUTH_REDIRECT_URI") or os.environ.get("RENDER_EXTERNAL_URL", "")).startswith("https://"))
 
+@app.before_request
+def _one_address():
+    """Online, every other address of the deployment (old project names, the long team address) goes to APP_HOST, so a
+    Google sign-in that starts on one address never comes back to another (the session cookie belongs to one host)."""
+    host = os.environ.get("APP_HOST")
+    if host and os.environ.get("VERCEL_ENV") == "production" and request.host != host and request.path != "/healthz":
+        return redirect(f"https://{host}{request.full_path.rstrip('?')}", 308)
+
 @app.get("/healthz")
 def healthz():
     return "ok"
