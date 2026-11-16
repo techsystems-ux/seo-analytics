@@ -50,10 +50,10 @@
 <div class="grid">
   <div class="card kpi"><div class="l">Monthly searches</div><div class="v">{{ o.volume|n }}</div><div class="s mute">India, Google</div></div>
   <div class="card kpi"><div class="l">Difficulty</div><div class="v">{{ o.kd|n }}</div><div class="s mute">{{ 'hard' if (o.kd or 0) >= 70 else 'possible' if (o.kd or 0) >= 40 else 'easy' }} · 0–100</div></div>
-  <div class="card kpi"><div class="l">Intent</div><div class="v" style="font-size:20px">{{ (o.intent or '–')|replace(',', ', ') }}</div><div class="s mute">why people search it</div></div>
+  <div class="card kpi"><div class="l">Intent</div><div class="v sm">{{ (o.intent or '–')|replace(',', ', ') }}</div><div class="s mute">why people search it</div></div>
   <div class="card kpi"><div class="l">Ads competition</div><div class="v">{{ o.competition|n }}</div><div class="s mute">0–1 · CPC {{ o.cpc if o.cpc is not none else '–' }} USD</div></div>
   <div class="card kpi"><div class="l">Last 12 months</div>
-    {% if o.trend %}<svg viewBox="0 0 120 40" style="width:100%;height:48px" role="img" aria-label="Search interest by month">{% for t in o.trend %}<rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 40 - (t * 36)|round(1) }}" width="8" height="{{ (t * 36)|round(1) }}" fill="{{ '#B20F00' if loop.last else '#000' }}"/>{% endfor %}</svg>{% else %}<div class="v">–</div>{% endif %}
+    {% if o.trend %}<svg viewBox="0 0 120 40" style="width:100%;height:48px" role="img" aria-label="Search interest by month">{% for t in o.trend %}<rect x="{{ loop.index0 * 10 + 1 }}" y="{{ 40 - (t * 36)|round(1) }}" width="8" height="{{ (t * 36)|round(1) }}" fill="{{ '#B20F00' if loop.last else '#0F0F0F' }}"/>{% endfor %}</svg>{% else %}<div class="v">–</div>{% endif %}
     <div class="s mute">relative interest, latest month red</div></div>
 </div>
 {% if o.features %}<p class="note">On Google's page for this keyword: {{ sm.features(o.features) }}</p>{% endif %}

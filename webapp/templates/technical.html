@@ -11,7 +11,7 @@
   <div class="card kpi"><div class="l">Errors</div><div class="v">{{ counts.error }}</div><div class="s mute">issue types open · fix within 7 days</div></div>
   <div class="card kpi"><div class="l">Warnings</div><div class="v">{{ counts.warning }}</div><div class="s mute">fix within 14 days</div></div>
   <div class="card kpi"><div class="l">Notices</div><div class="v">{{ counts.notice }}</div><div class="s mute">fix within 30 days</div></div>
-  <div class="card kpi"><div class="l">Last crawl</div><div class="v" style="font-size:18px">{{ h.at.strftime('%d %b, %H:%M') if h else 'Not yet' }}</div><div class="s mute">{{ h.pages|n if h else '–' }} URLs · runs every Monday</div></div>
+  <div class="card kpi"><div class="l">Last crawl</div><div class="v sm">{{ h.at.strftime('%d %b, %H:%M') if h else 'Not yet' }}</div><div class="s mute">{{ h.pages|n if h else '–' }} URLs · runs every Monday</div></div>
 </div>
 {% if s %}<p class="note">Semrush Site Audit, imported {{ s.at.strftime('%d %b %Y') }}: health {{ s.health|n }}%, {{ s.pages|n }} pages, {{ s.errors|n }} errors, {{ s.warnings|n }} warnings. Its issues are listed below with a Semrush tag.</p>{% endif %}
 
@@ -19,10 +19,10 @@
 <section class="card" style="display:flex;flex-direction:column;gap:12px">
   <div class="top" style="align-items:center"><h2>Issues to fix</h2>
   <div class="seg">{% for k,v in [('open','Open'),('fixed','Fixed'),('all','All')] %}<a class="{{ 'on' if show==k }}" href="?show={{ k }}">{{ v }}</a>{% endfor %}</div></div>
-  <div class="tw">{% if issues %}<table><tr><th>Issue</th><th class="r">Pages</th><th>Team</th><th>Status</th><th>Due</th></tr>
+  <div class="tw">{% if issues %}<table><tr><th>Issue</th><th class="r">Pages</th><th>Team</th><th>Status</th><th class="nw">Due</th></tr>
   {% for i in issues %}<tr class="{{ 'sel' if i.code==code }}"><td><span class="tag t-sev-{{ i.severity }}">{{ i.severity }}</span> <a href="?show={{ show }}&issue={{ i.code|urlencode }}">{{ i.title }}</a>{% if i.source=='semrush' %} <span class="tag t-na">Semrush</span>{% endif %}</td>
   <td class="r">{{ i.pages|n }}</td><td>{{ 'Developer' if i.team=='tech' else 'SEO' }}</td><td>{{ i.status|replace('_',' ') }}{% if i.owner %}<br><span class="note">{{ i.owner }}</span>{% endif %}</td>
-  <td>{% if i.due %}<span class="{{ 'down' if i.due < today and i.status in ('open','in_progress') }}">{{ i.due.strftime('%d %b') }}</span>{% else %}–{% endif %}</td></tr>{% endfor %}</table>
+  <td class="nw">{% if i.due %}<span class="{{ 'down' if i.due < today and i.status in ('open','in_progress') }}">{{ i.due.strftime('%d %b') }}</span>{% else %}–{% endif %}</td></tr>{% endfor %}</table>
   {% elif h or s %}<p class="empty">{{ 'Nothing open. Every issue from the last crawl is fixed.' if show=='open' else 'Nothing here.' }}</p>
   {% else %}<p class="empty">No crawl yet. Press Crawl site now: it is free and takes 10 to 20 minutes for about 1,000 pages.</p>{% endif %}</div>
 </section>
@@ -36,7 +36,7 @@
     <input type="hidden" name="issue" value="{{ sel.code }}"><input type="hidden" name="show" value="{{ show }}">
     <div><label for="st">Status</label><select id="st" name="status">{% for k,v in [('open','Open'),('in_progress','In progress'),('fixed','Fixed'),('verified','Verified')] %}<option value="{{ k }}" {{ 'selected' if sel.status==k }}>{{ v }}</option>{% endfor %}</select></div>
     <div><label for="ow">Owner</label><input id="ow" type="text" name="owner" value="{{ sel.owner or '' }}"></div>
-    <div><label for="du">Due</label><input id="du" type="date" name="due" value="{{ sel.due.isoformat() if sel.due else '' }}" style="font:inherit;padding:7px;border:1px solid #000;border-radius:8px;width:100%"></div>
+    <div><label for="du">Due</label><input id="du" type="date" name="due" value="{{ sel.due.isoformat() if sel.due else '' }}"></div>
     <div><button class="btn blk">Save</button></div></form>
   <p class="note">Mark it Fixed when the change is live. The next crawl sets it to Verified if the issue is gone, or reopens it if not.</p>
   <div class="tw">{% if pages %}<table><tr><th>Page ({{ pages|length }}{{ '+' if pages|length >= 200 }})</th><th>Detail</th></tr>

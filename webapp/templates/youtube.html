@@ -15,12 +15,12 @@
   <div class="card kpi"><div class="l">Views on those</div><div class="v">{{ mine.views|n if mine else 0 }}</div><div class="s mute">all time</div></div>
   <div class="card kpi"><div class="l">Share of views</div><div class="v">{{ mine.share|pct if mine else '0%' }}</div><div class="s mute">across videos naming tracked brands</div></div>
   <div class="card kpi"><div class="l">Own channel</div><div class="v">{{ summ.own_videos|n }}</div><div class="s mute">videos found · {{ summ.own_views|n }} views</div></div>
-  <div class="card kpi"><div class="l">Pulled</div><div class="v" style="font-size:18px">{{ summ.last.strftime('%d %b %Y') }}</div><div class="s mute">{{ summ.videos|n }} videos</div></div>
+  <div class="card kpi"><div class="l">Pulled</div><div class="v sm">{{ summ.last.strftime('%d %b %Y') }}</div><div class="s mute">{{ summ.videos|n }} videos</div></div>
 </div>
 <section class="card"><h2>Brand vs competitors</h2>
 <div class="tw"><table><tr><th>Brand</th><th class="r">Videos</th><th class="r">Views</th><th style="width:28%">Share of views</th><th class="r">In topic searches</th><th class="r">Channels</th></tr>
 {% for b in summ.brands %}<tr><td>{% if b.is_client %}<b>{{ client.name }} (you)</b>{% else %}{{ labels.get(b.brand, b.brand) }}{% endif %}</td><td class="r">{{ b.videos|n }}</td><td class="r">{{ b.views|n }}</td>
-<td><div style="background:#F0F0F0;border-radius:6px;height:10px"><div style="width:{{ (b.share * 100)|round(1) }}%;height:10px;border-radius:6px;background:{{ '#B20F00' if b.is_client else '#000' }}"></div></div><span class="note">{{ b.share|pct }}</span></td>
+<td><div class="bar"><div style="width:{{ (b.share * 100)|round(1) }}%;height:8px;border-radius:3px;background:{{ '#B20F00' if b.is_client else '#0F0F0F' }}"></div></div><span class="note">{{ b.share|pct }}</span></td>
 <td class="r">{{ b.in_topic|n }}</td><td class="r">{{ b.channels|n }}</td></tr>{% endfor %}</table></div></section>
 
 <section class="card" style="display:flex;flex-direction:column;gap:12px">

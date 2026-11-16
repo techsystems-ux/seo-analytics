@@ -58,19 +58,36 @@ def existing_clients(conn):
 
 # ---------------------------------------------------------------- pages
 BASE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ title }} | Hovers AI Search</title><style>
-:root{--red:#B20F00;--line:#E5E5E5;--grey:#F5F5F5;--mute:#5A5A5A}*{box-sizing:border-box}
-body{margin:0;font:15px/1.5 Montserrat,system-ui,Arial,sans-serif;color:#000;background:#fff}
-.wrap{max-width:1100px;margin:0 auto;padding:32px 20px}h1{font-size:30px;margin:0 0 6px}p.m{color:var(--mute);margin:0 0 24px}
-.btn{display:inline-block;border:0;border-radius:999px;padding:11px 20px;font:600 14px Montserrat,Arial;cursor:pointer;text-decoration:none}
-.red{background:var(--red);color:#fff}.blk{background:#000;color:#fff}.ln{background:#fff;color:#000;box-shadow:inset 0 0 0 1px #000}
-table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
-th{font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--mute)}input[type=text],select{font:inherit;padding:7px 10px;border:1px solid #000;border-radius:8px;width:100%}
-.tag{font-size:11px;font-weight:600;text-transform:uppercase;border-radius:999px;padding:2px 8px;border:1px solid var(--line)}.ok{background:#000;color:#fff}.warn{border-color:var(--red);color:var(--red)}
-.box{background:var(--grey);border-radius:16px;padding:20px;margin:16px 0}.err{color:var(--red);font-weight:600}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-</style></head><body><div class="wrap">
-<div class="top"><strong>Hovers AI Search · Google connections{% if staff %} · <a href="/c">Brands</a>{% endif %}</strong>{% if staff %}<form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><span style="color:#5A5A5A;margin-right:10px">{{ staff }}</span><button class="btn ln">Sign out</button></form>{% endif %}</div>
-{{ body|safe }}</div></body></html>"""
+<title>{{ title }} | Hovers AI Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Montserrat:wght@600;700&display=swap" rel="stylesheet"><style>
+:root{--ink:#0F0F0F;--red:#B20F00;--grey:#6E6E6E;--mid:#A9A9A9;--surface:#F5F5F5;--tint:#FBEDEE;--hair:#E4E1DE;
+  --fh:'Montserrat',Arial,sans-serif;--fb:'Inter',Calibri,Arial,sans-serif;--fn:'JetBrains Mono','Courier New',monospace}
+*{box-sizing:border-box}body{margin:0;font:400 14px/1.55 var(--fb);color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased}
+a{color:var(--ink)}
+.bar0{height:60px;border-bottom:1px solid var(--hair);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 32px;font:600 13px var(--fh)}
+.bar0 .crumb{color:var(--grey)}.bar0 .crumb b{color:var(--ink)}.bar0 .who{display:flex;align-items:center;gap:10px}
+.chip{font:500 11px var(--fn);color:var(--grey);border:1px solid var(--hair);border-radius:3px;padding:4px 9px}
+.wrap{max-width:1100px;margin:0 auto;padding:40px 32px 32px;display:flex;flex-direction:column;gap:16px}
+.kicker{display:block;font:700 10.5px var(--fh);letter-spacing:.18em;text-transform:uppercase;color:var(--grey)}
+.kicker::after{content:"";display:block;width:28px;height:2px;background:var(--ink);margin-top:12px}
+h1{font:700 1.75rem/1.2 var(--fh);letter-spacing:-.01em;margin:0}.wrap>.btn,.wrap>form>.btn{align-self:flex-start}p.m{color:var(--grey);margin:0;max-width:720px}
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:3px;padding:8px 14px;font:600 12.5px var(--fh);cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--ink);color:#fff}.red,.blk{background:var(--ink);color:#fff}.red:hover,.blk:hover{background:#333;border-color:#333}.ln{background:#fff;color:var(--ink)}
+.card,table{border:1px solid var(--hair);border-radius:6px;background:#fff}
+table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden}th,td{text-align:left;padding:10px 12px;border-bottom:1px solid #EFEDEA;vertical-align:middle}
+tr:last-child td{border-bottom:0}th{font:600 11px var(--fh);color:var(--grey);background:#fff}
+input[type=text],select{font:inherit;padding:8px 10px;border:1px solid var(--hair);border-radius:3px;width:100%;background:#fff}input:focus,select:focus{outline:2px solid var(--ink);outline-offset:-1px}
+.tag{font:500 11px var(--fn);border-radius:3px;padding:2px 7px;border:1px solid var(--hair);white-space:nowrap}.ok{background:var(--ink);color:#fff;border-color:var(--ink)}.warn{border-color:var(--red);color:var(--red);background:var(--tint)}
+.box{background:var(--tint);border-left:3px solid var(--red);border-radius:3px;padding:14px 18px}.err{color:var(--red);font-weight:600}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.foot{margin-top:24px;padding-top:18px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;font:700 10.5px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--grey)}
+@media (max-width:700px){.bar0,.wrap{padding-left:16px;padding-right:16px}.bar0 .chip{display:none}}
+</style></head><body>
+<header class="bar0"><span class="crumb">Hovers / <b>{{ title }}</b>{% if staff %} · <a href="/c">Brands</a>{% endif %}</span>
+{% if staff %}<form class="who" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><span class="chip">{{ staff }}</span><button class="btn ln">Sign out</button></form>{% else %}<span class="chip">Read-only Google access</span>{% endif %}</header>
+<div class="wrap"><span class="kicker">Hovers AI Search · Setup</span>
+{{ body|safe }}<footer class="foot"><span>Hovers® — AI Search</span><span>Confidential</span></footer></div></body></html>"""
 
 def page(title, body_tpl, **ctx):
     body = render_template_string(body_tpl, csrf=csrf_token(), **ctx)
@@ -79,10 +96,10 @@ def page(title, body_tpl, **ctx):
 @app.get("/")
 def home():
     if not staff():
-        return page("Sign in", """<h1 style="margin-top:40px">Connect Google</h1>
+        return page("Sign in", """<h1>Connect Google</h1>
 <p class="m">Sign in with the Google account that has access to your clients' Search Console and Google Analytics. We will list every site and property it can see, and you choose which to import as clients.</p>
 {% if err %}<p class="err">{{ err }}</p>{% endif %}<a class="btn red" href="{{ url_for('auth_start') }}">Sign in with Google</a>
-<p class="m" style="margin-top:16px">Read-only access. We never change anything in Search Console or Analytics.</p>""", err=request.args.get("err"))
+<p class="m">Read-only access. We never change anything in Search Console or Analytics.</p>""", err=request.args.get("err"))
     return redirect(url_for("dash.clients"))
 
 @app.get("/connections")
@@ -94,7 +111,7 @@ def connections():
             (SELECT count(*) FROM google_ga4_properties p WHERE p.connection_id=g.connection_id),
             (SELECT count(*) FROM client_integrations i WHERE i.google_connection_id=g.connection_id)
             FROM google_connections g ORDER BY g.connected_at""").fetchall()
-    return page("Connections", """<h1 style="margin-top:32px">Google connections</h1><p class="m">Each connection is a Google account whose Search Console sites and GA4 properties we can read.</p>
+    return page("Connections", """<h1>Google connections</h1><p class="m">Each connection is a Google account whose Search Console sites and GA4 properties we can read.</p>
 {% if msg %}<div class="box">{{ msg }}</div>{% endif %}
 <table><tr><th>Google account</th><th>Status</th><th>Search Console sites</th><th>GA4 properties</th><th>Clients linked</th><th>Last listed</th><th></th></tr>
 {% for c in conns %}<tr><td>{{ c[1] }}</td><td>{% if c[2]=='active' %}<span class="tag ok">Active</span>{% else %}<span class="tag warn">Reconnect</span>{% endif %}</td>
@@ -158,7 +175,7 @@ def import_page(cid):
         props = [{"property_id": p, "display_name": n, "account_name": a, "web_uris": u} for p, n, a, u in
                  conn.execute("SELECT property_id, display_name, account_name, web_uris FROM google_ga4_properties WHERE connection_id=%s ORDER BY account_name, display_name", [cid]).fetchall()]
         plan = ga.import_plan(sites, props, existing_clients(conn))
-    return page("Import clients", """<h1 style="margin-top:32px">Import clients</h1>
+    return page("Import clients", """<h1>Import clients</h1>
 <p class="m">From {{ email }}. Tick the sites to import. Each one becomes a client, with its GA4 property matched by website address. Check the matches before importing.</p>
 {% if err %}<p class="err">{{ err }}</p>{% endif %}
 {% if not plan %}<div class="box">This account has no verified Search Console sites. Check you signed in with the right Google account.</div>{% else %}

@@ -13,14 +13,14 @@
 <div class="grid">
   <div class="card kpi"><div class="l">{{ client.name }} mentions</div><div class="v">{{ mine.mentions|n if mine else 0 }}</div><div class="s mute">posts and comments naming {{ client.name }}</div></div>
   <div class="card kpi"><div class="l">Share of voice</div><div class="v">{{ mine.share|pct if mine else '0%' }}</div><div class="s mute">of mentions across tracked brands</div></div>
-  <div class="card kpi"><div class="l">Tone</div><div class="v" style="font-size:22px">{% if mine %}<span class="up">{{ mine.positive }}</span> / <span class="down">{{ mine.negative }}</span>{% else %}–{% endif %}</div><div class="s mute">positive / negative mentions (rough word read)</div></div>
+  <div class="card kpi"><div class="l">Tone</div><div class="v md">{% if mine %}<span class="up">{{ mine.positive }}</span> / <span class="down">{{ mine.negative }}</span>{% else %}–{% endif %}</div><div class="s mute">positive / negative mentions (rough word read)</div></div>
   <div class="card kpi"><div class="l">Questions</div><div class="v">{{ summ.questions|n }}</div><div class="s mute">{{ summ.pains|n }} pain points</div></div>
-  <div class="card kpi"><div class="l">Pulled</div><div class="v" style="font-size:18px">{{ summ.last.strftime('%d %b %Y') }}</div><div class="s mute">{{ summ.total|n }} posts and comments</div></div>
+  <div class="card kpi"><div class="l">Pulled</div><div class="v sm">{{ summ.last.strftime('%d %b %Y') }}</div><div class="s mute">{{ summ.total|n }} posts and comments</div></div>
 </div>
 <section class="card"><h2>Brand vs competitors</h2>
 <div class="tw"><table><tr><th>Brand</th><th class="r">Mentions</th><th style="width:28%">Share of voice</th><th class="r">Positive</th><th class="r">Negative</th><th class="r">Communities</th><th class="r">Upvotes</th></tr>
 {% for b in summ.brands %}<tr><td>{% if b.is_client %}<b>{{ client.name }} (you)</b>{% else %}{{ labels.get(b.brand, b.brand) }}{% endif %}</td><td class="r">{{ b.mentions|n }}</td>
-<td><div style="background:#F0F0F0;border-radius:6px;height:10px"><div style="width:{{ (b.share * 100)|round(1) }}%;height:10px;border-radius:6px;background:{{ '#B20F00' if b.is_client else '#000' }}"></div></div><span class="note">{{ b.share|pct }}</span></td>
+<td><div class="bar"><div style="width:{{ (b.share * 100)|round(1) }}%;height:8px;border-radius:3px;background:{{ '#B20F00' if b.is_client else '#0F0F0F' }}"></div></div><span class="note">{{ b.share|pct }}</span></td>
 <td class="r up">{{ b.positive|n }}</td><td class="r down">{{ b.negative|n }}</td><td class="r">{{ b.subreddits|n }}</td><td class="r">{{ b.upvotes|n }}</td></tr>{% endfor %}</table></div></section>
 
 <section class="card" style="display:flex;flex-direction:column;gap:12px">

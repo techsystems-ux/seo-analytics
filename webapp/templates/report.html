@@ -15,7 +15,7 @@
   <div class="card kpi"><div class="l">Google clicks</div><div class="v">{{ fmt.n(t.clicks) if t else '–' }}</div><div class="s mute">{{ ('vs ' ~ fmt.n(R.search.prev.clicks) ~ ' in ' ~ R.prev.strftime('%B')) if R.search.prev else 'no data for the month before' }}</div></div>
   <div class="card kpi"><div class="l">Keywords in the top 10</div><div class="v">{{ fmt.n(rk.top10) }}</div><div class="s mute">{{ ('vs ' ~ fmt.n(R.rank.prev.top10)) if R.rank.prev else '–' }}</div></div>
   <div class="card kpi"><div class="l">Organic sessions</div><div class="v">{{ fmt.n(g.sessions) if g else '–' }}</div><div class="s mute">{{ ('vs ' ~ fmt.n(R.traffic.prev.sessions)) if R.traffic.prev else 'no GA4 data for the month before' }}</div></div>
-  <div class="card kpi"><div class="l">Organic revenue</div><div class="v" style="font-size:24px">{{ fmt.inr(R.revenue.cur) }}</div><div class="s mute">{{ ('vs ' ~ fmt.inr(R.revenue.prev)) if R.revenue.prev is not none else '–' }}</div></div>
+  <div class="card kpi"><div class="l">Organic revenue</div><div class="v md">{{ fmt.inr(R.revenue.cur) }}</div><div class="s mute">{{ ('vs ' ~ fmt.inr(R.revenue.prev)) if R.revenue.prev is not none else '–' }}</div></div>
 </div>
 
 <section class="card" style="display:flex;flex-direction:column;gap:8px"><h2>Data for this month</h2>

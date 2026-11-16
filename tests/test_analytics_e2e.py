@@ -70,7 +70,7 @@ with connect() as conn:
     assert "2 non-branded keywords" in out and "2 competitors" in out and "2 untapped keywords vs 4 competitors" in out and "(260 units)" in out, out
     assert conn.execute("SELECT sum(units) FROM semrush_usage WHERE client_id=%s", [cid]).fetchone()[0] == 660
     assert conn.execute("SELECT tracked FROM competitors WHERE client_id=%s AND name='myntra.com'", [cid]).fetchone()[0] is False
-    stopped = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, max_units=100, session=FakeSemrush(), competitor_refresh_days=0)
+    stopped = semrush.sync_client(conn, cid, "KEY", n_keywords=2, n_competitors=2, n_gap=2, max_units=100, session=FakeSemrush(), today=dt.date(2026, 11, 9), competitor_refresh_days=0)
     assert "stopped" in stopped and "domain_domains could cost 160 units; 0 left" in stopped, stopped
     assert all("key=KEY" in u for u in fs.urls)
     kw_url = next(u for u in fs.urls if "type=domain_organic&" in u)          # non-branded only: brand words excluded

@@ -29,8 +29,30 @@ def client_or_404(conn, cid):
     if not r: abort(404)
     return {"id": str(r[0]), "name": r[1], "domain": r[2], "sample": r[3]}
 
+_INTEL = {}
+
+def intel_for(cid):
+    """Sidebar and top-bar facts for a brand (latest data date, what the tool reads), cached for ten minutes."""
+    import time
+    hit = _INTEL.get(cid)
+    if hit and time.time() - hit[0] < 600: return hit[1]
+    try:
+        with connect() as conn:
+            r = conn.execute("""SELECT (SELECT max(date) FROM gsc_search_daily WHERE client_id=%(c)s),
+                                       (SELECT count(DISTINCT query) FROM gsc_search_daily WHERE client_id=%(c)s
+                                          AND date > (SELECT max(date) - 7 FROM gsc_search_daily WHERE client_id=%(c)s)),
+                                       (SELECT count(*) FROM pages WHERE client_id=%(c)s),
+                                       (SELECT count(*) FROM prompts WHERE client_id=%(c)s AND approved)""", {"c": cid}).fetchone()
+        out = {"data_to": r[0], "queries": r[1] or 0, "pages": r[2] or 0, "prompts": r[3] or 0}
+    except Exception:
+        out = {"data_to": None, "queries": 0, "pages": 0, "prompts": 0}
+    _INTEL[cid] = (time.time(), out)
+    return out
+
 def view(tpl, client=None, active=None, **ctx):
-    return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES, **ctx)
+    info = intel_for(client["id"]) if client else None
+    return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES,
+                           intel=info, data_to=info["data_to"] if info else None, **ctx)
 
 # ------------------------------------------------------------------ formatting helpers for templates
 @bp.app_template_filter("n")
@@ -55,24 +77,30 @@ def fmt_path(url):
     for p in ("https://", "http://"): u = u.replace(p, "")
     return "/" + u.split("/", 1)[1] if "/" in u else "/"
 
-def line_chart(points, series, colors=("#B20F00", "#000000"), height=170, ymax=None):
-    """points = [{date, s1, s2}] -> inline SVG, no JavaScript. Labels the first, middle and last dates."""
+def line_chart(points, series, colors=("#B20F00", "#0F0F0F"), height=170, ymax=None):
+    """points = [{date, s1, s2}] -> inline SVG, no JavaScript. The lines stretch to the card's width while the axis
+    labels are HTML at a fixed size, so text never scales with the card. Labels the first, middle and last dates."""
     if len(points) < 2: return Markup('<p class="mute">Not enough data yet for a chart.</p>')
-    W, H, L, B = 640, height, 36, 22
+    W, H = 1000, height
     vals = [float(p[s] or 0) for p in points for s in series]
     top = ymax or (max(vals) or 1) * 1.1
-    x = lambda i: L + i * (W - L - 8) / (len(points) - 1)
-    y = lambda v: 8 + (H - B - 8) * (1 - float(v or 0) / top)
-    out = [f'<svg viewBox="0 0 {W} {H}" role="img" aria-label="Daily trend" style="width:100%;height:auto">']
+    x = lambda i: i * W / (len(points) - 1)
+    y = lambda v: 4 + (H - 8) * (1 - float(v or 0) / top)
+    svg = [f'<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Daily trend" '
+           f'style="display:block;width:100%;height:{H}px;overflow:visible">']
+    labels = []
     for f in (0, 0.5, 1):
-        yy = y(top * f); out.append(f'<line x1="{L}" x2="{W-8}" y1="{yy:.1f}" y2="{yy:.1f}" stroke="#ECECEC"/>'
-                                    f'<text x="{L-6}" y="{yy+4:.1f}" font-size="10" text-anchor="end" fill="#5A5A5A">{top*f:,.0f}</text>')
+        yy = y(top * f)
+        svg.append(f'<line x1="0" x2="{W}" y1="{yy:.1f}" y2="{yy:.1f}" stroke="#EFEDEA" vector-effect="non-scaling-stroke"/>')
+        labels.append(f'<span class="ya" style="top:{yy:.1f}px">{top*f:,.0f}</span>')
     for k, s in enumerate(series):
         d = " ".join(f'{"M" if i == 0 else "L"}{x(i):.1f},{y(p[s]):.1f}' for i, p in enumerate(points))
-        out.append(f'<path d="{d}" fill="none" stroke="{colors[k % len(colors)]}" stroke-width="2"/>')
-    for i, anchor in ((0, "start"), (len(points) // 2, "middle"), (len(points) - 1, "end")):
-        out.append(f'<text x="{x(i):.1f}" y="{H-6}" font-size="10" text-anchor="{anchor}" fill="#5A5A5A">{points[i]["date"].strftime("%d %b")}</text>')
-    return Markup("".join(out) + "</svg>")
+        svg.append(f'<path d="{d}" fill="none" stroke="{colors[k % len(colors)]}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>')
+    svg.append("</svg>")
+    xs = "".join(f'<span>{points[i]["date"].strftime("%d %b") if points[i].get("date") else ""}</span>'
+                 for i in (0, len(points) // 2, len(points) - 1))
+    return Markup(f'<div class="lc"><div class="lc-y">{"".join(labels)}</div><div class="lc-p">{"".join(svg)}'
+                  f'<div class="lc-x">{xs}</div></div></div>')
 
 # ------------------------------------------------------------------ screens
 @bp.get("/c")

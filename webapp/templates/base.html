@@ -2,87 +2,197 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{{ client.name if client else 'Clients' }}{% endblock %} · Hovers AI Search</title>
+<title>{% block title %}{{ client.name if client else 'Brands' }}{% endblock %} · Hovers AI Search</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-:root{--red:#B20F00;--ink:#000;--mute:#5A5A5A;--line:#E5E5E5;--soft:#F5F5F5}
-*{box-sizing:border-box}body{margin:0;background:var(--soft);color:var(--ink);font:14px/1.5 Montserrat,system-ui,Arial,sans-serif}
-a{color:var(--red)}a:hover{color:#8F0C00}
-.shell{display:flex;flex-wrap:wrap;min-height:100vh}
-nav.side{flex:1 1 220px;max-width:240px;background:#fff;border-right:1px solid var(--line);padding:24px 14px;display:flex;flex-direction:column;gap:18px}
-nav.side img{width:112px;margin:24px 8px 8px}
-.brandbox{padding:10px 12px;border:1px solid var(--line);border-radius:10px;display:flex;flex-direction:column}
-.brandbox b{font-size:14px}.brandbox span{font-size:12px;color:var(--mute)}
-.grp{display:flex;flex-direction:column;gap:2px}.grp .h{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);padding:4px 10px}
-.grp a{display:block;padding:9px 10px;border-radius:8px;text-decoration:none;color:var(--ink);font-weight:600;min-height:40px}
-.grp a.on{background:#000;color:#fff}.grp a:hover:not(.on){background:var(--soft)}
-main{flex:999 1 560px;min-width:0;padding:28px 32px 56px;max-width:1200px;display:flex;flex-direction:column;gap:18px}
-.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
-.kicker{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--red)}
-h1{margin:4px 0 0;font-size:28px;font-weight:800;line-height:1.15}h2{margin:0;font-size:16px;font-weight:800}
-.lead{margin:6px 0 0;color:var(--mute);max-width:720px}
-.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0}
-.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
-.grid2{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));align-items:start}
-.kpi .l{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute)}
-.kpi .v{font-size:30px;font-weight:800;line-height:1.15;margin:6px 0 2px}.kpi .s{font-size:12px}
-.up{color:#0A7A3D;font-weight:600}.down{color:var(--red);font-weight:600}.mute{color:var(--mute)}
-.seg{display:inline-flex;flex-wrap:wrap;border:1px solid #000;border-radius:999px;overflow:hidden}
-.seg a{padding:8px 14px;min-height:36px;font-weight:600;font-size:12px;text-decoration:none;color:#000;background:#fff}.seg a.on{background:#000;color:#fff}
-.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:10px;border-bottom:1px solid #F0F0F0;vertical-align:top}td.r,th.r{text-align:right}
-.tag{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
-.t-fail{background:var(--red);color:#fff}.t-warn{border:1px solid var(--red);color:var(--red)}.t-pass{background:#F0F0F0}.t-blk{background:#000;color:#fff}.t-na{color:var(--mute);border:1px solid var(--line)}
-.t-sev-error{background:var(--red);color:#fff}.t-sev-warning{border:1px solid var(--red);color:var(--red)}.t-sev-notice{background:#F0F0F0}
-tr.sel td{background:#FBF3F2}
-.samplebar{border:1px dashed var(--red);background:#FFF8F7;border-radius:10px;padding:10px 14px;font-size:13px}.btn[disabled]{opacity:.45;cursor:not-allowed}
-.btn{display:inline-flex;align-items:center;min-height:40px;padding:0 16px;border-radius:999px;border:0;font:600 13px Montserrat,sans-serif;cursor:pointer;text-decoration:none}
-.btn.red{background:var(--red);color:#fff}.btn.blk{background:#000;color:#fff}.btn.ln{background:#fff;color:#000;box-shadow:inset 0 0 0 1px #000}
-input[type=text],input[type=number],textarea,select{font:inherit;padding:8px 10px;border:1px solid #000;border-radius:8px;width:100%;background:#fff}
-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mute);display:block;margin:12px 0 6px}
-.msg{background:#000;color:#fff;border-radius:10px;padding:12px 16px}
-.bar{height:8px;background:#F0F0F0;border-radius:999px;overflow:hidden}.bar i{display:block;height:100%;background:var(--red)}
-.empty{padding:24px;text-align:center;color:var(--mute)}
-.note{font-size:12px;color:var(--mute)}
-@media (max-width:700px){main{padding:20px 16px 40px}nav.side{max-width:none}}
+/* Hovers dashboard design system (same as the Zoomies growth plan): ink on white, one red, hairlines, Montserrat labels,
+   Inter text, JetBrains Mono numbers. Class names are the app's own; the look is the shared system. */
+:root{--ink:#0F0F0F;--red:#B20F00;--grey:#6E6E6E;--mid:#A9A9A9;--surface:#F5F5F5;--tint:#FBEDEE;--hair:#E4E1DE;--row:#EFEDEA;--chart:#EEECE9;
+  --fh:'Montserrat',Arial,sans-serif;--fb:'Inter',Calibri,Arial,sans-serif;--fn:'JetBrains Mono','Courier New',monospace;
+  /* old names, kept so every screen picks up the new palette */--mute:var(--grey);--line:var(--hair);--soft:var(--surface)}
+*{box-sizing:border-box}
+html,body{margin:0;background:#fff}
+body{color:var(--ink);font:14px/1.5 var(--fb);color-scheme:light}
+a{color:var(--ink);text-decoration:underline;text-decoration-color:#CFCCC8;text-underline-offset:2px}a:hover{color:var(--red);text-decoration-color:var(--red)}
+b,strong{font-weight:600}
+
+/* ---------- frame: 240px sidebar, sticky top bar, centred body ---------- */
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh}
+nav.side{background:#fff;border-right:1px solid var(--hair);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:26px 16px 20px;overflow:auto}
+.client{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--hair);border-radius:6px;margin-bottom:18px;text-decoration:none;color:var(--ink)}
+.client:hover{border-color:var(--ink);color:var(--ink)}
+.client b{display:block;font:700 13px var(--fh)}.client .s{display:block;font-size:11px;color:var(--grey);line-height:1.35}
+.bm{width:34px;height:34px;border-radius:50%;border:1px solid var(--hair);background:#fff;display:inline-grid;place-items:center;overflow:hidden;flex:0 0 auto;position:relative}
+.bm img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}.bm span{font:700 12px var(--fh);color:var(--grey)}
+.bm.hv{background:var(--ink);border-color:var(--ink)}.bm.hv span{color:#fff;font-size:13px}
+.ng{font:700 10px var(--fh);letter-spacing:.16em;text-transform:uppercase;color:var(--mid);margin:14px 12px 4px}
+.tab{display:flex;align-items:center;gap:11px;width:100%;border-left:2px solid transparent;border-radius:0 4px 4px 0;padding:8px 12px;color:var(--grey);font:600 13px var(--fh);text-decoration:none}
+.tab svg{width:17px;height:17px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.tab:hover{background:var(--surface);color:var(--ink)}
+.tab.on{background:var(--surface);color:var(--ink);border-left-color:var(--ink);font-weight:700}
+.intel{margin-top:auto;border-top:1px solid var(--hair);padding:16px 10px 0;font-size:11.5px;color:var(--grey);line-height:1.6}
+.intel .t{font:700 10px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.intel b{color:var(--ink);font-family:var(--fn);font-weight:700}.intel a{color:var(--grey)}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--ink);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.25}}@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+.mainwrap{min-width:0}
+.topbar{height:60px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 32px;background:#fff;border-bottom:1px solid var(--hair);position:sticky;top:0;z-index:5}
+.crumb{font:600 13px var(--fh);color:var(--grey)}.crumb b{color:var(--ink);font-weight:600}.crumb a{color:var(--grey);text-decoration:none}
+.meta{display:flex;gap:8px;align-items:center}
+.chip{border:1px solid var(--hair);border-radius:3px;padding:5px 10px;background:#fff;white-space:nowrap;font:500 11px var(--fn);color:var(--grey)}
+main{padding:32px 32px 40px;max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.foot{margin-top:12px;padding-top:14px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;align-items:center;font:600 10.5px var(--fh);letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
+.foot .dots{width:48px;height:12px;background-image:radial-gradient(var(--mid) 1.2px,transparent 1.4px);background-size:6px 6px}
+
+/* ---------- page heading: eyebrow, rule, title, lead ---------- */
+main>.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;position:relative;margin-bottom:8px}
+main>.top:not(:has(>form,>a,>button))::before{content:"";position:absolute;right:0;top:0;width:120px;height:60px;background-image:radial-gradient(var(--hair) 1.3px,transparent 1.5px);background-size:10px 10px}
+.kicker{display:block;font:700 10.5px var(--fh);letter-spacing:.18em;text-transform:uppercase;color:var(--grey)}
+.kicker::after{content:"";display:block;width:28px;height:2px;background:var(--ink);margin-top:10px}
+h1{font:700 1.75rem/1.12 var(--fh);margin:14px 0 6px;letter-spacing:-.015em}h1 em{font-style:normal;color:var(--red)}
+.lead{margin:0;color:var(--grey);max-width:70ch;line-height:1.5}
+h2{font:700 14.5px var(--fh);margin:0;letter-spacing:-.005em}h3{font:700 13.5px var(--fh);margin:0}
+
+/* ---------- cards and grids ---------- */
+.card{background:#fff;border:1px solid var(--hair);border-radius:6px;padding:20px 22px;min-width:0}
+.card .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.grid2{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));align-items:stretch}
+.kpi .l{font:700 10.5px var(--fh);letter-spacing:.12em;text-transform:uppercase;color:var(--grey)}
+.kpi .v{font:700 1.9rem/1.1 var(--fn);letter-spacing:-.02em;margin:12px 0 6px;color:var(--ink);overflow-wrap:anywhere}
+.kpi .v.md{font-size:1.45rem}.kpi .v.sm{font-size:1.15rem;line-height:1.35}
+.kpi .s{font-size:12px;color:var(--grey);line-height:1.45}
+.kpi.hero .v{color:var(--red)}
+.up{color:var(--ink);font-weight:600}.down{color:var(--red);font-weight:600}.mute{color:var(--grey)}
+.note{font-size:12px;color:var(--grey);line-height:1.5}
+.empty{color:var(--grey);font-size:12.5px;padding:12px 0;margin:0}
+.msg{background:#fff;border:1px solid var(--hair);border-left:3px solid var(--ink);border-radius:6px;padding:12px 16px;font-size:13px}
+.samplebar{background:var(--tint);border:1px solid rgba(178,15,0,.35);border-left:3px solid var(--red);border-radius:6px;padding:12px 16px;font-size:13px}
+.samplebar b{color:var(--red)}
+
+/* ---------- segmented switch ---------- */
+.seg{display:inline-flex;align-self:flex-start;width:max-content;max-width:100%;flex-wrap:wrap;border:1px solid var(--hair);border-radius:999px;padding:3px;background:#fff;gap:2px}
+.seg a{font:600 12px var(--fh);border-radius:999px;padding:6px 12px;color:var(--grey);text-decoration:none;white-space:nowrap}
+.seg a:hover{color:var(--ink)}
+.lc{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:start;margin-top:4px}
+.lc-y{position:relative;height:100%;min-width:34px}.lc-y .ya{position:absolute;right:0;transform:translateY(-50%);font:500 10.5px var(--fn);color:var(--grey);white-space:nowrap}
+.lc-p{min-width:0}.lc-x{display:flex;justify-content:space-between;margin-top:6px;font:500 10.5px var(--fn);color:var(--grey)}
+td.nw,th.nw{white-space:nowrap}
+.seg a.on{background:var(--ink);color:#fff}
+
+/* ---------- tables ---------- */
+.tw{overflow:auto;max-width:100%}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;font:600 11px var(--fh);letter-spacing:.04em;color:var(--grey);padding:8px 10px;border-bottom:1px solid var(--hair);background:#fff;white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--row);vertical-align:middle}
+td.r,th.r{text-align:right}td.r{font-family:var(--fn);font-size:12px;white-space:nowrap}
+tbody tr:hover td,table tr:hover td{background:var(--surface)}
+tr.sel td{background:var(--surface)}tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--red)}
+
+/* ---------- pills ---------- */
+.tag{display:inline-block;padding:1px 8px;border-radius:3px;font:500 11px var(--fn);border:1px solid var(--hair);white-space:nowrap;color:var(--ink);background:#fff;text-decoration:none;line-height:1.6}
+a.tag:hover{border-color:var(--ink);color:var(--ink)}
+.t-pass{color:var(--ink)}
+.t-blk{background:var(--ink);color:#fff;border-color:var(--ink)}a.t-blk:hover{color:#fff}
+.t-fail,.t-sev-error{color:var(--red);border-color:rgba(178,15,0,.4);background:var(--tint)}
+.t-warn,.t-sev-warning{color:var(--red);border-color:rgba(178,15,0,.4)}
+.t-na,.t-sev-notice{color:var(--grey);background:var(--surface)}
+
+/* ---------- buttons and fields ---------- */
+.btn{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:3px;padding:8px 14px;font:600 12.5px var(--fh);cursor:pointer;text-decoration:none;white-space:nowrap;line-height:1.3}
+.btn:hover{background:var(--ink);color:#fff}
+.btn.red,.btn.blk{background:var(--ink);color:#fff}.btn.red:hover,.btn.blk:hover{background:#333;border-color:#333;color:#fff}
+.btn.ln{background:#fff;color:var(--ink)}.btn.ln:hover{background:var(--ink);color:#fff}
+td .btn{padding:5px 10px;font-size:12px}
+.split{display:grid;gap:16px;grid-template-columns:minmax(0,2fr) minmax(0,3fr);align-items:start}@media (max-width:1100px){.split{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){.btn{white-space:normal;text-align:center}}
+.btn[disabled],.btn[disabled]:hover{opacity:.4;cursor:not-allowed;background:#fff;color:var(--ink)}
+.btn.red[disabled],.btn.blk[disabled]{background:var(--ink);color:#fff}
+input[type=text],input[type=number],input[type=email],input[type=url],input[type=date],textarea,select{font:400 13px var(--fb);color:var(--ink);padding:8px 10px;border:1px solid var(--hair);border-radius:3px;width:100%;background:#fff}
+select{font:600 12.5px var(--fh);padding:7px 10px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--ink)}
+textarea{line-height:1.5;resize:vertical}
+input[type=file]{font:400 12.5px var(--fb)}
+label{display:block;font-size:12px;color:var(--grey);margin:12px 0 6px}
+details summary{cursor:pointer}
+
+/* ---------- bars ---------- */
+.bar{height:8px;background:var(--chart);border-radius:2px;overflow:hidden;margin-bottom:4px}.bar i{display:block;height:100%;background:var(--ink)}.bar.us i{background:var(--red)}
+
+/* svg charts drawn by the server */
+svg text{font-family:var(--fb)}
+
+@media (max-width:820px){.shell{grid-template-columns:1fr}nav.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--hair)}.intel{display:none}
+  main{padding:24px 18px}.topbar{padding:0 18px}.meta .chip:first-child{display:none}.grid2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+{% set I = {
+ 'overview':'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+ 'search':'<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
+ 'ai':'<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+ 'competitors':'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0121.5 19"/>',
+ 'r_keyword':'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+ 'r_domain':'<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18a14 14 0 010-18"/>',
+ 'r_backlinks':'<path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1"/>',
+ 'r_paid':'<path d="M3 11v2a1 1 0 001 1h2l5 4V6L6 10H4a1 1 0 00-1 1z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/>',
+ 'reddit':'<path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z"/><path d="M8.5 13.5c1.8 1.4 5.2 1.4 7 0"/>',
+ 'youtube':'<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/>',
+ 'report':'<path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8z"/><path d="M14 3v5h5"/><path d="M9 17v-3M12 17v-6M15 17v-2"/>',
+ 'pages':'<rect x="4" y="3" width="16" height="18" rx="1"/><path d="M8 8h8M8 12h8M8 16h5"/>',
+ 'technical':'<path d="M14.7 6.3a4 4 0 015 5L12 19l-4 1 1-4z"/><path d="M3 21l3-3"/>',
+ 'ideas':'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.4.3.5.7.5 1.1v1h6v-1c0-.4.2-.8.5-1.1A6 6 0 0012 3z"/>',
+ 'settings':'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+ 'brands':'<path d="M3 9l9-6 9 6v11a1 1 0 01-1 1H4a1 1 0 01-1-1z"/><path d="M9 21v-7h6v7"/>'} %}
+{% macro navlink(key, label, href) %}<a class="tab{{ ' on' if active==key }}" href="{{ href }}"{{ ' aria-current="page"' if active==key }}><svg viewBox="0 0 24 24" aria-hidden="true">{{ I[key]|safe }}</svg>{{ label }}</a>{% endmacro %}
 <div class="shell">
 <nav class="side" aria-label="Main menu">
-  <a href="{{ url_for('dash.clients') }}"><img src="{{ url_for('static', filename='hovers-logo.svg') }}" alt="Hovers"></a>
   {% if client %}
-  <div class="brandbox"><b>{{ client.name }}</b><span>{{ client.domain }}</span><a href="{{ url_for('dash.clients') }}" style="font-size:12px;margin-top:4px">Switch brand</a></div>
-  <div class="grp"><a class="{{ 'on' if active=='overview' }}" href="{{ url_for('dash.overview', cid=client.id) }}">Overview</a></div>
-  <div class="grp"><span class="h">Analytics</span>
-    <a class="{{ 'on' if active=='search' }}" href="{{ url_for('dash.search', cid=client.id) }}">Search performance</a>
-    <a class="{{ 'on' if active=='ai' }}" href="{{ url_for('dash.ai', cid=client.id) }}">AI visibility</a>
-    <a class="{{ 'on' if active=='competitors' }}" href="{{ url_for('dash.competitors', cid=client.id) }}">Competitors</a></div>
-  <div class="grp"><span class="h">Research</span>
-    <a class="{{ 'on' if active=='r_keyword' }}" href="{{ url_for('dash.research', cid=client.id, tool='keyword') }}">Keyword research</a>
-    <a class="{{ 'on' if active=='r_domain' }}" href="{{ url_for('dash.research', cid=client.id, tool='domain') }}">Domain research</a>
-    <a class="{{ 'on' if active=='r_backlinks' }}" href="{{ url_for('dash.research', cid=client.id, tool='backlinks') }}">Backlink analytics</a>
-    <a class="{{ 'on' if active=='r_paid' }}" href="{{ url_for('dash.research', cid=client.id, tool='paid') }}">Paid and shopping</a></div>
-  <div class="grp"><span class="h">Community</span>
-    <a class="{{ 'on' if active=='reddit' }}" href="{{ url_for('dash.reddit_view', cid=client.id) }}">Reddit</a>
-    <a class="{{ 'on' if active=='youtube' }}" href="{{ url_for('dash.youtube_view', cid=client.id) }}">YouTube</a></div>
-  <div class="grp"><span class="h">Reports</span>
-    <a class="{{ 'on' if active=='report' }}" href="{{ url_for('dash.monthly_report', cid=client.id) }}">Monthly report</a></div>
-  <div class="grp"><span class="h">Work</span>
-    <a class="{{ 'on' if active=='pages' }}" href="{{ url_for('dash.pages', cid=client.id) }}">Pages</a>
-    <a class="{{ 'on' if active=='technical' }}" href="{{ url_for('dash.technical', cid=client.id) }}">Technical</a>
-    <a class="{{ 'on' if active=='ideas' }}" href="{{ url_for('dash.ideas', cid=client.id) }}">Content ideas</a></div>
-  <div class="grp"><a class="{{ 'on' if active=='settings' }}" href="{{ url_for('dash.settings', cid=client.id) }}">Settings</a></div>
+  <a class="client" href="{{ url_for('dash.clients') }}" title="Switch brand">
+    <span class="bm"><span>{{ client.name[:1] }}</span><img src="https://www.google.com/s2/favicons?domain={{ client.domain }}&sz=128" alt="" onerror="this.remove()"></span>
+    <span><b>{{ client.name }}</b><span class="s">{{ client.domain }} · Switch brand</span></span></a>
+  {{ navlink('overview', 'Overview', url_for('dash.overview', cid=client.id)) }}
+  <div class="ng">Analytics</div>
+  {{ navlink('search', 'Search performance', url_for('dash.search', cid=client.id)) }}
+  {{ navlink('ai', 'AI visibility', url_for('dash.ai', cid=client.id)) }}
+  {{ navlink('competitors', 'Competitors', url_for('dash.competitors', cid=client.id)) }}
+  <div class="ng">Research</div>
+  {{ navlink('r_keyword', 'Keyword research', url_for('dash.research', cid=client.id, tool='keyword')) }}
+  {{ navlink('r_domain', 'Domain research', url_for('dash.research', cid=client.id, tool='domain')) }}
+  {{ navlink('r_backlinks', 'Backlink analytics', url_for('dash.research', cid=client.id, tool='backlinks')) }}
+  {{ navlink('r_paid', 'Paid and shopping', url_for('dash.research', cid=client.id, tool='paid')) }}
+  <div class="ng">Community</div>
+  {{ navlink('reddit', 'Reddit', url_for('dash.reddit_view', cid=client.id)) }}
+  {{ navlink('youtube', 'YouTube', url_for('dash.youtube_view', cid=client.id)) }}
+  <div class="ng">Work</div>
+  {{ navlink('pages', 'Pages', url_for('dash.pages', cid=client.id)) }}
+  {{ navlink('technical', 'Technical', url_for('dash.technical', cid=client.id)) }}
+  {{ navlink('ideas', 'Content ideas', url_for('dash.ideas', cid=client.id)) }}
+  <div class="ng">Reports</div>
+  {{ navlink('report', 'Monthly report', url_for('dash.monthly_report', cid=client.id)) }}
+  <div class="ng">Setup</div>
+  {{ navlink('settings', 'Settings', url_for('dash.settings', cid=client.id)) }}
+  {% else %}
+  <a class="client" href="{{ url_for('dash.clients') }}"><span class="bm hv"><span>H</span></span><span><b>Hovers</b><span class="s">AI search intelligence</span></span></a>
+  {{ navlink('brands', 'Brands', url_for('dash.clients')) }}
   {% endif %}
-  <div style="margin-top:auto;font-size:12px" class="mute">{{ staff }}<br><a href="{{ url_for('connections') }}">Google connections</a></div>
+  <div class="intel"><div class="t"><span class="pulse"></span>Intelligence layer</div>
+    {% if client and intel %}Reading <b>{{ intel.queries|n }}</b> searches and <b>{{ intel.pages|n }}</b> pages{% if intel.prompts %}, <b>{{ intel.prompts }}</b> ChatGPT prompts{% endif %}, refreshed every night.{% else %}Search Console, GA4, ChatGPT, Semrush, Reddit and YouTube in one place.{% endif %}
+    <div style="margin-top:8px">{{ staff }} · <a href="{{ url_for('connections') }}">Google connections</a></div></div>
 </nav>
+<div class="mainwrap">
+<header class="topbar">
+  <div class="crumb"><a href="{{ url_for('dash.clients') }}">Hovers</a> <span>/</span> <b>{{ client.name ~ ' · SEO and AI search' if client else 'Brands' }}</b></div>
+  <div class="meta">{% if client %}<span class="chip">{{ client.domain }}</span>{% if data_to %}<span class="chip">Data to {{ data_to.strftime('%d %b %Y') }}</span>{% endif %}{% endif %}</div>
+</header>
 <main>
-{% if request.args.get('msg') %}<div class="msg">{{ request.args.get('msg') }}</div>{% endif %}
-{% if client and client.sample and active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_') %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
+{% if request.args.get('msg') %}<div class="msg" role="status">{{ request.args.get('msg') }}</div>{% endif %}
+{% if client and client.sample and (active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_')) %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush, Reddit and YouTube sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
 {% block body %}{% endblock %}
+<footer class="foot"><span>Hovers® — {{ client.name ~ ' · ' if client }}SEO and AI search</span><span class="dots" aria-hidden="true"></span><span>Confidential</span></footer>
 </main>
+</div>
 </div>
 </body>
 </html>
