@@ -80,7 +80,7 @@ def existing_clients(conn):
 
 # ---------------------------------------------------------------- pages
 BASE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ title }} | Hovers AI Search</title>
+<title>{{ title }} · Orbit by Hovers</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&family=Montserrat:wght@600;700&display=swap" rel="stylesheet"><style>
 :root{--ink:#0F0F0F;--red:#B20F00;--grey:#6E6E6E;--mid:#A9A9A9;--surface:#F5F5F5;--tint:#FBEDEE;--hair:#E4E1DE;
@@ -106,10 +106,10 @@ input[type=text],select{font:inherit;padding:8px 10px;border:1px solid var(--hai
 .foot{margin-top:24px;padding-top:18px;border-top:1px solid var(--hair);display:flex;justify-content:space-between;font:700 10.5px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--grey)}
 @media (max-width:700px){.bar0,.wrap{padding-left:16px;padding-right:16px}.bar0 .chip{display:none}}
 </style></head><body>
-<header class="bar0"><span class="crumb">Hovers / <b>{{ title }}</b>{% if staff %} · <a href="/c">Brands</a>{% endif %}</span>
+<header class="bar0"><span class="crumb">Orbit / <b>{{ title }}</b>{% if staff %} · <a href="/c">Brands</a>{% endif %}</span>
 {% if staff %}<form class="who" method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><span class="chip">{{ staff }}</span><button class="btn ln">Sign out</button></form>{% else %}<span class="chip">Read-only Google access</span>{% endif %}</header>
-<div class="wrap"><span class="kicker">Hovers AI Search · Setup</span>
-{{ body|safe }}<footer class="foot"><span>Hovers® — AI Search</span><span>Confidential</span></footer></div></body></html>"""
+<div class="wrap"><span class="kicker">Orbit · Setup</span>
+{{ body|safe }}<footer class="foot"><span>Orbit · by Hovers®</span><span>Confidential</span></footer></div></body></html>"""
 
 def page(title, body_tpl, **ctx):
     body = render_template_string(body_tpl, csrf=csrf_token(), **ctx)
@@ -119,10 +119,8 @@ def page(title, body_tpl, **ctx):
 def home():
     if not staff() and session.get("viewer_email"): return redirect(url_for("portal.home"))
     if not staff():
-        return page("Sign in", """<h1>Connect Google</h1>
-<p class="m">Sign in with the Google account that has access to your clients' Search Console and Google Analytics. We will list every site and property it can see, and you choose which to import as clients.</p>
-{% if err %}<p class="err">{{ err }}</p>{% endif %}<a class="btn red" href="{{ url_for('auth_start') }}">Sign in with Google</a>
-<p class="m">Read-only access. We never change anything in Search Console or Analytics.</p>""", err=request.args.get("err"))
+        import portal
+        return portal.login_page("client" if request.args.get("as") == "client" else "team", err=request.args.get("err"))
     return redirect(url_for("dash.clients"))
 
 @app.get("/connections")

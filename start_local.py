@@ -157,7 +157,7 @@ def main():
     sys.path.insert(0, os.path.join(HERE, "webapp"))
     from app import app
     threading.Timer(2, lambda: webbrowser.open("http://localhost:8080")).start()
-    print("\nHovers AI Search is running at http://localhost:8080  (leave this window open; close it to stop)\n")
+    print("\nOrbit is running at http://localhost:8080  (leave this window open; close it to stop)\n")
     app.run(host="127.0.0.1", port=8080, threaded=True)
 
 if __name__ == "__main__":

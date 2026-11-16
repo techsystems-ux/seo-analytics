@@ -33,9 +33,9 @@ def _setup_pending(missing):
     @pending.route("/<path:path>")
     def page(path):
         items = "".join(f"<li><code>{k}</code></li>" for k in missing)
-        return (f"<!doctype html><meta name=viewport content='width=device-width'><title>Setup | Hovers AI Search</title>"
+        return (f"<!doctype html><meta name=viewport content='width=device-width'><title>Setup · Orbit by Hovers</title>"
                 f"<body style='font:15px/1.6 Arial;max-width:640px;margin:60px auto;padding:0 16px;color:#0F0F0F'>"
-                f"<p style='letter-spacing:.18em;font-size:11px;color:#6E6E6E'>HOVERS AI SEARCH · SETUP</p><h1>Almost there</h1>"
+                f"<p style='letter-spacing:.18em;font-size:11px;color:#6E6E6E'>ORBIT · SETUP</p><h1>Almost there</h1>"
                 f"<p>Add these in Vercel, Project Settings, Environment Variables, then redeploy:</p><ul>{items}</ul></body>", 503)
     return pending
 

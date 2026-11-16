@@ -1,4 +1,26 @@
-# AEO platform: free-API collectors (no n8n needed)
+# Orbit by Hovers
+
+Search intelligence across Google and AI answers. For each brand Orbit reads Search Console, GA4, ChatGPT answers,
+Semrush, Reddit and YouTube, and turns them into one view (Overview, Search performance, AI visibility, Competitors,
+Reddit, YouTube, Pages, Technical, Content ideas) and a monthly PowerPoint report. Hovers staff sign in with hovers.in
+Google accounts; clients can be given a read-only view of their own brand.
+
+## Quick map of the code
+
+| Folder / file | What it is |
+|---|---|
+| `webapp/` | Flask app: `app.py` (sign-in, Google connections), `dashboard.py` (all screens), `portal.py` (client sign-in), `analytics.py` (queries), `report.py` (monthly deck), `templates/` (Jinja screens; `login.html` is the sign-in page, `base.html` the app shell) |
+| `collectors/` | Data pulls: `gsc.py`, `ga4.py`, `rank.py`, `ai_visibility.py` (ChatGPT), `semrush*.py`, `reddit.py` (Apify), `youtube.py`, `community.py`; `daily.py` runs them all with credit caps |
+| `seo/` | Site crawler, page checks, sitemap and keyword mapping |
+| `db/` | Postgres schema and numbered migrations (row-level security keeps each brand's data separate) |
+| `scripts/` | Brand setup from `seeds/`, sample data, `copy_to_cloud.py` |
+| `api/index.py`, `vercel.json`, `pyproject.toml` | The online copy on Vercel (Singapore), database on Neon |
+| `start_local.py` | Runs everything on a Mac: private Postgres or the online database, the web app, and the daily pull |
+| `tests/` | End-to-end and unit tests (`python tests/<file>.py`, need a Postgres) |
+
+Keys are never in this repository. Locally they live in `.env`; online in Vercel's environment variables.
+
+## Original notes: free-API collectors
 
 Plain Python scripts. Schedule with cron; n8n can call them later if you want it, but doesn't have to.
 
