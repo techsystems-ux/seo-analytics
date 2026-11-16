@@ -52,21 +52,27 @@ New sites added to the Google account later: open the connect page and press **R
     python tests/test_gsc_ga4.py
     python tests/test_pagespeed.py
 
-## Run it on a server (Render)
+## Run it online (Render free plan + Neon)
 
-The repo carries a Render Blueprint (`render.yaml`): the web app, a nightly data pull and a Postgres database, in Singapore.
+The repo carries a Render Blueprint (`render.yaml`) for one free web service in Singapore. The database is Neon (free, does not
+expire; Render's free database is deleted after 30 days). Keys never go in this repo: Render asks for them when the Blueprint is created.
 
-1. On render.com: New, Blueprint, pick this repository. Render creates the database, the web service and the nightly job.
-2. In the Render dashboard, open the environment group **hovers-secrets** and add:
-   `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `OPENAI_API_KEY`, `SEMRUSH_API_KEY`. Keys never go in this repo.
-3. In Google Cloud, on the same OAuth client, add `https://<your-service>.onrender.com/auth/google/callback` as an authorised redirect URI.
-4. Open the web address, sign in with a hovers.in Google account, connect Google, and import the brand. Gargi (gargi.shop)
-   is already set up from `seeds/gargi.json` with draft prompts: approve them in Settings, Prompts.
+1. **Database.** Create a Neon Postgres database in Singapore (neon.tech, or Vercel, Storage, Neon). Copy its connection string.
+2. **Copy the Mac's data.** In the Mac's `.env` add `CLOUD_DATABASE_URL=<that string>`, then double-click
+   *Copy data to cloud.command*. Brands, Search Console and GA4 history, prompts, work logs and Semrush usage are copied, so the
+   credit cap keeps counting online. The Mac's data is only read.
+3. **Web service.** render.com, New, Blueprint, pick this repository. Fill in `DATABASE_URL` (the Neon string), the Google
+   client ID and secret, `TOKEN_KEY` (the Mac's value, so copied Google sign-ins keep working) and any API keys. Leave
+   `OAUTH_REDIRECT_URI` as `https://<service>.onrender.com/auth/google/callback`.
+4. **Google.** On the same OAuth client in Google Cloud, add that address as an authorised redirect URI.
+5. **Nightly pull.** In GitHub, Settings, Secrets and variables, Actions, add `APP_URL` (the Render address) and `CRON_TOKEN`
+   (the value Render generated). `.github/workflows/nightly.yml` starts the pull at 03:10 IST and keeps the server awake until it ends.
+   The token can only start the pull and ask if it is running.
 
-Every deploy runs `scripts/migrate.py` first (new tables, then seed files). The nightly job (`collectors/daily.py`, 03:10 IST)
-pulls Search Console, GA4 and ChatGPT for every brand and checks pages on Mondays.
+Each start runs `scripts/migrate.py` first (new tables, then seed files). Free plan: the service sleeps after 15 minutes without
+visits and takes about a minute to wake; a pull started from a screen keeps it awake until the pull finishes.
 
-**Semrush credit limit.** `SEMRUSH_TOTAL_CAP` (default 500) is a lifetime limit on Semrush units across all brands and pulls,
+**Semrush credit limit.** `SEMRUSH_TOTAL_CAP` (600 online) is a lifetime limit on Semrush units across all brands and pulls,
 counted from `semrush_usage`, including the 400 units used to build Gargi's seed data. A call that could pass the limit is never made.
 Semrush never runs on the schedule (unless `SEMRUSH_AUTO=1`); it runs only from Settings, Data.
 

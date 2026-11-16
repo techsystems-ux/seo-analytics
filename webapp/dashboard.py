@@ -420,8 +420,37 @@ def start_job(cid, only, max_units=None, seeds="", research=""):
     out = open(os.path.join(logdir, "jobs.log"), "a")
     out.write(f"\n=== {dt.datetime.now():%Y-%m-%d %H:%M:%S} {only} for {cid}\n"); out.flush()
     extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else [])
-    subprocess.Popen([sys.executable, os.path.join(HERE, "..", "collectors", "daily.py"), "--client-id", cid, "--only", only, "--force-weekly"] + extra,
-                     stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+    run_daily(["--client-id", cid, "--only", only, "--force-weekly"] + extra, out)
+
+JOBS = []          # background pulls started by this server process
+
+def jobs_running():
+    JOBS[:] = [p for p in JOBS if p.poll() is None]
+    return len(JOBS)
+
+def run_daily(args, out=None):
+    """Start collectors/daily.py in the background. On a host that sleeps when idle (Render's free plan), the server
+    pings its own public address every 4 minutes while a pull runs, so the pull is not cut off half way."""
+    if out is None:
+        logdir = os.path.join(HERE, "..", "logs"); os.makedirs(logdir, exist_ok=True)
+        out = open(os.path.join(logdir, "jobs.log"), "a")
+    JOBS.append(subprocess.Popen([sys.executable, os.path.join(HERE, "..", "collectors", "daily.py")] + args,
+                                 stdout=out, stderr=subprocess.STDOUT, start_new_session=True))
+    _keep_awake()
+
+_AWAKE = {"on": False}
+def _keep_awake():
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url or _AWAKE["on"]: return
+    import threading, time, urllib.request
+    def loop():
+        try:
+            while jobs_running():
+                time.sleep(240)
+                try: urllib.request.urlopen(url.rstrip("/") + "/healthz", timeout=20).read()
+                except Exception: pass
+        finally: _AWAKE["on"] = False
+    _AWAKE["on"] = True; threading.Thread(target=loop, daemon=True).start()
 
 
 # ------------------------------------------------------------------ Research (Semrush lookups)

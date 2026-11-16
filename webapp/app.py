@@ -20,6 +20,27 @@ app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True,
 @app.get("/healthz")
 def healthz():
     return "ok"
+
+def _cron_ok():
+    """The nightly trigger (GitHub Actions) sends CRON_TOKEN as a bearer token. Without CRON_TOKEN set, these are off."""
+    tok = os.environ.get("CRON_TOKEN", "")
+    got = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    return bool(tok) and secrets.compare_digest(tok, got)
+
+@app.post("/cron/daily")
+def cron_daily():
+    """Starts the nightly pull for every brand, unless one is already running. Same caps as a pull from the screen."""
+    if not _cron_ok(): abort(403)
+    import dashboard
+    if dashboard.jobs_running(): return {"started": False, "running": True}
+    dashboard.run_daily([])
+    return {"started": True, "running": True}
+
+@app.get("/cron/status")
+def cron_status():
+    if not _cron_ok(): abort(403)
+    import dashboard
+    return {"running": bool(dashboard.jobs_running())}
 ALLOWED = [d.strip().lower() for d in os.environ.get("ALLOWED_EMAIL_DOMAINS", "").split(",") if d.strip()]
 
 # ---------------------------------------------------------------- helpers

@@ -10,4 +10,5 @@ COPY seeds ./seeds
 COPY start_local.py ./
 ENV PYTHONUNBUFFERED=1 PORT=8080
 EXPOSE 8080
-CMD gunicorn --chdir webapp --workers 2 --timeout 120 --bind 0.0.0.0:${PORT} app:app
+# Migrations run at start (Render's free plan has no pre-deploy step). One worker, so the server can see the pulls it started.
+CMD python scripts/migrate.py && exec gunicorn --chdir webapp --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:${PORT} app:app

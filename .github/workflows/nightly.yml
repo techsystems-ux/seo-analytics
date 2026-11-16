@@ -1,0 +1,29 @@
+# Starts the nightly data pull on the Render server at 03:10 India time and keeps the free server awake until it ends.
+# Needs two repository secrets (Settings > Secrets and variables > Actions):
+#   APP_URL     the Render address, e.g. https://hovers-ai-search.onrender.com
+#   CRON_TOKEN  the CRON_TOKEN value Render generated (Render > hovers-ai-search > Environment)
+# CRON_TOKEN only lets a caller start the nightly pull and ask whether it is running. It cannot read any data.
+name: Nightly data pull
+on:
+  schedule:
+    - cron: "40 21 * * *"
+  workflow_dispatch: {}
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Wake the server and start the pull
+        env: {APP_URL: "${{ secrets.APP_URL }}", CRON_TOKEN: "${{ secrets.CRON_TOKEN }}"}
+        run: |
+          for i in 1 2 3 4 5 6; do curl -fsS -m 90 "$APP_URL/healthz" && break || sleep 20; done
+          curl -fsS -m 60 -X POST -H "Authorization: Bearer $CRON_TOKEN" "$APP_URL/cron/daily"; echo
+      - name: Keep it awake until the pull finishes
+        env: {APP_URL: "${{ secrets.APP_URL }}", CRON_TOKEN: "${{ secrets.CRON_TOKEN }}"}
+        run: |
+          for i in $(seq 1 110); do
+            sleep 60
+            s=$(curl -fsS -m 30 -H "Authorization: Bearer $CRON_TOKEN" "$APP_URL/cron/status" || echo '{"running":true}')
+            echo "$(date -u +%H:%M) $s"
+            echo "$s" | grep -q '"running":false' && exit 0
+          done

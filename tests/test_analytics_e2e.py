@@ -301,3 +301,22 @@ with psycopg.connect(owner, autocommit=True) as c:                              
               "research_lookups", "reddit_items", "youtube_videos", "monthly_reports"):
         assert c.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0, t
 print("tenant isolation holds for the new tables")
+
+# nightly trigger for the free cloud host: off without CRON_TOKEN, refuses a wrong token, starts one pull at a time
+import dashboard
+assert cl.post("/cron/daily").status_code == 403
+os.environ["CRON_TOKEN"] = "night-token"
+assert cl.post("/cron/daily", headers={"Authorization": "Bearer wrong"}).status_code == 403
+started = []
+class FakeProc:
+    def poll(s): return None
+real_run = dashboard.run_daily
+dashboard.run_daily = lambda args, out=None: (started.append(args), dashboard.JOBS.append(FakeProc()))
+h = {"Authorization": "Bearer night-token"}
+assert cl.post("/cron/daily", headers=h).get_json() == {"started": True, "running": True} and started == [[]]
+assert cl.post("/cron/daily", headers=h).get_json()["started"] is False and len(started) == 1
+assert cl.get("/cron/status", headers=h).get_json() == {"running": True}
+dashboard.JOBS.clear(); dashboard.run_daily = real_run
+assert cl.get("/cron/status", headers=h).get_json() == {"running": False}
+del os.environ["CRON_TOKEN"]
+print("nightly trigger: needs the token, starts one pull at a time, reports when it is done")

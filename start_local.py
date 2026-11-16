@@ -26,9 +26,11 @@ def migrate(conn):
                 conn.execute(open(os.path.join(HERE, m)).read())
                 conn.execute("INSERT INTO schema_migrations (name) VALUES (%s)", [m])
     # Let the connecting owner switch to the app role (SET ROLE aeo_app). Harmless if it already can.
-    if conn.execute("SELECT NOT rolsuper AND NOT pg_has_role(current_user, 'aeo_app', 'USAGE') FROM pg_roles WHERE rolname = current_user").fetchone()[0]:
+    # Postgres 16+ (Neon, Render) separates "may switch to" (SET) from "inherits" (USAGE), so check and grant SET there.
+    pg16 = conn.execute("SELECT current_setting('server_version_num')::int >= 160000").fetchone()[0]
+    if conn.execute(f"SELECT NOT rolsuper AND NOT pg_has_role(current_user, 'aeo_app', '{'SET' if pg16 else 'USAGE'}') FROM pg_roles WHERE rolname = current_user").fetchone()[0]:
         try:
-            conn.execute("GRANT aeo_app TO CURRENT_USER")
+            conn.execute("GRANT aeo_app TO CURRENT_USER WITH SET TRUE" if pg16 else "GRANT aeo_app TO CURRENT_USER")
         except psycopg.errors.InsufficientPrivilege:
             sys.exit("The database user cannot switch to aeo_app. Ask a database admin to run: GRANT aeo_app TO <this user>;")
 
