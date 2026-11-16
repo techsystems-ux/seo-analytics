@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_autopilot.html" as ap with context %}
 {% block body %}
-<div class="top"><div><span class="kicker">Community · Reddit</span><h1>What Reddit says</h1>
+<div class="top"><div><span class="kicker">{{ t('Community · Reddit', 'Community · Reddit (UGC citation source)') }}</span><h1>What Reddit says</h1>
 <p class="lead">Where {{ client.name }} and its competitors come up on Reddit, in which communities, with what tone; what people ask and complain about in the category; and the Reddit threads ChatGPT cites when it answers your prompts. Those threads are where a helpful reply can shape AI answers.</p></div></div>
 
 {{ ap.card("reddit", status, topics, auto, cols, why,

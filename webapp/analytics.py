@@ -511,3 +511,168 @@ def reddit_communities(conn, client_id, limit=12):
                                        (SELECT count(*) FROM reddit_items i WHERE i.client_id=c.client_id AND i.subreddit=c.name)
                                 FROM reddit_communities c WHERE c.client_id=%s ORDER BY c.relevance DESC NULLS LAST, c.members DESC NULLS LAST LIMIT %s""",
                              [client_id, limit]), ["name", "title", "members", "relevance", "found_for", "posts"])
+
+# ------------------------------------------------------------------ sources AI trusts (niche-aware)
+def _on(domain, d):
+    return domain == d or domain.endswith("." + d)
+
+def source_presence(conn, client_id, niche, days=30):
+    """For the niche's high-authority sources (plus the generic four and any the team added): how often ChatGPT cites each
+    one in this brand's prompts, and which brands those answers name. Free: built from the answers Orbit already stores.
+    Returns {"sources": [...], "answers": n, "others": [top cited domains not on the list], "brands": [competitor names]}."""
+    import niches as N
+    me = _client_brand(conn, client_id)
+    saved = {r[0]: r for r in conn.execute("""SELECT domain, name, kind, status, listing_url, note, updated_at FROM client_sources
+                                             WHERE client_id=%s""", [client_id])}
+    lst = [dict(s) for s in N.preset(niche)]
+    for d, r in saved.items():
+        if not any(s["domain"] == d for s in lst):
+            lst.append({"domain": d, "name": r[1] or d, "kind": r[2] or "custom", "why": r[5] or "", "generic": False})
+    for s in lst:
+        r = saved.get(s["domain"])
+        s.update(status=r[3] if r else "unknown", listing_url=r[4] if r else None, updated_at=r[6] if r else None)
+    lst = [s for s in lst if s["status"] != "hidden"]
+    ans = conn.execute("""SELECT a.answer_id, p.text,
+                                 array(SELECT DISTINCT c.domain FROM citations c WHERE c.answer_id=a.answer_id),
+                                 EXISTS (SELECT 1 FROM mentions m WHERE m.answer_id=a.answer_id AND m.is_client AND m.rank_in_answer IS NOT NULL),
+                                 array(SELECT DISTINCT m.brand FROM mentions m WHERE m.answer_id=a.answer_id AND NOT m.is_client AND m.rank_in_answer IS NOT NULL)
+                          FROM answers a JOIN runs r USING (run_id) JOIN prompts p ON p.prompt_id=r.prompt_id
+                          WHERE a.client_id=%s AND r.run_at > now() - make_interval(days => %s)""", [client_id, days]).fetchall()
+    total = len(ans)
+    tracked = [r[0] for r in conn.execute("SELECT name FROM competitors WHERE client_id=%s AND tracked AND NOT coalesce(own_brand,false) ORDER BY name",
+                                          [client_id])]
+    for s in lst:
+        hit = [a for a in ans if any(_on(d, s["domain"]) for d in a[2])]
+        s["answers"] = len(hit)
+        s["share"] = len(hit) / total if total else 0
+        s["you"] = sum(1 for a in hit if a[3])
+        comp = {}
+        for a in hit:
+            for b in a[4]: comp[b] = comp.get(b, 0) + 1
+        s["rivals"] = sorted(comp.items(), key=lambda x: -x[1])[:3]
+        s["prompts"] = sorted({a[1] for a in hit})[:4]
+        s["gap"] = bool(hit) and s["you"] < (s["rivals"][0][1] if s["rivals"] else 0)
+    lst.sort(key=lambda s: (-s["answers"], not s.get("generic"), s["name"]))
+    listed = {s["domain"] for s in lst}
+    counts = {}
+    for a in ans:
+        for d in set(a[2]): counts[d] = counts.get(d, 0) + 1
+    own = (conn.execute("SELECT domain FROM clients WHERE client_id=%s", [client_id]).fetchone()[0] or "").lower().removeprefix("www.")
+    others = sorted(((d, n) for d, n in counts.items()
+                     if not any(_on(d, x) for x in listed) and not (own and _on(d, own))), key=lambda x: -x[1])[:8]
+    return {"sources": lst, "answers": total, "others": others, "brands": tracked, "me": me}
+
+# ------------------------------------------------------------------ overview: the keywords and prompts we committed to
+def keyword_board(conn, client_id, days=28):
+    """Tracked target keywords: position now (Search Console, 7-day average), position a month ago, clicks, ranking page."""
+    out = rows(conn.execute("""
+        WITH g AS (SELECT keyword, date, position, url, clicks FROM rank_positions WHERE client_id=%(c)s AND source='gsc'
+                   AND date > current_date - 70),
+             mx AS (SELECT max(date) d FROM g),
+             now_ AS (SELECT keyword, avg(position) pos, sum(clicks) clicks FROM g, mx WHERE g.date > mx.d - 7 GROUP BY keyword),
+             then_ AS (SELECT keyword, avg(position) pos FROM g, mx WHERE g.date <= mx.d - %(d)s AND g.date > mx.d - %(d)s - 7 GROUP BY keyword),
+             clk AS (SELECT keyword, sum(clicks) clicks FROM g, mx WHERE g.date > mx.d - %(d)s GROUP BY keyword),
+             pg AS (SELECT DISTINCT ON (keyword) keyword, url FROM g ORDER BY keyword, date DESC)
+        SELECT k.keyword, now_.pos, then_.pos, clk.clicks, pg.url
+        FROM rank_keywords k LEFT JOIN now_ USING (keyword) LEFT JOIN then_ USING (keyword) LEFT JOIN clk USING (keyword) LEFT JOIN pg USING (keyword)
+        WHERE k.client_id=%(c)s ORDER BY now_.pos IS NULL, now_.pos, k.keyword""", {"c": client_id, "d": days}),
+        ["keyword", "position", "before", "clicks", "url"])
+    for r in out:
+        p, b = (float(r["position"]) if r["position"] is not None else None), (float(r["before"]) if r["before"] is not None else None)
+        r["position"], r["before"] = p, b
+        r["change"] = round(b - p, 1) if p is not None and b is not None else None
+        r["band"] = ("top3" if p <= 3.5 else "page1" if p <= 10.5 else "page2" if p <= 20.5 else "beyond") if p is not None else "none"
+    n = len(out)
+    top10 = sum(1 for r in out if r["position"] is not None and r["position"] <= 10.5)
+    top10_before = sum(1 for r in out if r["before"] is not None and r["before"] <= 10.5)
+    ranked = [r["position"] for r in out if r["position"] is not None]
+    before = [r["before"] for r in out if r["before"] is not None and r["position"] is not None]
+    now_ranked = [r["position"] for r in out if r["before"] is not None and r["position"] is not None]
+    return {"rows": out, "n": n, "top10": top10, "top10_before": top10_before, "top3": sum(1 for r in out if r["band"] == "top3"),
+            "avg": round(sum(ranked) / len(ranked), 1) if ranked else None,
+            "avg_change": round(sum(before) / len(before) - sum(now_ranked) / len(now_ranked), 1) if before else None,
+            "improved": sum(1 for r in out if (r["change"] or 0) >= 1), "declined": sum(1 for r in out if (r["change"] or 0) <= -1),
+            "clicks": sum(r["clicks"] or 0 for r in out)}
+
+def prompt_board(conn, client_id, engine="chatgpt"):
+    """Approved prompts: named or not in the latest ChatGPT run, the position in the answer, and the run before for change."""
+    cycles = [r[0] for r in conn.execute("""SELECT DISTINCT cycle FROM runs WHERE client_id=%s AND engine=%s AND status='ok'
+                                           ORDER BY cycle DESC LIMIT 2""", [client_id, engine])]
+    cur, prev = (cycles + [None, None])[:2]
+    def at(cycle):
+        if not cycle: return {}
+        return {r[0]: r[1:] for r in conn.execute("""
+            SELECT r.prompt_id, bool_or(m.is_client AND m.rank_in_answer IS NOT NULL), min(m.rank_in_answer) FILTER (WHERE m.is_client),
+                   (array_agg(m.brand ORDER BY m.rank_in_answer) FILTER (WHERE NOT m.is_client AND m.rank_in_answer IS NOT NULL))[1]
+            FROM runs r JOIN answers a USING (run_id) LEFT JOIN mentions m ON m.answer_id=a.answer_id
+            WHERE r.client_id=%s AND r.engine=%s AND r.cycle=%s GROUP BY r.prompt_id""", [client_id, engine, cycle])}
+    now_, then_ = at(cur), at(prev)
+    out = []
+    for pid, text, stage in conn.execute("""SELECT prompt_id, text, funnel_stage FROM prompts WHERE client_id=%s AND approved AND active
+                                           ORDER BY funnel_stage, text""", [client_id]):
+        n, t = now_.get(pid), then_.get(pid)
+        out.append({"text": text, "stage": stage, "run": n is not None, "named": bool(n and n[0]), "rank": n[1] if n else None,
+                    "leader": n[2] if n else None, "was": bool(t and t[0]) if t is not None else None})
+    asked = [p for p in out if p["run"]]
+    return {"rows": out, "n": len(out), "asked": len(asked), "named": sum(1 for p in asked if p["named"]),
+            "named_before": sum(1 for p in out if p["was"]), "first": sum(1 for p in asked if p["rank"] == 1),
+            "won": [p["text"] for p in out if p["named"] and p["was"] is False], "lost": [p["text"] for p in out if p["was"] and p["run"] and not p["named"]],
+            "cycle": cur, "prev": prev}
+
+def headlines(kb, pb):
+    """Three to five plain-language lines on what moved, for the overview."""
+    out = []
+    up = [r for r in kb["rows"] if r["before"] is not None and r["position"] is not None and r["before"] > 10.5 >= r["position"]]
+    down = [r for r in kb["rows"] if r["before"] is not None and r["position"] is not None and r["before"] <= 10.5 < r["position"]]
+    if up: out.append(("up", f"{len(up)} target keyword{'s' if len(up) > 1 else ''} moved onto page 1: " + ", ".join(r["keyword"] for r in up[:3])))
+    best = max((r for r in kb["rows"] if r["change"]), key=lambda r: r["change"], default=None)
+    if best and best["change"] >= 2: out.append(("up", f"Biggest climb: “{best['keyword']}” up {best['change']:g} places to {best['position']:.0f}"))
+    if pb["won"]: out.append(("up", f"ChatGPT now names you for {len(pb['won'])} more prompt{'s' if len(pb['won']) > 1 else ''}, e.g. “{pb['won'][0]}”"))
+    if down: out.append(("down", f"{len(down)} keyword{'s' if len(down) > 1 else ''} slipped off page 1: " + ", ".join(r["keyword"] for r in down[:3])))
+    if pb["lost"]: out.append(("down", f"No longer named for “{pb['lost'][0]}”" + (f" and {len(pb['lost']) - 1} more" if len(pb["lost"]) > 1 else "")))
+    if not out and (kb["n"] or pb["n"]): out.append(("flat", "No big moves since last month. Positions are holding."))
+    return out[:5]
+
+# ------------------------------------------------------------------ technical SEO index (Pro)
+TECH_PILLARS = [
+    ("crawl", "Crawlability and indexation", "Status codes, index directives, canonicalisation and redirects that decide what Googlebot can crawl and index.",
+     ["page_4xx", "page_5xx", "noindex_in_sitemap", "canonical_broken", "canonical_other", "redirect_chain"]),
+    ("links", "Internal linking and link equity", "Broken and redirected internal links and orphan URLs that leak PageRank and crawl budget.",
+     ["broken_internal_link", "link_to_redirect", "orphan_page"]),
+    ("onpage", "On-page relevance and metadata", "Title tags, meta descriptions, heading hierarchy and image alt attributes that carry topical relevance and SERP CTR.",
+     ["missing_title", "duplicate_title", "missing_description", "duplicate_description", "missing_h1", "multiple_h1", "img_missing_alt"]),
+    ("intl", "Security and internationalisation", "HTTPS integrity (mixed content) and hreflang reciprocity for regional versions.",
+     ["mixed_content", "hreflang_broken"]),
+    ("perf", "Performance and Core Web Vitals", "Server response (TTFB) from the crawl, plus LCP, INP and CLS from PageSpeed (field data where CrUX has enough traffic).",
+     ["slow_page"]),
+]
+SEV_W = {"error": 10, "warning": 4, "notice": 1}
+
+def tech_index(conn, client_id):
+    """Five technical SEO pillars scored 0-100 from open crawl issues (weighted by severity and affected URLs),
+    plus Core Web Vitals from the latest PageSpeed results."""
+    issues = {r[0]: r[1:] for r in conn.execute("""SELECT issue_code, severity, pages FROM tech_issues
+                                                  WHERE client_id=%s AND source='hovers' AND status IN ('open','in_progress') AND pages > 0""", [client_id])}
+    crawled = conn.execute("""SELECT pages_crawled FROM tech_crawls WHERE client_id=%s AND source='hovers' AND finished_at IS NOT NULL
+                              ORDER BY finished_at DESC LIMIT 1""", [client_id]).fetchone()
+    n = (crawled[0] if crawled else 0) or 0
+    cwv = conn.execute("""SELECT avg(perf_score), percentile_cont(.75) WITHIN GROUP (ORDER BY coalesce(field_lcp_ms, lcp_ms)),
+                                 percentile_cont(.75) WITHIN GROUP (ORDER BY field_inp_ms), percentile_cont(.75) WITHIN GROUP (ORDER BY coalesce(field_cls, cls)),
+                                 percentile_cont(.75) WITHIN GROUP (ORDER BY ttfb_ms), count(*)
+                          FROM (SELECT DISTINCT ON (url) * FROM pagespeed_results WHERE client_id=%s AND strategy='mobile' AND error IS NULL
+                                ORDER BY url, fetched_at DESC) x""", [client_id]).fetchone()
+    out = []
+    for key, name, what, codes in TECH_PILLARS:
+        hit = [(c, issues[c]) for c in codes if c in issues]
+        penalty = sum(SEV_W[sev] * min(pages, max(n, 1)) / max(n, 1) * 10 for c, (sev, pages) in hit)
+        score = None if not n else max(0, round(100 - penalty))
+        out.append({"key": key, "name": name, "what": what, "score": score, "issues": len(hit),
+                    "urls": sum(p for _, (s, p) in hit), "codes": [c for c, _ in hit]})
+    vit = None
+    if cwv and cwv[5]:
+        vit = {"perf": round(float(cwv[0])) if cwv[0] is not None else None, "lcp": cwv[1], "inp": cwv[2], "cls": cwv[3], "ttfb": cwv[4], "urls": cwv[5]}
+        if vit["perf"] is not None:
+            p = next(x for x in out if x["key"] == "perf")
+            p["score"] = round((vit["perf"] + (p["score"] if p["score"] is not None else vit["perf"])) / 2)
+    scored = [x["score"] for x in out if x["score"] is not None]
+    return {"pillars": out, "overall": round(sum(scored) / len(scored)) if scored else None, "crawled": n, "cwv": vit}

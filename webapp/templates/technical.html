@@ -2,9 +2,24 @@
 {% import "_semrush.html" as sm with context %}
 {% block body %}
 {% set h = summary.get('hovers') %}{% set s = summary.get('semrush') %}
-<div class="top"><div><span class="kicker">Work · Technical</span><h1>Technical health</h1>
+<div class="top"><div><span class="kicker">Technical SEO · Site health and crawl</span><h1>{{ t('Technical health', 'Crawlability, indexation and site health') }}</h1>
 <p class="lead">A crawl of {{ client.domain }} that finds what stops Google reading the site: broken pages and links, redirects, missing tags, duplicates. Each issue type is one task with an owner and a due date. The next crawl checks the fix.</p></div>
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Crawl site now (free)</button></form></div>
+
+{% if pro %}<section class="card"><div class="top" style="align-items:flex-end"><div><h2>Technical SEO index</h2>
+  <p class="note" style="margin:4px 0 0">Five pillars scored 0–100 from open crawl issues, weighted by severity (error 10, warning 4, notice 1) and share of affected URLs{% if tix.crawled %} across {{ tix.crawled|n }} crawled URLs{% endif %}. Performance blends TTFB from the crawl with Lighthouse and CrUX.</p></div>
+  <div class="kpi" style="padding:0;text-align:right"><div class="l">Overall</div><div class="v">{{ tix.overall if tix.overall is not none else '–' }}</div></div></div>
+  <div class="pillars">{% for p in tix.pillars %}<div class="pil"><div class="top" style="align-items:baseline"><b>{{ p.name }}</b><span class="pv">{{ p.score if p.score is not none else '–' }}</span></div>
+    <div class="bar"><i style="width:{{ p.score or 0 }}%;background:{{ '#B20F00' if (p.score or 0) < 70 else '#0F0F0F' }}"></i></div>
+    <p class="note">{{ p.what }}</p><span class="note">{{ p.issues }} issue type{{ '' if p.issues == 1 else 's' }} · {{ p.urls|n }} URLs</span></div>{% endfor %}</div>
+  {% if tix.cwv %}<div class="cwv">{% set v = tix.cwv %}
+    <span class="tag {{ 't-pass' if v.lcp and v.lcp <= 2500 else 't-sev-error' }}">LCP p75 {{ '%.1f'|format((v.lcp or 0)/1000) }}s</span>
+    <span class="tag {{ 't-pass' if v.inp is not none and v.inp <= 200 else 't-na' }}">INP p75 {{ (v.inp|round|int ~ 'ms') if v.inp is not none else 'no field data' }}</span>
+    <span class="tag {{ 't-pass' if v.cls is not none and v.cls <= 0.1 else 't-sev-error' }}">CLS p75 {{ '%.2f'|format(v.cls or 0) }}</span>
+    <span class="tag">TTFB p75 {{ (v.ttfb|round|int) if v.ttfb is not none else '–' }}ms</span>
+    <span class="tag">Lighthouse perf {{ v.perf if v.perf is not none else '–' }}</span><span class="note">{{ v.urls }} URLs, mobile</span></div>
+  {% else %}<p class="note">Core Web Vitals appear after the first PageSpeed run (Pages, PageSpeed).</p>{% endif %}
+</section>{% endif %}
 
 <div class="grid">
   <div class="card kpi"><div class="l">Health</div><div class="v">{{ h.health|n if h else '–' }}{% if h %}%{% endif %}</div><div class="s mute">pages with no error</div></div>

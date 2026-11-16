@@ -1,0 +1,60 @@
+{% extends "_dark.html" %}
+{% block title %}Start your free trial{% endblock %}
+{% block css %}
+.steps3{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.steps3 li{display:grid;grid-template-columns:30px 1fr;gap:12px;align-items:start;font-size:14px;color:var(--fg2)}
+.steps3 li i{font-style:normal;width:30px;height:30px;border-radius:9px;border:1px solid var(--line2);display:inline-flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:var(--red-ink)}
+.steps3 li b{display:block;font-family:var(--display);font-size:15px;color:var(--fg)}
+.scope{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.scope div{padding:12px;border:1px solid var(--line);border-radius:12px;font-size:12.5px;color:var(--mut)}
+.scope b{display:block;color:var(--fg2);font-size:13px;margin-bottom:2px}
+.site{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:14px;border:1px solid var(--line2);border-radius:14px;cursor:pointer}
+.site:hover{border-color:rgba(255,255,255,.3)}
+.site input{margin-top:4px;accent-color:var(--red-ink);width:16px;height:16px}
+.site b{display:block;font-family:var(--display);font-size:15px}
+.site span{display:block;font-size:12.5px;color:var(--mut)}
+.site em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--ok)}
+.site em.no{color:var(--mut2)}
+input[type=text]{width:100%;height:44px;padding:0 14px;border-radius:12px;border:1px solid var(--line2);background:rgba(0,0,0,.35);color:var(--fg);font:inherit;font-size:14px}
+input[type=text]:focus{outline:none;border-color:rgba(240,64,44,.6)}
+{% endblock %}
+{% block navright %}<span class="clock">Have an account? <a href="{{ url_for('login') }}" style="color:var(--fg2);text-decoration:underline;margin-left:4px">Sign in</a></span>{% endblock %}
+{% block main %}
+<main><div class="wrap"><div class="g">
+  <section class="hero" aria-label="About the trial">
+    <span class="eyebrow"><i></i>14-day free trial · no card</span>
+    <h1><span>Your search visibility,</span><span>in <span class="r" style="display:inline">one</span> click.</span></h1>
+    <p class="lead">Connect the Google account that sees your Search Console and Analytics. Orbit picks up your site, your keywords and your category, and starts tracking Google and AI answers straight away.</p>
+    <ol class="steps3" style="margin-top:28px">
+      <li><i>01</i><div><b>Connect Google</b>One consent screen covers Search Console and Analytics, read-only.</div></li>
+      <li><i>02</i><div><b>Pick your site</b>Orbit matches it to its Analytics property and suggests your category.</div></li>
+      <li><i>03</i><div><b>See your dashboard</b>Search data fills in first; AI answers and sources follow as Orbit runs.</div></li>
+    </ol>
+  </section>
+  <section class="signin" aria-label="Start trial"><div class="card">
+    <div class="card-hd"><span class="dot"></span><span>{{ 'step 2 of 2 · choose your site' if sites is defined else 'step 1 of 2 · connect google' }}</span></div>
+    <div class="card-b">
+      {% if err %}<div class="alert err" role="alert">{{ err }}</div>{% endif %}
+      {% if sites is defined %}
+        <div><h2>Which site should Orbit track?</h2><p class="sub" style="margin-top:8px">Signed in as {{ email }}. Pick up to {{ limit }} for the trial.</p></div>
+        {% if sites %}<form method="post" style="display:flex;flex-direction:column;gap:10px">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          {% for r in sites %}<label class="site"><input type="checkbox" name="pick" value="{{ loop.index0 }}" {{ 'checked' if loop.first }}>
+            <div><b>{{ r.domain }}</b><span>{{ r.site_url }}</span><em class="{{ '' if r.ga4 else 'no' }}">{{ ('Analytics: ' ~ r.ga4.display_name) if r.ga4 else 'No Analytics property matched' }}</em>
+            <input type="hidden" name="site_{{ loop.index0 }}" value="{{ r.site_url }}"><input type="hidden" name="ga4_{{ loop.index0 }}" value="{{ r.ga4.property_id if r.ga4 else '' }}">
+            <div style="margin-top:8px"><input type="text" name="name_{{ loop.index0 }}" value="{{ r.name }}" aria-label="Brand name for {{ r.domain }}"></div></div></label>{% endfor %}
+          <button class="btn red">Start tracking</button></form>
+        {% else %}<div class="off">This Google account has no verified Search Console sites. Sign in with the account that manages your site in Search Console, or add {{ email }} as a user there first.</div>
+          <a class="btn g" href="{{ url_for('signup') }}">Use another Google account</a>{% endif %}
+      {% else %}
+        <div><h2>Start your free trial</h2><p class="sub" style="margin-top:8px">Use the Google account that has access to your website's Search Console and Google Analytics.</p></div>
+        <a class="btn g" href="{{ url_for('signup_google') }}">{{ gicon|safe }}Connect Google and start</a>
+        <div class="scope"><div><b>Search Console</b>Queries, clicks, positions. Read-only.</div><div><b>Google Analytics</b>Organic sessions and revenue. Read-only.</div></div>
+        <p class="note"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 2.5 4v4c0 3.2 2.3 5.6 5.5 6.5 3.2-.9 5.5-3.3 5.5-6.5V4z"/><path d="m5.5 8 1.8 1.8L10.8 6"/></svg>
+          <span>Orbit never changes anything in your Google accounts. Remove its access any time at myaccount.google.com/permissions.</span></p>
+      {% endif %}
+    </div></div>
+    <p class="m" style="font-size:12px;color:var(--mut2);margin-top:12px">By starting a trial you agree to be contacted by Hovers about Orbit. Questions? <a href="/#demo" style="text-decoration:underline">Talk to sales</a>.</p>
+  </section>
+</div></div></main>
+{% endblock %}

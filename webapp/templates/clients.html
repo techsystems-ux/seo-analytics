@@ -11,4 +11,14 @@
 </a>
 {% else %}<div class="card empty">No brands yet. <a href="{{ url_for('connections') }}">Import them from a Google connection.</a></div>{% endfor %}
 </div>
+
+{% if trials %}<section class="card"><h2>Self-serve trials</h2><p class="note">Brands created from the Orbit sign-up page.</p>
+<div class="tw"><table><tr><th>Brand</th><th>Owner</th><th>Trial ends</th></tr>
+{% for t_ in trials %}<tr><td><a href="{{ url_for('dash.overview', cid=t_[0]) }}">{{ t_[1] }}</a><br><span class="note">{{ t_[2] }}</span></td><td>{{ t_[3] }}</td>
+<td>{{ t_[4].strftime('%d %b %Y') if t_[4] else '–' }}</td></tr>{% endfor %}</table></div></section>{% endif %}
+
+{% if demos %}<section class="card"><h2>Sales requests</h2><p class="note">From "Talk to sales" on the Orbit page.</p>
+<div class="tw"><table><tr><th>When</th><th>Who</th><th>Company</th><th>Message</th></tr>
+{% for d in demos %}<tr><td class="nw">{{ d[0].strftime('%d %b, %H:%M') }}</td><td>{{ d[1] }}<br><a class="note" href="mailto:{{ d[2] }}">{{ d[2] }}</a></td>
+<td>{{ d[3] or '–' }}{% if d[4] %}<br><span class="note">{{ d[4] }}</span>{% endif %}{% if d[6] %}<br><span class="tag">{{ d[6] }}</span>{% endif %}</td><td>{{ (d[5] or '')[:240] }}</td></tr>{% endfor %}</table></div></section>{% endif %}
 {% endblock %}

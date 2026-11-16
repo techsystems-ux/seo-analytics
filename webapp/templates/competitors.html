@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_semrush.html" as sm with context %}
 {% block body %}
-<div class="top"><div><span class="kicker">Analytics · Competitors</span><h1>Who {{ client.name }} competes with</h1>
+<div class="top"><div><span class="kicker">{{ t('Visibility · Competitors', 'Competitive intelligence · SERP + LLM') }}</span><h1>{{ t('Who ' ~ client.name ~ ' competes with', 'SERP competitors and keyword gap') }}</h1>
 <p class="lead">Organic competitors from Semrush, and the brands ChatGPT names instead. Tracked competitors feed the keyword gap and the visibility score.</p></div>
 <span class="note staff-only">Semrush credits: <b>{{ budget.used|n }} of {{ budget.cap|n }}</b> used (hard limit)</span></div>
 

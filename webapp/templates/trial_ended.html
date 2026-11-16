@@ -1,0 +1,10 @@
+{% extends "_dark.html" %}
+{% block title %}Trial ended{% endblock %}
+{% block main %}
+<main><div class="wrap" style="max-width:640px"><div class="card"><div class="card-hd"><span class="dot"></span><span>trial ended {{ ends.strftime('%d %b %Y') }}</span></div>
+<div class="card-b"><h2>Your free trial has ended</h2>
+<p class="sub">Your data is kept. Talk to the Hovers team to choose a plan and pick up where you left off.</p>
+<a class="btn red" href="/#demo">Talk to sales</a>
+<form method="post" action="{{ url_for('portal.logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn g" style="background:transparent;color:var(--fg);border:1px solid var(--line2)">Sign out</button></form>
+</div></div></div></main>
+{% endblock %}

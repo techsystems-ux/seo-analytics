@@ -6,7 +6,7 @@ Env (in addition to DATABASE_URL and the google_auth vars):
   ALLOWED_EMAIL_DOMAINS   comma list of Google account domains allowed to sign in, e.g. "hovers.in"
 """
 import os, sys, secrets
-from flask import Flask, request, redirect, session, url_for, render_template_string, abort
+from flask import Flask, request, redirect, session, url_for, render_template_string, render_template, abort
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "collectors"))
 from common import connect
 import google_auth as ga
@@ -25,6 +25,13 @@ def _one_address():
     host = os.environ.get("APP_HOST")
     if host and os.environ.get("VERCEL_ENV") == "production" and request.host != host and request.path != "/healthz":
         return redirect(f"https://{host}{request.full_path.rstrip('?')}", 308)
+
+@app.get("/mode/<m>")
+def set_mode(m):
+    """Simple / Pro switch in the top bar; returns to the same screen."""
+    if m in ("simple", "pro"): session["ui_mode"] = m
+    back = request.referrer or "/"
+    return redirect(back if back.startswith(request.host_url) or back.startswith("/") else "/")
 
 @app.get("/healthz")
 def healthz():
@@ -57,7 +64,7 @@ def staff():
     return session.get("staff_email")
 
 def require_staff():
-    if not staff(): abort(redirect(url_for("home")))
+    if not staff(): abort(redirect(url_for("login")))
 
 def csrf_token():
     if "csrf" not in session: session["csrf"] = secrets.token_urlsafe(24)
@@ -125,11 +132,100 @@ def page(title, body_tpl, **ctx):
 
 @app.get("/")
 def home():
-    if not staff() and session.get("viewer_email"): return redirect(url_for("portal.home"))
-    if not staff():
-        import portal
-        return portal.login_page("client" if request.args.get("as") == "client" else "team", err=request.args.get("err"))
-    return redirect(url_for("dash.clients"))
+    """Signed-in staff go to their brands, clients to their dashboard; everyone else sees the Orbit page."""
+    if staff(): return redirect(url_for("dash.clients"))
+    if session.get("viewer_email"): return redirect(url_for("portal.home"))
+    if request.args.get("err"): return redirect(url_for("login", err=request.args["err"]))
+    return render_template("landing.html", csrf=csrf_token(), sent=request.args.get("sent"))
+
+@app.get("/login")
+def login():
+    if staff(): return redirect(url_for("dash.clients"))
+    if session.get("viewer_email"): return redirect(url_for("portal.home"))
+    import portal
+    return portal.login_page("client" if request.args.get("as") == "client" else "team", err=request.args.get("err"), msg=request.args.get("msg"))
+
+@app.post("/demo")
+def demo_request():
+    """'Talk to sales' from the Orbit page. Stored for the Hovers team (Brands page); a hidden field catches simple bots."""
+    check_csrf()
+    f = request.form
+    if f.get("company_url"): return redirect(url_for("home", sent=1) + "#demo")
+    name, email = (f.get("name") or "").strip()[:120], (f.get("email") or "").strip().lower()[:200]
+    if not name or "@" not in email: return redirect(url_for("home") + "#demo")
+    with connect() as conn:
+        conn.execute("""INSERT INTO demo_requests (name, email, company, website, message, source) VALUES (%s,%s,%s,%s,%s,%s)""",
+                     [name, email, (f.get("company") or "")[:200] or None, (f.get("website") or "")[:200] or None,
+                      (f.get("message") or "")[:2000] or None, (f.get("source") or "")[:200] or None])
+    return redirect(url_for("home", sent=1) + "#demo")
+
+TRIAL_DAYS, TRIAL_BRANDS = 14, 3
+
+@app.get("/signup")
+def signup():
+    import portal
+    return render_template("signup.html", csrf=csrf_token(), err=request.args.get("err"), gicon=portal.GICON)
+
+@app.get("/signup/google")
+def signup_google():
+    session["oauth_state"] = secrets.token_urlsafe(24); session["signup"] = 1
+    return redirect(ga.auth_url(session["oauth_state"]))
+
+def _signup_plan(conn):
+    cid = session.get("signup_conn")
+    if not cid: abort(redirect(url_for("signup")))
+    sites = conn.execute("SELECT site_url, permission_level FROM google_gsc_sites WHERE connection_id=%s", [cid]).fetchall()
+    props = [{"property_id": p, "display_name": n, "account_name": a, "web_uris": u} for p, n, a, u in
+             conn.execute("SELECT property_id, display_name, account_name, web_uris FROM google_ga4_properties WHERE connection_id=%s", [cid]).fetchall()]
+    plan, by_id = ga.import_plan(sites, props, {}), {p["property_id"]: p for p in props}
+    for r in plan: r["ga4"] = by_id.get(r["ga4"])                     # the matched property's id and name, for the form
+    return cid, plan
+
+@app.get("/signup/choose")
+def signup_choose():
+    import portal
+    with connect() as conn:
+        _, plan = _signup_plan(conn)
+    return render_template("signup.html", csrf=csrf_token(), err=request.args.get("err"), gicon=portal.GICON, sites=plan,
+                           email=session.get("signup_email"), limit=TRIAL_BRANDS)
+
+@app.post("/signup/choose")
+def signup_create():
+    """Creates the trial brand(s), links Search Console and GA4, makes the person the owner, and queues the first pulls."""
+    check_csrf()
+    import json, datetime as dt, niches
+    email = session.get("signup_email")
+    picks = request.form.getlist("pick")[:TRIAL_BRANDS]
+    if not picks: return redirect(url_for("signup_choose", err="Pick at least one site."))
+    made = []
+    with connect() as conn:
+        cid, plan = _signup_plan(conn)
+        allowed_sites = {r["site_url"] for r in plan}
+        allowed_props = {r["ga4"]["property_id"] for r in plan if r["ga4"]}
+        for i in picks:                                   # check every pick before creating anything
+            site, ga4 = request.form.get(f"site_{i}", ""), request.form.get(f"ga4_{i}") or None
+            if site not in allowed_sites or (ga4 and ga4 not in allowed_props): abort(400)
+            d = ga.domain_of(site)
+            if conn.execute("SELECT 1 FROM clients WHERE lower(domain)=lower(%s)", [d]).fetchone():
+                return redirect(url_for("signup_choose", err=f"{d} is already in Orbit. Talk to the Hovers team to get access to it."))
+        with conn.transaction():
+            for i in picks:
+                site, ga4 = request.form.get(f"site_{i}", ""), request.form.get(f"ga4_{i}") or None
+                d = ga.domain_of(site)
+                name = (request.form.get(f"name_{i}") or "").strip()[:120] or ga.suggest_name(d)
+                new = conn.execute("""INSERT INTO clients (name, domain, niche, trial_ends, signup_email) VALUES (%s,%s,%s,%s,%s) RETURNING client_id""",
+                                   [name, d, niches.guess(name + " " + d), dt.date.today() + dt.timedelta(days=TRIAL_DAYS), email]).fetchone()[0]
+                conn.execute("INSERT INTO client_integrations (client_id, gsc_site_url, ga4_property_id, google_connection_id) VALUES (%s,%s,%s,%s)",
+                             [new, site, ga4, cid])
+                conn.execute("INSERT INTO client_viewers (client_id, email, added_by, role) VALUES (%s,%s,'self-serve sign-up','owner') ON CONFLICT DO NOTHING",
+                             [new, email])
+                conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,'first pull',%s,%s)",
+                             [new, json.dumps(["--client-id", str(new), "--only", "gsc,ga4,rank,pages,crawl", "--force-weekly"]), email])
+                made.append(str(new))
+    import portal
+    portal.sign_in(email)
+    session.pop("signup_conn", None)
+    return redirect(url_for("dash.overview", cid=made[0], welcome=1))
 
 @app.get("/connections")
 def connections():
@@ -157,17 +253,20 @@ def auth_start():
 
 @app.get("/auth/google/callback")
 def auth_callback():
+    signup = bool(session.pop("signup", None))          # a self-serve trial sign-up, not a Hovers staff sign-in
     if request.args.get("error"):
-        return redirect(url_for("home", err="Google sign-in was cancelled."))
+        return redirect(url_for("signup" if signup else "login", err="Google sign-in was cancelled."))
     if not request.args.get("state") or request.args.get("state") != session.pop("oauth_state", None):
-        return redirect(url_for("home", err="Sign-in expired. Please try again."))
+        return redirect(url_for("signup" if signup else "login", err="Sign-in expired. Please try again."))
     try:
         tok = ga.exchange_code(request.args["code"])
         email = ga.userinfo(tok["access_token"]).get("email", "").lower()
     except (RuntimeError, PermissionError) as e:
-        return redirect(url_for("home", err=str(e)))
-    if not email or (ALLOWED and email.split("@")[-1] not in ALLOWED):
-        return redirect(url_for("home", err=f"{email or 'This account'} is not allowed to connect. Use a Hovers Google account."))
+        return redirect(url_for("signup" if signup else "login", err=str(e)))
+    if not email: return redirect(url_for("signup" if signup else "login", err="Google did not share an email address."))
+    if ALLOWED and email.split("@")[-1] not in ALLOWED:
+        if not signup:
+            return redirect(url_for("login", err=f"{email or 'This account'} is not allowed to connect. Use a Hovers Google account."))
     with connect() as conn:
         cid = conn.execute("""INSERT INTO google_connections (google_email, refresh_token_enc, scopes) VALUES (%s,%s,%s)
             ON CONFLICT (google_email) DO UPDATE SET refresh_token_enc=EXCLUDED.refresh_token_enc, scopes=EXCLUDED.scopes, status='active', last_error=NULL
@@ -176,6 +275,10 @@ def auth_callback():
             discover(conn, cid, tok["access_token"])
         except RuntimeError as e:
             conn.execute("UPDATE google_connections SET last_error=%s WHERE connection_id=%s", [str(e)[:500], cid])
+    if signup and not (ALLOWED and email.split("@")[-1] in ALLOWED):
+        session.pop("staff_email", None)
+        session["signup_email"], session["signup_conn"] = email, str(cid)
+        return redirect(url_for("signup_choose"))
     session["staff_email"] = email
     return redirect(url_for("import_page", cid=cid))
 
@@ -253,7 +356,7 @@ def import_submit(cid):
 @app.post("/logout")
 def logout():
     check_csrf(); session.clear()
-    return redirect(url_for("home"))
+    return redirect(url_for("login", msg="Signed out."))
 
 from dashboard import bp as dashboard_bp                   # Overview, Search, Competitors, AI visibility, Pages, Settings
 app.register_blueprint(dashboard_bp)

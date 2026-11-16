@@ -1,7 +1,7 @@
 """Staff dashboard: Overview, Search performance, Competitors, AI visibility, Pages, Settings. One client at a time.
 Registered by app.py. Every screen reads through analytics.py."""
 import os, sys, json, secrets, subprocess, csv, io
-from flask import Blueprint, render_template, request, redirect, url_for, session, abort, has_request_context
+from flask import Blueprint, render_template, request, redirect, url_for, session, abort, has_request_context, make_response
 from markupsafe import Markup, escape
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo"), os.path.join(HERE, "..", "scripts")]
@@ -9,8 +9,14 @@ from common import connect as _staff_connect
 import analytics as A
 
 # Screens a client may open for their own brand (read-only). Everything else, and every form, is staff only.
-VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.answer", "dash.reddit_view",
+VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.answer", "dash.reddit_view", "dash.sources",
                   "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download"}
+
+def ui_mode():
+    """Simple: for brand owners and marketers who are not SEO specialists. Pro: for SEO teams (technical screens, SEO terms).
+    Staff default to Pro, client viewers to Simple; anyone can switch with the toggle in the top bar."""
+    m = session.get("ui_mode")
+    return m if m in ("simple", "pro") else ("pro" if session.get("staff_email") else "simple")
 
 def is_viewer():
     return has_request_context() and not session.get("staff_email") and bool(session.get("viewer_email"))
@@ -29,7 +35,7 @@ bp = Blueprint("dash", __name__)
 STAGES = {"awareness": "Discovery", "consideration": "Research", "decision": "Decision"}
 
 def staff_required():
-    if not session.get("staff_email"): abort(redirect(url_for("home")))
+    if not session.get("staff_email"): abort(redirect(url_for("login")))
 
 def csrf():
     if "csrf" not in session: session["csrf"] = secrets.token_urlsafe(24)
@@ -43,7 +49,12 @@ def _gate():
     if session.get("staff_email"): return
     if session.get("viewer_email"):
         cid = (request.view_args or {}).get("cid")
-        if request.method == "GET" and request.endpoint in VIEWER_SCREENS and cid in (session.get("viewer_clients") or []): return
+        if request.method == "GET" and request.endpoint in VIEWER_SCREENS and cid in (session.get("viewer_clients") or []):
+            with _staff_connect() as conn:
+                ends = conn.execute("SELECT trial_ends FROM clients WHERE client_id=%s", [cid]).fetchone()
+            if ends and ends[0] and ends[0] < __import__("datetime").date.today():
+                abort(make_response(render_template("trial_ended.html", ends=ends[0], csrf=csrf()), 402))
+            return
         abort(redirect(url_for("portal.home")))
     staff_required()
 
@@ -74,7 +85,9 @@ def intel_for(cid):
 
 def view(tpl, client=None, active=None, **ctx):
     info = intel_for(client["id"]) if client else None
+    pro = ui_mode() == "pro"
     return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES,
+                           pro=pro, t=lambda simple, technical: technical if pro else simple,
                            viewer=session.get("viewer_email") if is_viewer() else None, viewer_brands=len(session.get("viewer_clients") or []),
                            intel=info, data_to=info["data_to"] if info else None, **ctx)
 
@@ -135,8 +148,17 @@ def clients():
                                  (SELECT max(date) FROM gsc_search_daily g WHERE g.client_id=c.client_id),
                                  (SELECT count(*) FROM prompts p WHERE p.client_id=c.client_id AND p.approved)
                                FROM clients c WHERE c.status='active' ORDER BY c.name""").fetchall()
+        demos = conn.execute("""SELECT created_at, name, email, company, website, message, source FROM demo_requests
+                                ORDER BY created_at DESC LIMIT 20""").fetchall()
+        trials = conn.execute("""SELECT client_id, name, domain, signup_email, trial_ends FROM clients WHERE signup_email IS NOT NULL
+                                 ORDER BY trial_ends DESC LIMIT 20""").fetchall()
     return view("clients.html", clients=[{"id": str(r[0]), "name": r[1], "domain": r[2], "score": r[3], "band": A.band(r[3]),
-                                          "gsc_to": r[4], "prompts": r[5]} for r in rows])
+                                          "gsc_to": r[4], "prompts": r[5]} for r in rows], demos=demos, trials=trials)
+
+def conn_trial(cid):
+    with _staff_connect() as conn:
+        r = conn.execute("SELECT trial_ends FROM clients WHERE client_id=%s", [cid]).fetchone()
+    return r[0] if r else None
 
 @bp.get("/c/<cid>")
 def overview(cid):
@@ -148,9 +170,61 @@ def overview(cid):
         pages = A.page_summary(conn, cid)
         chart = line_chart(A.daily_clicks(conn, cid, 90), ["nonbranded", "branded"])
         runs = A.last_runs(conn, cid)
+        kb, pb = A.keyword_board(conn, cid), A.prompt_board(conn, cid)
     won = sum(1 for p in prompts if p["rank"]); asked = sum(1 for p in prompts if p["answer_id"])
     return view("overview.html", c, "overview", vis=vis, search=search, rev=rev, won=won, asked=asked, gaps=gaps,
-                fixes=sum(p["fails"] for p in pages), pages_checked=sum(1 for p in pages if p["checked_at"]), chart=chart, runs=runs)
+                fixes=sum(p["fails"] for p in pages), pages_checked=sum(1 for p in pages if p["checked_at"]), chart=chart, runs=runs,
+                kb=kb, pb=pb, news=A.headlines(kb, pb), welcome=request.args.get("welcome"),
+                trial=conn_trial(cid))
+
+@bp.get("/c/<cid>/sources")
+def sources(cid):
+    import niches as N
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        niche = conn.execute("SELECT niche FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
+        guessed = None
+        if not niche:
+            guessed = N.guess(" ".join([c["name"], c["domain"] or ""]))
+        S = A.source_presence(conn, cid, niche or guessed)
+        rd, yt = A.reddit_summary(conn, cid), A.youtube_summary(conn, cid)
+    def community(sm, unit):
+        if not sm: return None
+        you = next((b for b in sm["brands"] if b["is_client"]), None)
+        top = next((b for b in sm["brands"] if not b["is_client"]), None)
+        return {"you": you[unit] if you else 0, "top": (top["brand"], top[unit]) if top else None, "unit": unit}
+    extra = {"reddit.com": community(rd, "mentions"), "youtube.com": community(yt, "videos")}
+    return view("sources.html", c, "sources", S=S, niche=niche, guessed=guessed, niche_label=N.label(niche or guessed),
+                choices=N.choices(), kinds=N.KIND_LABEL, extra=extra, msg=request.args.get("msg"))
+
+@bp.post("/c/<cid>/sources")
+def sources_save(cid):
+    check_csrf()
+    import niches as N, re
+    what = request.form.get("what")
+    with connect() as conn:
+        client_or_404(conn, cid)
+        if what == "niche":
+            v = request.form.get("niche") or None
+            conn.execute("UPDATE clients SET niche=%s WHERE client_id=%s", [v if v in N.NICHES else None, cid])
+            msg = "Niche set to " + (N.label(v) or "none") + ". The source list below follows it."
+        elif what in ("status", "add", "hide"):
+            d = (request.form.get("domain") or "").strip().lower()
+            d = re.sub(r"^https?://", "", d).removeprefix("www.").split("/")[0]
+            if not re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}", d):
+                return redirect(url_for("dash.sources", cid=cid, msg="That is not a website address."))
+            status = {"add": "unknown", "hide": "hidden"}.get(what, request.form.get("status") or "unknown")
+            if status not in ("unknown", "listed", "in_progress", "not_listed", "hidden"): status = "unknown"
+            conn.execute("""INSERT INTO client_sources (client_id, domain, name, kind, status, listing_url, updated_by)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s)
+                            ON CONFLICT (client_id, domain) DO UPDATE SET status=EXCLUDED.status,
+                              listing_url=coalesce(EXCLUDED.listing_url, client_sources.listing_url), updated_by=EXCLUDED.updated_by, updated_at=now()""",
+                         [cid, d, request.form.get("name") or None, "custom" if what == "add" else None, status,
+                          (request.form.get("listing_url") or "").strip() or None, session.get("staff_email")])
+            msg = {"add": d + " added.", "hide": d + " hidden from this brand's list."}.get(what, "Listing status saved for " + d + ".")
+        else:
+            abort(400)
+    return redirect(url_for("dash.sources", cid=cid, msg=msg))
 
 @bp.get("/c/<cid>/search")
 def search(cid):
@@ -372,9 +446,10 @@ def technical(cid):
         pages = A.tech_issue_pages(conn, cid, code) if code else None
         sel = next((i for i in A.tech_issues(conn, cid, "all") if i["code"] == code), None) if code else None
         actions = semrush_actions(conn, cid)
+        tix = A.tech_index(conn, cid)
     counts = {s: sum(1 for i in issues if i["severity"] == s) for s in ("error", "warning", "notice")}
     return view("technical.html", c, "technical", summary=summary, issues=issues, show=show, code=code, pages=pages, sel=sel,
-                counts=counts, actions=actions, today=__import__("datetime").date.today())
+                counts=counts, actions=actions, today=__import__("datetime").date.today(), tix=tix)
 
 @bp.post("/c/<cid>/technical")
 def technical_save(cid):

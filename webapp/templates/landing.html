@@ -1,0 +1,141 @@
+{% extends "_dark.html" %}
+{% block title %}Search intelligence for Google and AI answers{% endblock %}
+{% block css %}
+main{display:block;padding-block:0}
+.navlinks{display:flex;align-items:center;gap:22px;font-size:13px;color:var(--mut)}
+.navlinks a:hover{color:var(--fg)}
+.btn.sm{width:auto;height:38px;padding:0 18px;font-size:13px}
+.btn.ghost{border:1px solid var(--line2);color:var(--fg);background:transparent}.btn.ghost:hover{border-color:rgba(255,255,255,.35)}
+.btn.auto{width:auto}
+section.s{padding-block:clamp(56px,8vw,104px);position:relative}
+.hero2{padding-block:clamp(48px,7vw,96px) clamp(40px,6vw,72px)}
+.hero2 h1{font-size:clamp(42px,6.6vw,92px);line-height:.94;font-weight:800;letter-spacing:-.06em;margin:22px 0 24px;max-width:13ch}
+.hero2 h1 .r{color:var(--red-ink)}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
+.sh{display:grid;grid-template-columns:1.2fr 1fr;gap:40px;align-items:end;margin-bottom:36px}
+.sh h2{font-size:clamp(30px,4vw,50px);line-height:1.04;font-weight:800;letter-spacing:-.045em;margin-top:14px}
+.sh p{color:var(--mut);max-width:46ch;justify-self:end}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.c{padding:22px;border-radius:18px;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;flex-direction:column;gap:10px;min-width:0}
+.c b.k{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.06em;color:var(--red-ink)}
+.c h3{font-size:19px;font-weight:700;letter-spacing:-.025em}
+.c p{color:var(--mut);font-size:14px}
+.c ul{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.c li{font-size:13.5px;color:var(--fg2);display:grid;grid-template-columns:16px 1fr}
+.c li::before{content:"→";color:var(--red-ink);font-family:var(--mono);font-size:12px}
+.c.st b.k{color:var(--steel)}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;counter-reset:s}
+.step{padding:24px;border-radius:18px;border:1px solid var(--line);background:var(--ink2);position:relative}
+.step i{font-style:normal;font-family:var(--mono);font-size:12px;color:var(--red-ink)}
+.step h3{font-size:20px;font-weight:800;letter-spacing:-.035em;margin:10px 0 8px}
+.step p{color:var(--mut);font-size:14px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mode{padding:26px;border-radius:18px;border:1px solid var(--line);background:var(--panel)}
+.mode h3{font-size:22px;font-weight:800;letter-spacing:-.04em;margin:10px 0 8px}
+.mode p{color:var(--mut);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.chips span{height:28px;display:inline-flex;align-items:center;padding:0 11px;border-radius:99px;border:1px solid var(--line2);font-size:12.5px;color:var(--fg2)}
+.demo{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:start;padding:clamp(26px,4vw,48px);border-radius:24px;background:var(--red);position:relative;overflow:hidden}
+.demo::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(0,0,0,.2) 1px,transparent 1.4px);background-size:26px 26px;pointer-events:none}
+.demo>*{position:relative}
+.demo h2{font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.05em;line-height:1}
+.demo p{color:#FFE6E2;margin-top:14px;max-width:42ch}
+.demo form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.demo label{color:#FFD9D3}
+.demo input,.demo textarea{width:100%;height:44px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.22);color:#fff;font:inherit;font-size:14px}
+.demo textarea{height:84px;padding:10px 14px;resize:vertical}
+.demo input:focus,.demo textarea:focus{outline:2px solid #fff;outline-offset:-1px}
+.demo .full{grid-column:1/-1}
+.demo .btn{background:#fff;color:var(--ink)}.demo .btn:hover{background:#ececec}
+.faq{display:flex;flex-direction:column;gap:8px}
+.faq details{border:1px solid var(--line);border-radius:14px;background:var(--ink2);padding:0 20px}
+.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.015em;display:flex;justify-content:space-between;gap:12px}
+.faq summary::-webkit-details-marker{display:none}.faq summary::after{content:"+";font-family:var(--mono);color:var(--red-ink)}
+.faq details[open] summary::after{content:"–"}
+.faq p{color:var(--mut);padding-bottom:18px;font-size:14px}
+.ok{padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);color:#fff}
+@media (max-width:980px){.cards,.steps{grid-template-columns:1fr 1fr}.two,.demo,.sh{grid-template-columns:1fr}.sh p{justify-self:start}.navlinks a.hide-m{display:none}}
+@media (max-width:620px){.cards,.steps{grid-template-columns:1fr}.demo form{grid-template-columns:1fr}.navlinks{gap:12px}}
+{% endblock %}
+{% block navright %}<nav class="navlinks" aria-label="Main"><a class="hide-m" href="#features">Features</a><a class="hide-m" href="#how">How it works</a><a class="hide-m" href="#demo">Pricing</a><a href="{{ url_for('login') }}">Sign in</a>
+<a class="btn red sm" href="{{ url_for('signup') }}">Start free trial</a></nav>{% endblock %}
+{% block main %}
+<main>
+<section class="hero2"><div class="wrap">
+  <span class="eyebrow"><i></i>search intelligence · google + chatgpt + communities</span>
+  <h1>Know where you rank. In Google <span class="r">and</span> in AI.</h1>
+  <p class="lead">Orbit connects to your Search Console and Google Analytics in one click, then tracks the keywords and AI prompts that bring you customers, the sites AI trusts in your category, and what competitors do there. Plain language for owners. Full technical depth for SEO teams.</p>
+  <div class="cta"><a class="btn red auto" href="{{ url_for('signup') }}">Start 14-day free trial</a><a class="btn ghost auto" href="#demo">Talk to sales</a></div>
+  <div class="facts"><span>Read-only Google access</span><span>No card needed for the trial</span><span>One-click Google connection</span></div>
+</div></section>
+
+<section class="s" id="features"><div class="wrap">
+  <div class="sh"><div><span class="eyebrow"><i></i>what orbit tracks</span><h2>One view of your search visibility, old and new.</h2></div>
+    <p>Classic SEO and generative engine optimisation (GEO) side by side, so you see what moves revenue on Google and what makes AI assistants recommend you.</p></div>
+  <div class="cards">
+    <div class="c"><b class="k">01 · GOOGLE</b><h3>Keywords and rankings</h3><p>Positions, clicks and the pages that rank, straight from Search Console.</p>
+      <ul><li>Target keywords on page 1, week by week</li><li>Branded vs non-branded demand</li><li>Organic revenue from GA4</li></ul></div>
+    <div class="c"><b class="k">02 · AI ANSWERS</b><h3>AI visibility</h3><p>Does ChatGPT name you when buyers ask? Which brands does it pick instead?</p>
+      <ul><li>Mention rate and rank in the answer</li><li>Share of voice against competitors</li><li>The sources each answer cites</li></ul></div>
+    <div class="c st"><b class="k">03 · SOURCES</b><h3>Sources AI trusts</h3><p>The category sites models lean on, from Wikipedia and Quora to niche directories.</p>
+      <ul><li>Presets per niche, editable</li><li>Who appears there: you or competitors</li><li>Reddit and YouTube conversation maps</li></ul></div>
+    <div class="c"><b class="k">04 · COMPETITORS</b><h3>Competitive gaps</h3><p>Keywords and answers your competitors win and you don't.</p>
+      <ul><li>Keyword gap and SERP features</li><li>Backlink gap</li><li>Brands AI names in your place</li></ul></div>
+    <div class="c st"><b class="k">05 · TECHNICAL</b><h3>Technical SEO</h3><p>A crawl that scores crawlability, indexation, on-page and performance.</p>
+      <ul><li>Status codes, canonicals, hreflang</li><li>Core Web Vitals: LCP, INP, CLS</li><li>Each issue a task with an owner</li></ul></div>
+    <div class="c"><b class="k">06 · REPORT</b><h3>Monthly report</h3><p>A ready-to-share PowerPoint for the month, built from the data.</p>
+      <ul><li>Rankings, traffic and revenue</li><li>Work done and next month's plan</li><li>One click to download</li></ul></div>
+  </div>
+</div></section>
+
+<section class="s" id="how"><div class="wrap">
+  <div class="sh"><div><span class="eyebrow"><i></i>how it works</span><h2>Connect once. Orbit does the reading.</h2></div><p>No tags to install and no spreadsheets. Orbit only reads data; it never changes your site, Search Console or Analytics.</p></div>
+  <div class="steps">
+    <div class="step"><i>01</i><h3>Connect Google</h3><p>Sign in with the Google account that sees your Search Console and Analytics. One consent screen covers both.</p></div>
+    <div class="step"><i>02</i><h3>Pick your site</h3><p>Orbit matches each site to its Analytics property, finds your category, competitors and the questions buyers ask.</p></div>
+    <div class="step"><i>03</i><h3>Watch it move</h3><p>Keywords, AI answers and sources refresh every day. Your monthly report is ready when the month ends.</p></div>
+  </div>
+</div></section>
+
+<section class="s"><div class="wrap">
+  <div class="sh"><div><span class="eyebrow"><i></i>built for two kinds of teams</span><h2>Simple when you want it. Technical when you need it.</h2></div><p>Switch between the two views at any time.</p></div>
+  <div class="two">
+    <div class="mode"><b class="k" style="font-family:var(--mono);font-size:11px;color:var(--red-ink)">SIMPLE</b><h3>For founders and marketers</h3><p>The keywords and AI questions that matter, whether they are moving, and who is ahead. No jargon.</p>
+      <div class="chips"><span>Keywords on page 1</span><span>AI answers that name you</span><span>What changed this month</span></div></div>
+    <div class="mode"><b class="k" style="font-family:var(--mono);font-size:11px;color:var(--steel)">PRO</b><h3>For SEO and content teams</h3><p>Everything in Simple, plus the technical layer your team already works in.</p>
+      <div class="chips"><span>SERP features</span><span>Keyword gap</span><span>Citation share</span><span>Crawl and indexation</span><span>Core Web Vitals</span><span>Backlink gap</span></div></div>
+  </div>
+</div></section>
+
+<section class="s" id="demo"><div class="wrap">
+  <div class="demo">
+    <div><span class="eyebrow" style="color:#FFD9D3"><i style="background:#fff"></i>pricing</span><h2 style="margin-top:14px">Plans for brands and agencies.</h2>
+      <p>Pricing depends on the number of brands, prompts and markets you track. Tell us a little about your site and we'll show you Orbit on your own data.</p>
+      <p style="margin-top:10px">Prefer to try first? <a href="{{ url_for('signup') }}" style="text-decoration:underline;color:#fff">Start the free trial</a>.</p></div>
+    {% if sent %}<div class="ok" role="status"><b>Thanks, we have your request.</b><br>The Hovers team will get in touch at the email you gave.</div>
+    {% else %}<form method="post" action="{{ url_for('demo_request') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="source" id="src" value="">
+      <div><label for="dn">Name</label><input id="dn" name="name" required autocomplete="name"></div>
+      <div><label for="de">Work email</label><input id="de" name="email" type="email" required autocomplete="email"></div>
+      <div><label for="dc">Company</label><input id="dc" name="company" autocomplete="organization"></div>
+      <div><label for="dw">Website</label><input id="dw" name="website" placeholder="brand.com"></div>
+      <div class="full"><label for="dm">What would you like to see? (optional)</label><textarea id="dm" name="message"></textarea></div>
+      <div class="full" style="display:none"><label for="hp">Leave empty</label><input id="hp" name="company_url" tabindex="-1" autocomplete="off"></div>
+      <div class="full"><button class="btn">Talk to sales</button></div>
+    </form>{% endif %}
+  </div>
+</div></section>
+
+<section class="s"><div class="wrap" style="max-width:860px">
+  <div style="margin-bottom:24px"><span class="eyebrow"><i></i>questions</span><h2 style="font-size:clamp(28px,3.4vw,42px);font-weight:800;letter-spacing:-.045em;margin-top:14px">Before you connect</h2></div>
+  <div class="faq">
+    <details><summary>What does Orbit access in my Google account?</summary><p>Read-only access to Search Console and Google Analytics for the properties you choose. Orbit cannot change settings, users or data in either, and you can remove access at any time from your Google account.</p></details>
+    <details><summary>Which AI assistants does Orbit track?</summary><p>ChatGPT today, asked from India with web search on, through the official API. Each tracked question is asked on a schedule and the answer, the brands it names and the sources it cites are stored.</p></details>
+    <details><summary>Do I need an SEO team to use it?</summary><p>No. The Simple view shows the keywords and AI questions that matter and whether they are improving. SEO teams can switch to Pro for the technical detail.</p></details>
+    <details><summary>What happens after the trial?</summary><p>Your data stays in place. Talk to us to choose a plan; nothing is charged automatically.</p></details>
+    <details><summary>Where is my data stored?</summary><p>In a managed Postgres database in Singapore. Each brand's data is separated at the database level, so one brand can never see another's.</p></details>
+  </div>
+</div></section>
+</main>
+<script>try{var q=new URLSearchParams(location.search);var s=[q.get('utm_source'),q.get('utm_campaign')].filter(Boolean).join(' / ');if(s)document.getElementById('src').value=s;}catch(e){}</script>
+{% endblock %}

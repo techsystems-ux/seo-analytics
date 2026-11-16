@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block body %}
 {% set q = '&type=' ~ type ~ '&show=' ~ show ~ ('&issue=' ~ issue if issue else '') %}
-<div class="top"><div><span class="kicker">Work · Page audit</span><h1>On-page audit, page by page</h1>
+<div class="top"><div><span class="kicker">Technical SEO · On-page audit</span><h1>On-page audit, page by page</h1>
 <p class="lead">Every page on {{ client.domain }} is found from the sitemap and checked against the on-page rules in the SOP:
 how it shows in Google, its content, links, schema and brand rules. Technical issues (redirects, broken links, speed) are in the technical audit.</p></div>
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Find and check pages now</button></form></div>

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block body %}
-<div class="top"><div><span class="kicker">Analytics · AI visibility</span><h1>Is {{ client.name }} in ChatGPT's answers?</h1>
-<p class="lead">Each approved prompt is asked daily through the OpenAI API with web search on, from India. This approximates what ChatGPT shows its users.</p></div></div>
+<div class="top"><div><span class="kicker">{{ t('Visibility · AI answers', 'GEO · Generative engine visibility (ChatGPT)') }}</span><h1>{{ t('Is ' ~ client.name ~ ' in ChatGPT\'s answers?', 'LLM share of voice and citation rate') }}</h1>
+<p class="lead">Each approved prompt is asked daily through the OpenAI API with web search on, from India. This approximates what ChatGPT shows its users.{% if pro %} Metrics: mention rate, rank-in-answer, citation rate (own domain cited as a source), sentiment and share of voice across tracked entities; the visibility score weights mention 35%, position 25%, citation 25%, sentiment 15%.{% endif %}</p></div></div>
 
 {% if vis and vis.you %}
 <div class="grid">

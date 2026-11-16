@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% import "_autopilot.html" as ap with context %}
 {% block body %}
-<div class="top"><div><span class="kicker">Community · YouTube</span><h1>What YouTube shows</h1>
+<div class="top"><div><span class="kicker">{{ t('Community · YouTube', 'Community · YouTube (video SERP + LLM citations)') }}</span><h1>What YouTube shows</h1>
 <p class="lead">Who shows up when people search the category on YouTube, which videos and creators name {{ client.name }} or its competitors, what viewers ask in the comments, and the videos ChatGPT cites in its answers.</p></div></div>
 
 {{ ap.card("youtube", status, topics, auto, cols, why,

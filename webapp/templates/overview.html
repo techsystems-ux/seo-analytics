@@ -1,32 +1,79 @@
 {% extends "base.html" %}
 {% block body %}
-<div class="top"><div><span class="kicker">Overview</span><h1>Where {{ client.name }} stands</h1>
-<p class="lead">Google and ChatGPT, side by side. Last 28 days against the 28 days before.</p></div></div>
+{% set BAND = {'top3':('Top 3','t-pass'),'page1':('Page 1','t-pass'),'page2':('Page 2','t-na'),'beyond':('Beyond page 2','t-na'),'none':('Not ranking yet','t-na')} %}
+<div class="top"><div><span class="kicker">{{ t('Overview', 'Overview · tracked keyword set and prompt set') }}</span><h1>{{ client.name }} at a glance</h1>
+<p class="lead">{% if pro %}Target keywords (Search Console, 7-day average position) and approved prompts (ChatGPT, latest run), compared with 28 days and one run earlier.
+{% else %}The Google keywords and AI questions we are working on for {{ client.name }}, and how they moved over the last month.{% endif %}</p></div></div>
 
+{% if welcome %}<div class="msg" role="status"><b>Welcome to Orbit.</b> Your Search Console and Analytics are connected. The first data pull is queued; numbers fill in here as each source finishes, Search Console first.</div>{% endif %}
+{% if trial and viewer %}<p class="note" style="margin:-4px 0 0">Free trial until {{ trial.strftime('%d %b %Y') }}. <a href="/#demo">Talk to sales</a> to choose a plan.</p>{% endif %}
+<div class="grid">
+  <div class="card kpi"><div class="l">{{ t('Keywords on page 1 of Google', 'Keywords in top 10') }}</div>
+    {% if kb.n %}<div class="v">{{ kb.top10 }}<span class="mute" style="font-size:18px"> / {{ kb.n }}</span></div>
+    <div class="s">{% set d = kb.top10 - kb.top10_before %}{% if d > 0 %}<span class="up">+{{ d }}</span> since last month{% elif d < 0 %}<span class="down">{{ d }}</span> since last month{% else %}<span class="mute">Same as last month</span>{% endif %}{% if kb.top3 %} · {{ kb.top3 }} in top 3{% endif %}</div>
+    {% else %}<div class="v mute">–</div><div class="s mute">No target keywords yet</div>{% endif %}</div>
+  <div class="card kpi"><div class="l">{{ t('Average Google position', 'Avg. position (tracked set)') }}</div>
+    {% if kb.avg %}<div class="v">{{ kb.avg }}</div><div class="s">{% if kb.avg_change %}{% if kb.avg_change > 0 %}<span class="up">{{ kb.avg_change }} places better</span>{% else %}<span class="down">{{ -kb.avg_change }} places worse</span>{% endif %} than last month{% else %}<span class="mute">{{ t('Lower is better', 'Lower is better; no prior window') }}</span>{% endif %}</div>
+    {% else %}<div class="v mute">–</div><div class="s mute">After the first Search Console pull</div>{% endif %}</div>
+  <div class="card kpi"><div class="l">{{ t('AI answers that name you', 'Prompt mention rate (ChatGPT)') }}</div>
+    {% if pb.asked %}<div class="v">{{ pb.named }}<span class="mute" style="font-size:18px"> / {{ pb.asked }}</span></div>
+    <div class="s">{% set d = pb.named - pb.named_before %}{% if pb.prev %}{% if d > 0 %}<span class="up">+{{ d }}</span> vs last run{% elif d < 0 %}<span class="down">{{ d }}</span> vs last run{% else %}<span class="mute">Same as last run</span>{% endif %}{% else %}<span class="mute">First run</span>{% endif %}{% if pb.first %} · named first in {{ pb.first }}{% endif %}</div>
+    {% else %}<div class="v mute">–</div><div class="s mute">{{ 'After prompts are approved' if not pb.n else 'After the first ChatGPT run' }}</div>{% endif %}</div>
+  <div class="card kpi"><div class="l">{{ t('Visits from these keywords', 'Clicks, tracked set (28d)') }}</div>
+    {% if kb.n %}<div class="v">{{ kb.clicks|n }}</div><div class="s mute">{{ t('Clicks from Google, last 28 days', 'Search Console clicks') }}</div>
+    {% else %}<div class="v mute">–</div><div class="s mute">No target keywords yet</div>{% endif %}</div>
+</div>
+
+{% if news %}<section class="card"><h2>{{ t('What changed this month', 'Notable movements') }}</h2>
+  <ul class="news">{% for kind, line in news %}<li class="n-{{ kind }}">{{ line }}</li>{% endfor %}</ul></section>{% endif %}
+
+<div class="grid2">
+<section class="card"><div class="top" style="align-items:flex-end"><div><h2>{{ t('Keywords we are working on', 'Tracked keywords') }}</h2>
+  <p class="note" style="margin:4px 0 0">{{ t('Where ' ~ client.name ~ ' shows up on Google for each one.', 'Avg. position, last 7 days vs the same window 28 days earlier.') }}</p></div>
+  {% if kb.n %}<a class="note" href="{{ url_for('dash.search', cid=client.id, tab='rankings') }}">All {{ kb.n }}</a>{% endif %}</div>
+  {% if kb.n %}<div class="tw"><table><tr><th>Keyword</th><th class="r">{{ t('Position', 'Avg. pos.') }}</th><th class="r">{{ t('Change', 'Δ 28d') }}</th><th>{{ t('Where', 'SERP band') }}</th></tr>
+  {% for r in kb.rows[:10] %}<tr><td>{{ r.keyword }}{% if pro and r.url %}<br><span class="note">{{ r.url.split('://')[-1][:60] }}</span>{% endif %}</td>
+    <td class="r">{{ '%.0f'|format(r.position) if r.position is not none else '–' }}</td>
+    <td class="r">{% if r.change and r.change >= 1 %}<span class="up">▲ {{ '%g'|format(r.change) }}</span>{% elif r.change and r.change <= -1 %}<span class="down">▼ {{ '%g'|format(-r.change) }}</span>{% else %}<span class="mute">–</span>{% endif %}</td>
+    <td>{% set b = BAND[r.band] %}<span class="tag {{ b[1] }}">{{ b[0] }}</span></td></tr>{% endfor %}</table></div>
+  {% else %}<p class="empty">{{ 'Target keywords have not been chosen yet.' }}{% if staff %} <a href="{{ url_for('dash.search', cid=client.id, tab='rankings') }}">Add them in Search, Rankings</a>.{% endif %}</p>{% endif %}
+</section>
+
+<section class="card"><div class="top" style="align-items:flex-end"><div><h2>{{ t('Questions people ask AI', 'Tracked prompts (ChatGPT)') }}</h2>
+  <p class="note" style="margin:4px 0 0">{{ t('Whether ChatGPT recommends ' ~ client.name ~ ' when asked.', 'Brand mention and rank in the answer, latest run' ~ (' (' ~ pb.cycle.strftime('%d %b') ~ ')' if pb.cycle else '') ~ '.') }}</p></div>
+  {% if pb.n %}<a class="note" href="{{ url_for('dash.ai', cid=client.id) }}">All {{ pb.n }}</a>{% endif %}</div>
+  {% if pb.n %}<div class="tw"><table><tr><th>{{ t('Question', 'Prompt') }}</th><th>{{ t('Names you?', 'Mention') }}</th><th>{{ t('Named first', 'Rank-1 brand') }}</th></tr>
+  {% for p in pb.rows[:10] %}<tr><td>{{ p.text }}</td>
+    <td>{% if not p.run %}<span class="tag t-na">Not run yet</span>{% elif p.named %}<span class="tag t-pass">{{ 'Yes' if not p.rank else ('#' ~ p.rank) }}</span>{% if p.was is sameas false %} <span class="up">new</span>{% endif %}{% else %}<span class="tag t-sev-error">Not yet</span>{% endif %}</td>
+    <td>{{ client.name if p.rank == 1 else (p.leader or '–') }}</td></tr>{% endfor %}</table></div>
+  {% else %}<p class="empty">No AI questions approved yet.{% if staff %} <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Approve prompts in Settings</a>.{% endif %}</p>{% endif %}
+</section>
+</div>
+
+{% if pro %}
+<div class="sep"><span>Pro detail</span></div>
 <div class="grid">
   <div class="card kpi"><div class="l">Hovers Visibility Score · ChatGPT</div>
     {% if vis and vis.you %}<div class="v">{{ vis.you.score|n }}</div><div class="s"><span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}</div>
     {% else %}<div class="v mute">–</div><div class="s mute">Runs once prompts are approved</div>{% endif %}</div>
-  <div class="card kpi"><div class="l">Non-branded clicks</div><div class="v">{{ search.nb_clicks|n }}</div><div class="s">{{ search.nb_clicks_change|delta }}</div></div>
+  <div class="card kpi"><div class="l">Non-branded clicks (28d)</div><div class="v">{{ search.nb_clicks|n }}</div><div class="s">{{ search.nb_clicks_change|delta }}</div></div>
   <div class="card kpi"><div class="l">Organic share of revenue</div>
     {% if rev %}<div class="v">{{ rev.revenue_share if rev.revenue_share is not none else '–' }}%</div><div class="s mute">{{ rev.session_share }}% of sessions · GA4</div>
     {% else %}<div class="v mute">–</div><div class="s mute">No GA4 data yet</div>{% endif %}</div>
-  <div class="card kpi"><div class="l">Prompts where ChatGPT names you</div><div class="v">{{ won }}<span class="mute" style="font-size:18px"> / {{ asked }}</span></div><div class="s mute">latest daily run</div></div>
-  <div class="card kpi"><div class="l">Page checks to fix</div><div class="v">{{ fixes }}</div><div class="s mute">across {{ pages_checked }} checked pages</div></div>
+  <div class="card kpi"><div class="l">On-page issues open</div><div class="v">{{ fixes }}</div><div class="s mute">across {{ pages_checked }} audited URLs</div></div>
 </div>
-
 <div class="grid2">
   <section class="card"><div class="top" style="align-items:center"><h2>Clicks from Google, daily</h2><span class="note"><b style="color:#B20F00">Non-branded</b> · <b>Branded</b></span></div>{{ chart }}</section>
-  <section class="card"><h2>Untapped keywords</h2><p class="note">Competitors rank for these; {{ client.name }} does not. From Semrush.</p>
-    {% if gaps %}<table><tr><th>Keyword</th><th class="r">Monthly searches</th></tr>
+  <section class="card"><h2>Keyword gap</h2><p class="note">Competitors rank in the top 100 for these; {{ client.name }} does not. Semrush.</p>
+    {% if gaps %}<table><tr><th>Keyword</th><th class="r">Search volume</th></tr>
     {% for g in gaps %}<tr><td>{{ g.keyword }}</td><td class="r">{{ g.volume|n }}</td></tr>{% endfor %}</table>
     <a href="{{ url_for('dash.competitors', cid=client.id) }}">All gaps</a>
     {% else %}<p class="empty">Appears after the first Semrush pull.</p>{% endif %}</section>
 </div>
-
 <section class="card staff-only"><h2>Data freshness</h2>
 {% if runs %}<div class="tw"><table><tr><th>Source</th><th>Last run</th><th>Result</th></tr>
 {% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'GA4','ai':'ChatGPT prompts','semrush':'Semrush','pages':'Page checks','sitemap':'Sitemap'}.get(r.collector, r.collector) }}</td>
-<td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{% if r.status=='ok' %}<span class="tag t-pass">OK</span> <span class="note">{{ r.note }}</span>{% elif r.status=='running' %}<span class="tag t-na">Running</span>{% else %}<span class="tag t-fail">Failed</span> <span class="note">{{ (r.note or '').split('\n')[0][:200] }}</span>{% endif %}</td></tr>{% endfor %}</table></div>
+<td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{% if r.status=='ok' %}<span class="tag t-pass">OK</span> <span class="note">{{ r.note }}</span>{% elif r.status=='running' %}<span class="tag t-na">Running</span>{% else %}<span class="tag t-fail">Failed</span> <span class="note">{{ (r.note or '')[:160] }}</span>{% endif %}</td></tr>{% endfor %}</table></div>
 {% else %}<p class="empty">Nothing pulled yet. Start a pull from Settings, Data.</p>{% endif %}</section>
+{% endif %}
 {% endblock %}

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% import "_semrush.html" as sm with context %}
 {% block body %}
-<div class="top"><div><span class="kicker">Analytics · Search performance</span><h1>Google organic search</h1>
-<p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the 28 days before. Branded queries contain the brand name.</p></div></div>
+<div class="top"><div><span class="kicker">{{ t('Visibility · Google search', 'Organic search · Google Search Console + GA4') }}</span><h1>{{ t('How people find you on Google', 'Organic search performance') }}</h1>
+<p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the 28 days before. {{ t('Branded searches include your brand name; non-branded are new customers finding you.', 'Branded/non-branded split by brand-term regex; position is impression-weighted average; CTR = clicks / impressions.') }}</p></div></div>
 
 <div class="grid">
   <div class="card kpi"><div class="l">All clicks</div><div class="v">{{ totals.clicks|n }}</div><div class="s">{{ totals.clicks_change|delta }}</div></div>

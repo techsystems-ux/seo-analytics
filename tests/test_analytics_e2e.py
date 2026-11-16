@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 14
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 16
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -147,11 +147,11 @@ with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"
 with connect() as conn:
     aid = conn.execute("SELECT answer_id FROM answers WHERE client_id=%s", [cid]).fetchone()[0]
     pid = conn.execute("INSERT INTO pages (client_id, url, page_type, primary_keyword) VALUES (%s,'https://gargi.shop/collections/mangalsutra','collection','silver mangalsutra') RETURNING page_id", [cid]).fetchone()[0]
-checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Where Gargi stands", "Untapped keywords", "silver anklets for women", "+50.0%"],
+checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Gargi at a glance", "Keywords we are working on" if False else "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"],
           f"/c/{cid}/search": ["Non-branded clicks", "silver mangalsutra"], f"/c/{cid}/search?tab=revenue": ["/collections/mangalsutra", "100.0%"],
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
           f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID"],
-          f"/c/{cid}/technical": ["Technical health", "No crawl yet", "Import Site Audit"], f"/c/{cid}/ideas": ["What shoppers ask", "No ideas yet"],
+          f"/c/{cid}/technical": ["Crawlability, indexation and site health", "Technical SEO index", "No crawl yet", "Import Site Audit"], f"/c/{cid}/ideas": ["Query demand", "No ideas yet"],
           f"/c/{cid}/search?tab=rankings": ["silver mangalsutra", "Track"], f"/c/{cid}/competitors?tab=backlinks": ["No backlink data yet", "Pull backlinks"],
           f"/c/{cid}/research/keyword": ["Keyword research", "No lookups yet", "disabled"], f"/c/{cid}/research/domain": ["Quick pick", "gargi.shop"],
           f"/c/{cid}/research/backlinks": ["Backlink analytics"], f"/c/{cid}/research/paid": ["Paid and shopping"],
@@ -415,3 +415,45 @@ with gc.session_transaction() as s: assert s["viewer_email"] == "founder@gargi.s
 assert gc.get(f"/c/{cid}/ai").status_code == 200 and gc.get(f"/c/{cid}/settings").status_code == 302
 for k in ("RESEND_API_KEY", "CLIENT_OAUTH_CLIENT_ID", "CLIENT_OAUTH_CLIENT_SECRET"): del os.environ[k]
 print("client sign-in: email link (once, generic answer) and Google (verified, listed), read-only screens, own brand only in the database, removal at once")
+# Self-serve: the Orbit page, 'Talk to sales', trial sign-up through Google, the owner's own brand only, and the trial gate
+import google_auth
+webapp.ALLOWED[:] = ["hovers.in"]
+an = webapp.app.test_client()
+r = an.get("/"); assert r.status_code == 200 and b"Start free trial" in r.data and b"Talk to sales" in r.data
+with an.session_transaction() as s: tokc = s["csrf"]
+r = an.post("/demo", data={"csrf": tokc, "name": "Asha", "email": "asha@brand.in", "company": "Brand", "source": "utm=meta"})
+assert r.status_code == 302 and "sent=1" in r.headers["Location"]
+an.post("/demo", data={"csrf": tokc, "name": "Bot", "email": "bot@x.com", "company_url": "http://spam"})
+assert an.post("/demo", data={"name": "No token", "email": "n@x.com"}).status_code == 400
+with connect() as conn:
+    assert [x[0] for x in conn.execute("SELECT email FROM demo_requests")] == ["asha@brand.in"]
+assert b"Requests from the Orbit page" in cl.get("/c").data or b"asha@brand.in" in cl.get("/c").data
+assert an.get("/signup").status_code == 200 and an.get("/login").status_code == 200
+google_auth.exchange_code = lambda code: {"access_token": "a", "refresh_token": "r", "scope": "x"}
+google_auth.userinfo = lambda tok: {"email": "owner@newbrand.in"}
+google_auth.list_gsc_sites = lambda tok: [("sc-domain:newbrand.in", "siteOwner"), ("sc-domain:gargi.shop", "siteFullUser")]
+google_auth.list_ga4_properties = lambda tok: [{"property_id": "999", "display_name": "NewBrand web", "account_name": "NB", "web_uris": ["https://www.newbrand.in"]}]
+an.get("/signup/google")
+with an.session_transaction() as s: st = s["oauth_state"]
+r = an.get(f"/auth/google/callback?state={st}&code=x"); assert r.headers["Location"].endswith("/signup/choose"), r.headers["Location"]
+with an.session_transaction() as s: assert "staff_email" not in s and s["signup_email"] == "owner@newbrand.in"
+page = an.get("/signup/choose").get_data(as_text=True); assert "Analytics: NewBrand web" in page and "newbrand.in" in page
+r = an.post("/signup/choose", data={"csrf": tokc, "pick": ["0", "1"], "site_0": "sc-domain:gargi.shop", "ga4_0": "", "site_1": "sc-domain:newbrand.in", "ga4_1": "999"})
+assert "already+in+Orbit" in r.headers["Location"]                              # an existing brand can't be claimed by a trial
+assert an.post("/signup/choose", data={"csrf": tokc, "pick": ["0"], "site_0": "sc-domain:other.com"}).status_code == 400
+r = an.post("/signup/choose", data={"csrf": tokc, "pick": ["1"], "site_1": "sc-domain:newbrand.in", "ga4_1": "999", "name_1": "New Brand"})
+assert "welcome=1" in r.headers["Location"], r.headers["Location"]
+new = r.headers["Location"].split("/c/")[1].split("?")[0]
+with connect() as conn:
+    row = conn.execute("""SELECT c.name, c.trial_ends - current_date, i.ga4_property_id, v.role FROM clients c JOIN client_integrations i USING (client_id)
+                          JOIN client_viewers v USING (client_id) WHERE c.client_id=%s""", [new]).fetchone()
+    assert row == ("New Brand", 14, "999", "owner"), row
+    assert conn.execute("SELECT count(*) FROM pull_queue WHERE client_id=%s", [new]).fetchone()[0] == 1
+with an.session_transaction() as s: assert s["viewer_email"] == "owner@newbrand.in" and s["viewer_clients"] == [new] and "staff_email" not in s
+assert "Welcome to Orbit" in an.get(r.headers["Location"]).get_data(as_text=True)
+assert an.get(f"/c/{cid}").status_code == 302 and an.get(f"/c/{new}/settings").status_code == 302
+with connect() as conn: conn.execute("UPDATE clients SET trial_ends = current_date - 1 WHERE client_id=%s", [new])
+r = an.get(f"/c/{new}"); assert r.status_code == 402 and b"trial" in r.data.lower()
+assert cl.get(f"/c/{new}").status_code == 200                                    # the Hovers team still sees it
+webapp.ALLOWED[:] = []
+print("self-serve: Orbit page, sales requests (csrf, honeypot), Google trial sign-up with GA4 matched, no claiming existing brands, owner sees own brand only, trial gate")
