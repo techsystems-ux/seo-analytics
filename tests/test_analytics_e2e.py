@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 12
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 13
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -217,6 +217,7 @@ with connect() as conn:
 # ------------------------------------------------------------------ Reddit and YouTube start on their own once a key is set
 import dashboard
 started = []
+real_start_job = dashboard.start_job
 dashboard.start_job = lambda cid_, only, **k: started.append(only)
 os.environ["APIFY_TOKEN"] = "x"; os.environ["YOUTUBE_API_KEY"] = "x"
 page = cl.get(f"/c/{cid}/reddit").get_data(as_text=True)
@@ -320,3 +321,33 @@ dashboard.JOBS.clear(); dashboard.run_daily = real_run
 assert cl.get("/cron/status", headers=h).get_json() == {"running": False}
 del os.environ["CRON_TOKEN"]
 print("nightly trigger: needs the token, starts one pull at a time, reports when it is done")
+
+# online copy (Vercel): a pull asked for on screen is queued for the Mac; the Mac's worker runs it, then the daily pull once
+import json as _json, start_local
+dashboard.start_job = real_start_job
+dashboard.ONLINE = True
+r = cl.post(f"/c/{cid}/youtube", data={"csrf": "tok"}, headers={"Referer": f"http://localhost/c/{cid}/youtube"})
+assert r.status_code == 302 and "Queued" in r.headers["Location"], r.headers.get("Location")
+dashboard.ONLINE = False
+with connect() as conn:
+    q = conn.execute("SELECT label, args, requested_by, started_at FROM pull_queue WHERE client_id=%s", [cid]).fetchall()
+assert len(q) == 1 and q[0][0] == "youtube" and q[0][1][:4] == ["--client-id", cid, "--only", "youtube"] and q[0][2] == "seo@hovers.in" and q[0][3] is None, q
+ran = []
+class _Done(Exception): pass
+real_run, real_sleep = start_local.subprocess.run, start_local.time.sleep if hasattr(start_local, "time") else None
+import time as _time
+start_local.subprocess.run = lambda cmd, **kw: (ran.append(cmd[2:]), type("R", (), {"returncode": 0})())[1]
+_time_sleep = _time.sleep
+def _stop(_): raise _Done()
+_time.sleep = _stop
+os.makedirs(os.path.join(os.path.dirname(start_local.__file__), "logs"), exist_ok=True)
+try:
+    start_local.cloud_worker()
+except _Done: pass
+finally:
+    _time.sleep = _time_sleep; start_local.subprocess.run = real_run
+assert ran[0][:4] == ["--client-id", cid, "--only", "youtube"] and ran[1] == start_local.DAILY, ran
+with connect() as conn:
+    rows = conn.execute("SELECT label, exit_code, finished_at IS NOT NULL FROM pull_queue ORDER BY pull_id").fetchall()
+assert rows[-2:] == [("youtube", 0, True), ("nightly", 0, True)], rows
+print("online copy: pulls queue for the Mac, which runs them one at a time and the daily pull once a day")

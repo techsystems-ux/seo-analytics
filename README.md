@@ -52,25 +52,23 @@ New sites added to the Google account later: open the connect page and press **R
     python tests/test_gsc_ga4.py
     python tests/test_pagespeed.py
 
-## Run it online (Render free plan + Neon)
+## Run it online (Vercel + Neon, pulls from the Mac)
 
-The repo carries a Render Blueprint (`render.yaml`) for one free web service in Singapore. The database is Neon (free, does not
-expire; Render's free database is deleted after 30 days). Keys never go in this repo: Render asks for them when the Blueprint is created.
+The online copy is the Vercel project **hovers-ai-search** (Singapore), deployed from `main` on every push. It reads and
+writes a Neon Postgres database. Vercel cannot run long jobs, so data pulls run on the Hovers Mac:
 
-1. **Database.** Create a Neon Postgres database in Singapore (neon.tech, or Vercel, Storage, Neon). Copy its connection string.
-2. **Copy the Mac's data.** In the Mac's `.env` add `CLOUD_DATABASE_URL=<that string>`, then double-click
-   *Copy data to cloud.command*. Brands, Search Console and GA4 history, prompts, work logs and Semrush usage are copied, so the
-   credit cap keeps counting online. The Mac's data is only read.
-3. **Web service.** render.com, New, Blueprint, pick this repository. Fill in `DATABASE_URL` (the Neon string), the Google
-   client ID and secret, `TOKEN_KEY` (the Mac's value, so copied Google sign-ins keep working) and any API keys. Leave
-   `OAUTH_REDIRECT_URI` as `https://<service>.onrender.com/auth/google/callback`.
-4. **Google.** On the same OAuth client in Google Cloud, add that address as an authorised redirect URI.
-5. **Nightly pull.** In GitHub, Settings, Secrets and variables, Actions, add `APP_URL` (the Render address) and `CRON_TOKEN`
-   (the value Render generated). `.github/workflows/nightly.yml` starts the pull at 03:10 IST and keeps the server awake until it ends.
-   The token can only start the pull and ask if it is running.
+1. **Database.** Vercel, project, Storage, Neon (Singapore), connected to the project: this sets `DATABASE_URL`.
+   Tables are created on the first visit (`api/index.py`).
+2. **Settings.** In Vercel add `TOKEN_KEY` (the Mac's value), `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`. Until
+   they are in place the site lists what is missing. Add `<Vercel address>/auth/google/callback` on the Google OAuth client.
+3. **Copy the Mac's data.** Put the Neon string in the Mac's `.env` as `CLOUD_DATABASE_URL=...` and double-click
+   *Copy data to cloud.command*. It copies everything (Semrush usage included, so the cap keeps counting) and adds
+   `USE_CLOUD_DB=1` to `.env`.
+4. **From then on** the Mac app (Start SEO Analytics) uses the online database, so both show the same data. While it is
+   open it runs the daily pull once a day and any pull asked for on the online copy (`pull_queue`), one at a time, within
+   a minute. Pulls only happen while the Mac app is open. Set `USE_CLOUD_DB=0` to go back to the private database.
 
-Each start runs `scripts/migrate.py` first (new tables, then seed files). Free plan: the service sleeps after 15 minutes without
-visits and takes about a minute to wake; a pull started from a screen keeps it awake until the pull finishes.
+The Render files (`render.yaml`, `Dockerfile`, `.github/workflows/nightly.yml`) are an alternative host and are not used.
 
 **Semrush credit limit.** `SEMRUSH_TOTAL_CAP` (600 online) is a lifetime limit on Semrush units across all brands and pulls,
 counted from `semrush_usage`, including the 400 units used to build Gargi's seed data. A call that could pass the limit is never made.

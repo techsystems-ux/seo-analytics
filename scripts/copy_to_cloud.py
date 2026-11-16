@@ -56,4 +56,8 @@ with psycopg.connect(cloud) as c, psycopg.connect(local) as l:
         a = l.execute(f"SELECT count(*) FROM {t}").fetchone()[0]; b = c.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
         print(f"  {t}: Mac {a:,} rows, cloud {b:,} rows {'OK' if a == b else 'MISMATCH'}")
     print("Semrush units used so far (counts towards the cap online):", c.execute("SELECT coalesce(sum(units),0) FROM semrush_usage").fetchone()[0])
-print("Done. The online copy now has the same data as this Mac.")
+env = os.path.join(ROOT, ".env")
+if "USE_CLOUD_DB=1" not in open(env).read():
+    with open(env, "a") as f: f.write("\n# The Mac app now reads and writes the online database (set to 0 to go back to the private one)\nUSE_CLOUD_DB=1\n")
+print("Done. The online copy now has the same data as this Mac. From the next start, the Mac app uses the online database")
+print("and runs the daily pull, plus any pull asked for on the online copy, while it is open.")

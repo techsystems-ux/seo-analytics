@@ -406,32 +406,34 @@ def semrush_run(cid):
     if not a: abort(400)
     sep = "&" if "?" in back else "?"
     if not a["ready"]: return redirect(back + sep + urlencode({"msg": a["why"]}))
-    pulls_blocked()
     with connect() as conn:                       # a real pull replaces the sample rows, never mixes with them
         import sample_semrush; sample_semrush.clear(conn, cid, only='semrush')
     if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"])
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
 
-ONLINE = bool(os.environ.get("VERCEL"))     # the online copy on Vercel: pages only, no long background pulls
-PULLS_OFF = "Pulls do not run on the online copy yet. It shows the data copied from the Mac."
+ONLINE = bool(os.environ.get("VERCEL"))     # the online copy on Vercel: a request cannot outlive its response
+QUEUED = "Queued. The Hovers Mac runs it within a minute while the app is open there; results appear here as each step finishes."
 
-def pulls_blocked():
-    """On Vercel a request cannot outlive its response, so a background pull would be cut off. Say so instead."""
-    if not ONLINE: return
+def queue_pull(cid, label, args):
+    """Online, a pull waits in pull_queue for the Mac (start_local.py runs it). Then the screen says it is queued."""
+    import json
     from urllib.parse import urlencode
+    with connect() as conn:
+        conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,%s,%s,%s)",
+                     [cid, label, json.dumps(args), session.get("staff_email")])
     back = (request.referrer or url_for("dash.clients")).split("#")[0]
-    abort(redirect(back + ("&" if "?" in back else "?") + urlencode({"msg": PULLS_OFF})))
+    abort(redirect(back + ("&" if "?" in back else "?") + urlencode({"msg": QUEUED})))
 
 def start_job(cid, only, max_units=None, seeds="", research=""):
     """Runs the daily job for one client in the background. Results go to the run log on screen; full output,
     errors included, is appended to logs/jobs.log in the project folder."""
     import datetime as dt
-    pulls_blocked()
+    extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else [])
+    if ONLINE: queue_pull(cid, only, ["--client-id", cid, "--only", only, "--force-weekly"] + extra)
     logdir = os.path.join(HERE, "..", "logs"); os.makedirs(logdir, exist_ok=True)
     out = open(os.path.join(logdir, "jobs.log"), "a")
     out.write(f"\n=== {dt.datetime.now():%Y-%m-%d %H:%M:%S} {only} for {cid}\n"); out.flush()
-    extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else [])
     run_daily(["--client-id", cid, "--only", only, "--force-weekly"] + extra, out)
 
 JOBS = []          # background pulls started by this server process
@@ -571,7 +573,7 @@ def reddit_view(cid):
         comms = A.reddit_communities(conn, cid)
         left = rd.items_left(conn)
     labels = {b["name"]: b["label"] for b in cols}
-    why = None if os.environ.get("APIFY_TOKEN") else "No Apify token on the server"
+    why = None if ONLINE or os.environ.get("APIFY_TOKEN") else "No Apify token on the server"
     if not why and left <= 0: why = "The Apify result limit is used up"
     return view("reddit.html", c, "reddit", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, auto=auto, status=status,
                 comms=comms, auto_items=min(rd.AUTO_ITEMS, left), run_items=min(rd.RUN_ITEMS, left), left=left, why=why, msg=request.args.get("msg"),
@@ -586,10 +588,9 @@ def reddit_save(cid):
         if request.form.get("what") == "topics":
             save_topics(conn, cid, request.form.get("topics", ""))
             return back_with(url_for("dash.reddit_view", cid=cid, tab=request.form.get("tab", "overview")), "Topics saved for Reddit and YouTube." if request.form.get("topics", "").strip() else "Topics are automatic again.")
-        if not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
+        if not ONLINE and not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
         n = min(rd.RUN_ITEMS, rd.items_left(conn))
         if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Apify result limit is used up.")
-        pulls_blocked()
         import sample_semrush; sample_semrush.clear(conn, cid, only='reddit')
     start_job(cid, "reddit", max_units=n)
     return back_with(url_for("dash.reddit_view", cid=cid), f"Reddit pull started: up to {n} results. Refresh in a few minutes.")
@@ -618,7 +619,7 @@ def youtube_view(cid):
         channel = conn.execute("SELECT youtube_channel_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         quota = yt.used_today(conn)
     labels = {b["name"]: b["label"] for b in cols}
-    why = None if os.environ.get("YOUTUBE_API_KEY") else "No YouTube API key on the server"
+    why = None if ONLINE or os.environ.get("YOUTUBE_API_KEY") else "No YouTube API key on the server"
     return view("youtube.html", c, "youtube", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, auto=auto, status=status,
                 channel=channel, quota=quota, daily=yt.DAILY, why=why, msg=request.args.get("msg"), brand=request.args.get("brand"))
 
@@ -635,8 +636,7 @@ def youtube_save(cid):
             ch = "".join(ch for ch in request.form.get("channel", "") if ch.isalnum() or ch in "-_")[:40] or None
             conn.execute("UPDATE clients SET youtube_channel_id=%s WHERE client_id=%s", [ch, cid])
             return back_with(url_for("dash.youtube_view", cid=cid), "Channel saved.")
-        if not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "No YouTube API key on the server, so nothing was pulled.")
-        pulls_blocked()
+        if not ONLINE and not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "No YouTube API key on the server, so nothing was pulled.")
         import sample_semrush; sample_semrush.clear(conn, cid, only='youtube')
     start_job(cid, "youtube")
     return back_with(url_for("dash.youtube_view", cid=cid), "YouTube pull started (free daily quota). Refresh in a minute or two.")

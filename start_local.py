@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -60,6 +60,48 @@ def start_db():
     os.environ["DATABASE_URL"] = f"postgresql://aeo_app:change-me@/aeo?host={quote(host)}" if host else db_admin.replace("//postgres", "//aeo_app:change-me", 1)
     return srv
 
+def use_cloud(url):
+    """After "Copy data to cloud" (USE_CLOUD_DB=1 in .env) this Mac reads and writes the online database, so the Mac app
+    and the Vercel copy show the same data. The private local database is left as it was, as a backup."""
+    if "sslmode" not in url: url += ("&" if "?" in url else "?") + "sslmode=require"
+    with psycopg.connect(url, autocommit=True) as c:
+        migrate(c)
+    os.environ["DATABASE_URL"] = url
+    os.environ["DB_SET_ROLE"] = "aeo_app"
+    print("Using the online database (same data as the Vercel copy).")
+
+DAILY = ["--only", "gsc,ga4,rank,ai,pages,crawl,youtube,reddit"]     # never Semrush: that is a button in Settings
+
+def cloud_worker():
+    """While the app is open on this Mac: run pulls queued from the online copy, one at a time, and the daily pull of
+    every brand once a day. Each pull is collectors/daily.py, with the same credit caps as a pull from the screen."""
+    import json, time
+    sys.path[:0] = [os.path.join(HERE, "collectors")]
+    from common import connect
+    with connect() as conn:                         # pulls cut off when this Mac was last closed
+        conn.execute("UPDATE pull_queue SET finished_at=now(), exit_code=-1 WHERE started_at IS NOT NULL AND finished_at IS NULL")
+    while True:
+        try:
+            with connect() as conn:
+                job = conn.execute("""UPDATE pull_queue SET started_at=now() WHERE pull_id = (SELECT pull_id FROM pull_queue
+                                      WHERE started_at IS NULL ORDER BY pull_id LIMIT 1 FOR UPDATE SKIP LOCKED)
+                                      RETURNING pull_id, label, args""").fetchone()
+                if not job and conn.execute("""SELECT coalesce(max(requested_at) < now() - interval '20 hours', true)
+                                               FROM pull_queue WHERE label='nightly' AND client_id IS NULL""").fetchone()[0]:
+                    job = conn.execute("""INSERT INTO pull_queue (label, args, requested_by, started_at) VALUES ('nightly', %s, 'this Mac', now())
+                                          RETURNING pull_id, label, args""", [json.dumps(DAILY)]).fetchone()
+            if not job:
+                time.sleep(60); continue
+            print(f"Running {job[1]} pull...")
+            with open(os.path.join(HERE, "logs", "jobs.log"), "a") as log:
+                rc = subprocess.run([sys.executable, "daily.py"] + list(job[2]), cwd=os.path.join(HERE, "collectors"),
+                                    env=dict(os.environ), stdout=log, stderr=subprocess.STDOUT).returncode
+            with connect() as conn:
+                conn.execute("UPDATE pull_queue SET finished_at=now(), exit_code=%s WHERE pull_id=%s", [rc, job[0]])
+            print(f"{job[1]} pull finished" + ("" if rc == 0 else f" with errors (see logs/jobs.log)"))
+        except Exception as e:
+            print("Pull worker:", type(e).__name__, e); time.sleep(120)
+
 def load_seeds():
     """Brands in seeds/*.json (e.g. Gargi): added once, with draft prompts. Existing data is never changed."""
     import json
@@ -96,7 +138,9 @@ def ensure_packages():
 def main():
     ensure_packages()
     load_env()
-    srv = start_db()
+    cloud = os.environ.get("CLOUD_DATABASE_URL", "").strip() if os.environ.get("USE_CLOUD_DB") == "1" else ""
+    srv = use_cloud(cloud) if cloud else start_db()
+    os.makedirs(os.path.join(HERE, "logs"), exist_ok=True)
     load_seeds()
     load_sample_once()
     if len(sys.argv) > 1 and sys.argv[1] == "collect":
@@ -104,10 +148,12 @@ def main():
         subprocess.run([sys.executable, "daily.py", "--only", "gsc,ga4,rank,ai,pages,crawl,youtube,reddit"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ))
         return
     # Reddit and YouTube fill themselves: if a key is set and the data is missing or a week old, pull now in the background
-    if os.environ.get("YOUTUBE_API_KEY") or os.environ.get("APIFY_TOKEN"):
+    if not cloud and (os.environ.get("YOUTUBE_API_KEY") or os.environ.get("APIFY_TOKEN")):
         os.makedirs(os.path.join(HERE, "logs"), exist_ok=True)
         subprocess.Popen([sys.executable, "daily.py", "--only", "youtube,reddit"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ),
                          stdout=open(os.path.join(HERE, "logs", "jobs.log"), "a"), stderr=subprocess.STDOUT, start_new_session=True)
+    if cloud:                                       # the daily pull (and the YouTube and Reddit refresh) runs from here
+        threading.Thread(target=cloud_worker, daemon=True).start()
     sys.path.insert(0, os.path.join(HERE, "webapp"))
     from app import app
     threading.Timer(2, lambda: webbrowser.open("http://localhost:8080")).start()
