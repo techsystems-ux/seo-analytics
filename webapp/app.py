@@ -202,7 +202,9 @@ def brand_logo(key):
             if how == "first-frame":                        # Tupperware's header is an animated anniversary GIF; its first frame is the plain wordmark
                 from PIL import Image
                 im = Image.open(io.BytesIO(body)); im.seek(0); out = io.BytesIO()
-                im.convert("RGBA").save(out, "PNG"); body, ctype = out.getvalue(), "image/png"
+                im = im.convert("RGBA")                     # its frame sits on a white box: make the white see-through
+                im.putdata([(r, g, b, 0) if min(r, g, b) > 235 else (r, g, b, a) for r, g, b, a in im.getdata()])
+                im.save(out, "PNG"); body, ctype = out.getvalue(), "image/png"
             if not ctype.startswith("image/"): raise ValueError(ctype)
             if ctype == "image/svg+xml": body = _svg_sized(body)
             _LOGO_CACHE[key] = (body, ctype)
