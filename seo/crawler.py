@@ -2,6 +2,10 @@
 """Hovers technical crawl (free, no Semrush units). Fetches the brand's pages (sitemap list first, then internal
 links it finds), follows redirects by hand so chains are visible, and records technical issues.
 
+It works the way an analyst uses a site audit: issues, not pages. Nothing is stored per page; for each issue type Orbit
+keeps the full count and the affected URLs of the latest crawl only, capped (errors 500, warnings 100, notices 25), so
+re-crawling every week does not grow the database. Site-wide checks (HTTPS, www, soft 404, robots.txt, sitemap) run once.
+
 Results feed the issue tracker the team works from (tech_issues): one row per issue type with severity, team,
 owner, due date and status. Re-crawling verifies fixes: an issue marked fixed that no longer appears becomes
 "verified"; one marked fixed or verified that appears again is reopened.
@@ -28,7 +32,13 @@ ISSUES = {
     "broken_internal_link":  ("error", "tech", "Internal link to a broken page", "Change the link to a live page, or redirect the broken target."),
     "missing_title":         ("error", "seo",  "Title tag missing", "Write a unique title with the page's main keyword (SOP: 50–60 characters)."),
     "canonical_broken":      ("error", "tech", "Canonical points to a page that does not load", "Point the canonical at the live version of this page."),
+    "http_not_https":        ("error", "tech", "HTTP version does not redirect to HTTPS", "301-redirect every http:// URL to its https:// version."),
     "redirect_chain":        ("warning", "tech", "Redirect chain (more than one hop)", "Redirect straight to the final URL in one hop."),
+    "sitemap_bad_urls":      ("warning", "tech", "Sitemap lists URLs that redirect or do not load", "List only live, final (200) URLs in the sitemap; drop or update the rest."),
+    "soft_404":              ("warning", "tech", "Missing pages return 200 instead of 404 (soft 404)", "Make the not-found template return HTTP 404 so Google drops dead URLs."),
+    "www_both_live":         ("warning", "tech", "Both www and non-www versions load", "301-redirect one host to the other so there is a single version of the site."),
+    "robots_missing":        ("warning", "tech", "robots.txt missing or unreachable", "Serve /robots.txt (Shopify does by default) and list the sitemap in it."),
+    "sitemap_missing":       ("warning", "tech", "No XML sitemap found", "Publish /sitemap.xml and submit it in Search Console."),
     "duplicate_title":       ("warning", "seo",  "Same title on several pages", "Give each page its own title; the pages are listed with the shared title."),
     "missing_description":   ("warning", "seo",  "Meta description missing", "Write a description with the keyword and a reason to click (SOP: 140–160 characters)."),
     "missing_h1":            ("warning", "seo",  "No H1 heading", "Add one H1 that states what the page is about."),
@@ -42,7 +52,9 @@ ISSUES = {
     "img_missing_alt":       ("notice", "seo",  "Images without alt text", "Describe each product image in its alt text."),
     "slow_page":             ("notice", "tech", f"Server took over {SLOW_SECONDS:.0f}s to respond", "Check caching, apps and heavy sections on this template."),
     "orphan_page":           ("notice", "seo",  "Page in the sitemap that no crawled page links to", "Link to it from a related collection, blog or menu."),
+    "sitemap_not_in_robots": ("notice", "tech", "Sitemap not listed in robots.txt", "Add a Sitemap: line with the sitemap URL to robots.txt."),
 }
+KEEP_URLS = {"error": 500, "warning": 100, "notice": 25}      # affected URLs stored per issue; the count is always complete
 
 def host_key(url):
     return (urlparse(url).hostname or "").lower().removeprefix("www.")
@@ -138,6 +150,36 @@ def find_issues(pages, sitemap_urls=()):
     for u in in_sitemap:
         r = pages.get(u)
         if r and r["status"] == 200 and u not in linked and sitemap.page_key(u) != "/": out["orphan_page"].append((u, None))
+        if r and r["status"] is not None and (r["status"] != 200 or r["hops"]):
+            out["sitemap_bad_urls"].append((u, f"HTTP {r['status']}" if r["status"] != 200 else f"redirects to {r['final']}"))
+    return out
+
+def site_checks(session, domain):
+    """Once per crawl, a handful of requests: the checks an analyst ticks off for the whole site."""
+    import secrets
+    out, d = defaultdict(list), domain.replace("https://", "").replace("http://", "").strip("/")
+    bare = d.removeprefix("www.")
+    home = f"https://{d}/"
+    def get(u):
+        try: return fetch_chain(session, u, max_hops=5)
+        except Exception: return None
+    r = get(f"http://{d}/")
+    if r and not r[0].startswith("https://"): out["http_not_https"].append((f"http://{d}/", f"stays on {r[0]} (HTTP {r[1]})"))
+    a, b = get(f"https://{bare}/"), get(f"https://www.{bare}/")
+    if a and b and a[1] == 200 and b[1] == 200 and not a[3] and not b[3]:
+        out["www_both_live"].append((home, f"https://{bare}/ and https://www.{bare}/ both return 200"))
+    r = get(f"https://{d}/orbit-check-{secrets.token_hex(4)}-not-a-page")
+    if r and r[1] == 200: out["soft_404"].append((r[0], "a made-up URL returned 200"))
+    robots = get(f"https://{d}/robots.txt")
+    sm_lines = []
+    if not robots or robots[1] != 200: out["robots_missing"].append((f"https://{d}/robots.txt", f"HTTP {robots[1]}" if robots else "no answer"))
+    else:
+        try: txt = session.get(robots[0], headers={"User-Agent": UA}, timeout=20).text
+        except Exception: txt = ""
+        sm_lines = re.findall(r"(?im)^\s*sitemap:\s*(\S+)", txt)
+        if not sm_lines: out["sitemap_not_in_robots"].append((robots[0], None))
+    sm = get(sm_lines[0] if sm_lines else f"https://{d}/sitemap.xml")
+    if not sm or sm[1] != 200: out["sitemap_missing"].append((sm_lines[0] if sm_lines else f"https://{d}/sitemap.xml", f"HTTP {sm[1]}" if sm else "no answer"))
     return out
 
 def save(conn, client_id, pages, issues, started_at, today=None):
@@ -149,10 +191,16 @@ def save(conn, client_id, pages, issues, started_at, today=None):
     crawl_id = conn.execute("""INSERT INTO tech_crawls (client_id, source, started_at, finished_at, pages_crawled, health_score, errors, warnings, notices)
                                VALUES (%s,'hovers',%s,now(),%s,%s,%s,%s,%s) RETURNING crawl_id""",
                             [client_id, started_at, len(pages), health, counts["error"], counts["warning"], counts["notice"]]).fetchone()[0]
+    keep = []
+    for code, rows in issues.items():
+        seen = {}
+        for u, d in rows: seen.setdefault(u, d)
+        keep += [(crawl_id, client_id, code, u, d) for u, d in sorted(seen.items())[:KEEP_URLS[ISSUES[code][0]]]]
     with conn.cursor() as cur:
         cur.executemany("""INSERT INTO tech_issue_pages (crawl_id, client_id, issue_code, url, detail) VALUES (%s,%s,%s,%s,%s)
-                           ON CONFLICT DO NOTHING""",
-                        [(crawl_id, client_id, code, u, d) for code, rows in issues.items() for u, d in rows])
+                           ON CONFLICT DO NOTHING""", keep)
+    conn.execute("""DELETE FROM tech_issue_pages p USING tech_crawls c WHERE p.crawl_id = c.crawl_id AND c.client_id=%s
+                    AND c.source='hovers' AND c.crawl_id <> %s""", [client_id, crawl_id])        # earlier crawls keep their totals only
     for code, rows in issues.items():
         sev, team, title, fix = ISSUES[code]
         conn.execute("""INSERT INTO tech_issues (client_id, issue_code, source, title, severity, team, how_to_fix, pages, due_date)
@@ -179,6 +227,7 @@ def run(conn, client_id, session=None, limit=500, pause=0.5):
     start = [home or f"https://{domain.replace('https://', '').replace('http://', '').strip('/')}/"] + [by_id[i] for i in order if i in by_id]
     pages = crawl(start, session, limit, pause)
     issues = find_issues(pages, sm_urls)
+    for code, rows in site_checks(session or requests.Session(), domain).items(): issues[code] += rows
     return save(conn, client_id, pages, issues, started)
 
 if __name__ == "__main__":

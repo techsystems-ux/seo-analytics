@@ -91,7 +91,7 @@ def main():
                 import run_checks, sitemap
                 ok &= log(conn, cid, "sitemap", lambda: "{found} pages in the sitemap, {added} new, {keywords} keywords assigned".format(
                           **sitemap.sync_pages(conn, cid)))
-                limit = int(os.environ.get("PAGES_PER_RUN", "100"))
+                limit = int(os.environ.get("PAGES_PER_RUN", "30"))       # the key pages by traffic, not the whole site
                 ok &= log(conn, cid, "pages", lambda: f"{len(run_checks.check_live(conn, cid, pause=0.5, limit=limit))} pages checked (top {limit} by priority)")
             # Manual Semrush features: only when named in --only, with an explicit budget (Settings shows the cost first)
             key = os.environ.get("SEMRUSH_API_KEY")
@@ -125,7 +125,7 @@ def main():
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(
-                          **crawler.run(conn, cid, limit=int(os.environ.get("CRAWL_LIMIT", "1500")), pause=0.3)))
+                          **crawler.run(conn, cid, limit=int(os.environ.get("CRAWL_LIMIT", "500")), pause=0.3)))
     return 0 if ok else 1
 
 if __name__ == "__main__":

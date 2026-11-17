@@ -54,10 +54,20 @@ def fetch(url, session=None):
     resp = s.get(url, headers={"User-Agent": UA}, timeout=30, allow_redirects=True)
     return resp.status_code, resp.text
 
+KEEP = ("url", "title", "description", "h1s", "word_count", "canonical", "robots", "schema_types")
+
+def slim(content):
+    """What the screens and the cross-page checks read later. The page's text, links and images are checked when fetched
+    and not stored, so a weekly re-check does not grow the database."""
+    c = {k: content.get(k) for k in KEEP if k in content}
+    c["faq_count"] = len(content.get("faqs") or [])
+    return c
+
 def store(conn, client_id, page_id, source, status, content, results):
     sid = conn.execute("""INSERT INTO page_snapshots (client_id, page_id, source, http_status, content)
                           VALUES (%s,%s,%s,%s,%s) RETURNING snapshot_id""",
-                       [client_id, page_id, source, status, json.dumps(content)]).fetchone()[0]
+                       [client_id, page_id, source, status, json.dumps(slim(content))]).fetchone()[0]
+    conn.execute("DELETE FROM page_snapshots WHERE page_id=%s AND source=%s AND snapshot_id <> %s", [page_id, source, sid])   # latest only
     with conn.cursor() as cur:
         cur.executemany("""INSERT INTO page_checks (snapshot_id, client_id, page_id, check_id, result, found, message)
                            VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (snapshot_id, check_id) DO UPDATE

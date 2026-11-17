@@ -26,6 +26,9 @@ SITE = {
     D + "/pages/gone": (404, "not found"),
     D + "/pages/noidx": (200, page("Hidden", "Hidden", robots="noindex,follow")),
     D + "/pages/orphan": (200, page("Orphan", "Orphan", h1s=())),
+    "http://crawl-test.shop/": (301, "", D + "/"), "https://crawl-test.shop/": (301, "", D + "/"),
+    "https://crawl-test.shop/robots.txt": (200, "User-agent: *\nSitemap: https://crawl-test.shop/sitemap.xml\n"),
+    "https://crawl-test.shop/sitemap.xml": (200, "<urlset></urlset>"),
 }
 class R:
     def __init__(s, code, text="", loc=None, js=None):
@@ -40,14 +43,14 @@ class FakeSite:
 with connect() as conn:
     conn.execute("DELETE FROM clients WHERE domain IN ('crawl-test.shop','suite-test.shop')")
     cid = conn.execute("INSERT INTO clients (name, domain) VALUES ('CrawlTest','crawl-test.shop') RETURNING client_id").fetchone()[0]
-    for u, t in [("/", "home"), ("/collections/a", "collection"), ("/collections/b", "collection"), ("/pages/noidx", "static"), ("/pages/orphan", "static")]:
+    for u, t in [("/", "home"), ("/collections/a", "collection"), ("/collections/b", "collection"), ("/pages/noidx", "static"), ("/pages/orphan", "static"), ("/products/old", "product")]:
         conn.execute("INSERT INTO pages (client_id, url, page_type) VALUES (%s,%s,%s)", [cid, D + (u if u != "/" else "/"), t])
     fake = FakeSite(SITE)
     res = crawler.run(conn, cid, session=fake, pause=0)
     issues = dict(conn.execute("SELECT issue_code, pages FROM tech_issues WHERE client_id=%s", [cid]).fetchall())
     expect = {"page_4xx": 1, "broken_internal_link": 1, "redirect_chain": 1, "link_to_redirect": 1, "duplicate_title": 2,
               "missing_description": 1, "multiple_h1": 1, "missing_h1": 1, "img_missing_alt": 1, "noindex_in_sitemap": 1,
-              "orphan_page": 2, "mixed_content": 1, "hreflang_broken": 1}
+              "orphan_page": 2, "mixed_content": 1, "hreflang_broken": 1, "sitemap_bad_urls": 1}
     assert issues == expect, issues                               # noidx and orphan are in the sitemap but not linked: both orphans
     assert res["pages"] == 7 and res["error"] == 2 and res["health"] == 71.4, res    # 5 of 7 URLs free of errors (redirect counted once)
     assert fake.calls.count(D + "/collections/a") == 1            # "#top" link is the same page
@@ -67,8 +70,26 @@ with connect() as conn:
     assert st["multiple_h1"] == ("in_progress", 0) and st["duplicate_title"] == ("open", 0), st
     assert conn.execute("SELECT owner FROM tech_issues WHERE client_id=%s AND issue_code='page_4xx'", [cid]).fetchone()[0] == "Dev team"
     assert conn.execute("SELECT count(*) FROM tech_crawls WHERE client_id=%s", [cid]).fetchone()[0] == 2
+    # issues, not pages: only the latest crawl's URL lists are kept
+    assert conn.execute("SELECT count(DISTINCT crawl_id) FROM tech_issue_pages WHERE client_id=%s", [cid]).fetchone()[0] == 1
+    # and each list is capped, while the count stays complete
+    many = {"img_missing_alt": [(f"{D}/p{i}", "1 image") for i in range(40)], "page_4xx": [(f"{D}/g{i}", "HTTP 404") for i in range(40)]}
+    import datetime as _dt
+    crawler.save(conn, cid, {u: {"status": 200} for rows in many.values() for u, _ in rows}, many, _dt.datetime.now(_dt.timezone.utc))
+    kept = dict(conn.execute("SELECT issue_code, count(*) FROM tech_issue_pages WHERE client_id=%s GROUP BY 1", [cid]).fetchall())
+    counts = dict(conn.execute("SELECT issue_code, pages FROM tech_issues WHERE client_id=%s AND issue_code IN ('img_missing_alt','page_4xx')", [cid]).fetchall())
+    assert kept == {"img_missing_alt": 25, "page_4xx": 40} and counts == {"img_missing_alt": 40, "page_4xx": 40}, (kept, counts)
     conn.execute("DELETE FROM clients WHERE client_id=%s", [cid])
-print("crawl: 13 issue types found on a fake site, severity and due dates set, fixes verified and false fixes reopened on re-crawl")
+# site-wide checks on a badly set up site: http stays http, both hosts live, made-up URLs return 200, no robots.txt or sitemap
+BAD = {"http://bad.shop/": (200, "home"), "https://bad.shop/": (200, "home"), "https://www.bad.shop/": (200, "home")}
+class Soft(FakeSite):
+    def get(s, url, headers=None, timeout=None, allow_redirects=True):
+        if "orbit-check-" in url: return R(200, "home")
+        return super().get(url, headers, timeout, allow_redirects)
+sc = crawler.site_checks(Soft(BAD), "bad.shop")
+assert set(sc) == {"http_not_https", "www_both_live", "soft_404", "robots_missing", "sitemap_missing"}, set(sc)
+assert crawler.site_checks(FakeSite(SITE), "crawl-test.shop") == {}
+print("crawl: issue types found on a fake site, severity and due dates set, fixes verified and false fixes reopened; latest URL lists only, capped per issue; site-wide checks (https, www, soft 404, robots, sitemap)")
 
 # ---------------------------------------------------------------- rankings from Search Console
 with connect() as conn:
