@@ -50,6 +50,13 @@ def enqueue(conn, client_id, label, args, who=None):
                          [pid, cid, step, json.dumps({**extra, "force": o["force"]}), n * 100])
     return pid
 
+def adopt_waiting(conn):
+    """Pulls queued the old way (for the Mac) that nothing has started: turn them into tasks for this worker."""
+    for pid, cid, label, args, who in conn.execute("""SELECT pull_id, client_id::text, label, args, requested_by FROM pull_queue q
+            WHERE started_at IS NULL AND NOT EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id)""").fetchall():
+        enqueue(conn, cid, label, args, who)
+        conn.execute("UPDATE pull_queue SET started_at=now(), finished_at=now(), exit_code=0 WHERE pull_id=%s", [pid])
+
 def nightly(conn):
     """The once-a-day pull of every brand, unless one was queued in the last 20 hours."""
     recent = conn.execute("SELECT 1 FROM pull_queue WHERE label='nightly' AND requested_at > now() - interval '20 hours'").fetchone()
@@ -173,6 +180,7 @@ def work(budget=RUN_BUDGET, hard_stop=HARD_STOP, connect=None, kick_after=True):
         conn.execute(f"""UPDATE pull_tasks SET status = CASE WHEN attempts >= 3 THEN 'error' ELSE 'queued' END,
                          note = 'cut off; ' || CASE WHEN attempts >= 3 THEN 'gave up after 3 tries' ELSE 'retrying' END
                          WHERE status='running' AND started_at < now() - interval '{STALE}'""")
+        adopt_waiting(conn)
         _finish_pulls(conn)
         if pending(conn)[1] >= MAX_PARALLEL: return {"ran": 0, "busy": True}
     while time.time() - t0 < budget:

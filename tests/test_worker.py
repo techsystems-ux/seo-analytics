@@ -102,6 +102,16 @@ assert n1 and n2 is None and {s[0] for s in steps} == {A, B}
 assert steps[0][1] == ["gsc", "ga4", "rank", "ai", "pages", "reddit", "youtube", "blogs", "crawl"] and not any("semrush" in s for _, st in steps for s in st)
 print("nightly: every brand, once in 20 hours, Search Console to crawl, no Semrush")
 
+# 4b. a pull queued the old way (for the Mac) is taken over
+with connect() as conn:
+    old = conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,'youtube',%s,'x') RETURNING pull_id",
+                       [B, json.dumps(["--client-id", B, "--only", "youtube"])]).fetchone()[0]
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    assert conn.execute("SELECT started_at IS NOT NULL FROM pull_queue WHERE pull_id=%s", [old]).fetchone()[0]
+    assert conn.execute("SELECT status FROM pull_tasks t JOIN pull_queue q USING (pull_id) WHERE q.label='youtube' AND t.client_id=%s ORDER BY task_id DESC LIMIT 1", [B]).fetchone()[0] == "done"
+print("legacy: a pull queued for the Mac before this change is run by the server")
+
 # 5. the endpoints: locked without the secret; the schedule queues and works; the buttons start at once
 import app as webapp, dashboard
 cl = webapp.app.test_client()
