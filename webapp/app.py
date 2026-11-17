@@ -172,6 +172,19 @@ BRAND_LOGOS = {
 }
 _LOGO_CACHE = {}
 
+def _svg_sized(body):
+    """Give a logo SVG a real size from its viewBox. Some sites ship width="100%" with preserveAspectRatio="none", which an
+    <img> would stretch to 300x150; with fixed numbers it scales in proportion."""
+    import re
+    m = re.search(rb"<svg\b[^>]*>", body)
+    if not m: return body
+    tag = m.group(0)
+    vb = re.search(rb'viewBox="\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)', tag)
+    if not vb: return body
+    new = re.sub(rb'\s(width|height|preserveAspectRatio)="[^"]*"', b"", tag)
+    new = new.replace(b"<svg", b'<svg width="%s" height="%s"' % (vb.group(1), vb.group(2)), 1)
+    return body.replace(tag, new, 1)
+
 @app.get("/brand-logo/<key>")
 def brand_logo(key):
     if key not in BRAND_LOGOS: abort(404)
@@ -191,6 +204,7 @@ def brand_logo(key):
                 im = Image.open(io.BytesIO(body)); im.seek(0); out = io.BytesIO()
                 im.convert("RGBA").save(out, "PNG"); body, ctype = out.getvalue(), "image/png"
             if not ctype.startswith("image/"): raise ValueError(ctype)
+            if ctype == "image/svg+xml": body = _svg_sized(body)
             _LOGO_CACHE[key] = (body, ctype)
         except Exception:
             _LOGO_CACHE[key] = (None, None, time.time())
