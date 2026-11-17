@@ -132,8 +132,8 @@ p{margin:0}
 .logos p{font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
 .logo-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:22px clamp(36px,7vw,88px);margin-top:26px}
 .logo-row figure{margin:0;height:44px;display:flex;align-items:center;justify-content:center}
-.logo-row img{max-height:36px;max-width:170px;width:auto;height:auto;filter:grayscale(1);opacity:.62;transition:filter .3s,opacity .3s}
-.logo-row img.tall{max-height:44px}
+.logo-row img{height:30px;width:auto;max-width:190px;object-fit:contain;mix-blend-mode:multiply;filter:grayscale(1);opacity:.62;transition:filter .3s,opacity .3s}
+.logo-row img.tall{height:38px}.logo-row img.wide{height:24px}
 .logo-row figure:hover img{filter:none;opacity:1}
 .logo-row .nm{display:none;font-weight:900;font-size:22px;letter-spacing:-.01em;color:#7A7A7A}
 .logo-row figure.fail img{display:none}.logo-row figure.fail .nm{display:block}
@@ -371,7 +371,7 @@ footer .wm{font-weight:900;font-size:clamp(90px,22vw,300px);line-height:.78;lett
   <p>Brands the Hovers team has worked with</p>
   <div class="logo-row">
     <figure><img src="{{ url_for('brand_logo', key='tupperware', v=2) }}" alt="Tupperware" class="tall" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Tupperware</span></figure>
-    <figure><img src="{{ url_for('brand_logo', key='cradlewise', v=2) }}" alt="Cradlewise" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Cradlewise</span></figure>
+    <figure><img src="{{ url_for('brand_logo', key='cradlewise', v=2) }}" alt="Cradlewise" class="wide" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Cradlewise</span></figure>
     <figure><img src="{{ url_for('brand_logo', key='pack8', v=2) }}" alt="Pack8" class="tall" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Pack8</span></figure>
   </div>
 </div></section>
