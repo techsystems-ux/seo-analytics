@@ -106,8 +106,20 @@ def nudge_worker():
     except Exception:
         pass
 
+def keep_fresh(client):
+    """Opening a brand: if its free data is missing or stale, refresh it now (never the paid sources, see worker.ensure_fresh)."""
+    if not ONLINE or not client: return
+    try:
+        import worker
+        with _staff_connect() as conn:
+            started = worker.ensure_fresh(conn, client["id"], session.get("staff_email") or session.get("viewer_email"))
+        if started: worker.kick()
+    except Exception:
+        pass
+
 def view(tpl, client=None, active=None, **ctx):
     nudge_worker()
+    keep_fresh(client)
     info = intel_for(client["id"]) if client else None
     pro = ui_mode() == "pro"
     return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES,
@@ -395,7 +407,7 @@ def settings(cid):
         viewers = conn.execute("SELECT email, added_by, added_at, last_login FROM client_viewers WHERE client_id=%s ORDER BY email", [cid]).fetchall()
     keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
     login = {"google": bool(os.environ.get("CLIENT_OAUTH_CLIENT_ID")), "email": bool(os.environ.get("RESEND_API_KEY"))}
-    return view("settings.html", c, "settings", tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
+    return view("settings.html", c, "settings", paid_per_day=int(os.environ.get("PAID_RUNS_PER_DAY", "1")), semrush_auto=int(os.environ.get("SEMRUSH_AUTO_UNITS", "50")), tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
                 msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature, viewers=viewers, login=login,
                 portal_url=request.host_url.rstrip("/") + "/portal")
 

@@ -6,9 +6,11 @@ for one brand each. work() runs tasks until its time budget is spent, then, if a
 function after 300 seconds): long Search Console histories go in 10-day windows, ChatGPT prompts and the crawl stop at a
 deadline and continue in the next task, blog drafts are written one per task.
 
-Triggers: the Pull buttons and sign-up (enqueue + kick), Vercel's daily schedule (/cron/nightly), and any Orbit page a
-team member opens while tasks are waiting and nothing is running (a safety net).
-Same caps as before: Semrush only on request with a budget, Apify per-result limits, blog drafts per run.
+Triggers: Vercel's schedule (/cron/nightly at 02:00 IST: everything; /cron/nightly?slot=midday at 14:00 IST: the paid
+sources again when PAID_RUNS_PER_DAY >= 2), sign-up and the team's buttons, and opening a brand whose free data is missing
+or stale (ensure_fresh: free sources only, except a brand's very first pull). Data is ready when people open Orbit.
+Guardrail for paid sources (paid_ok): ChatGPT prompts, blog drafts and Semrush run at most PAID_RUNS_PER_DAY times per brand
+in 24 hours, whatever asks; Semrush also within SEMRUSH_AUTO_UNITS a run and the lifetime SEMRUSH_TOTAL_CAP.
 """
 import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +18,9 @@ sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
 ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "pages", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
-NIGHTLY = "gsc,ga4,rank,ai,pages,blogs,crawl,youtube,reddit"
+NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,blogs,crawl,youtube,reddit"
+PAID_STEPS = ("ai", "blogs", "semrush")         # OpenAI (prompts, blog drafts) and Semrush: limited per brand per day
+FREE_REFRESH = "gsc,ga4,rank,pages"            # what opening a dashboard with stale data may start (costs nothing)
 RUN_BUDGET = int(os.environ.get("WORKER_BUDGET", "100"))       # seconds a run keeps starting new tasks
 HARD_STOP = int(os.environ.get("WORKER_HARD_STOP", "270"))     # tasks must wrap up before this (Vercel stops at 300)
 STALE = "6 minutes"                                              # a task running longer was cut off
@@ -57,11 +61,62 @@ def adopt_waiting(conn):
         enqueue(conn, cid, label, args, who)
         conn.execute("UPDATE pull_queue SET started_at=now(), finished_at=now(), exit_code=0 WHERE pull_id=%s", [pid])
 
-def nightly(conn):
-    """The once-a-day pull of every brand, unless one was queued in the last 20 hours."""
-    recent = conn.execute("SELECT 1 FROM pull_queue WHERE label='nightly' AND requested_at > now() - interval '20 hours'").fetchone()
-    if recent: return None
-    return enqueue(conn, None, "nightly", ["--only", NIGHTLY], "schedule")
+def paid_per_day():
+    return max(0, int(os.environ.get("PAID_RUNS_PER_DAY", "1")))
+
+def nightly(conn, slot="nightly"):
+    """Scheduled pulls of every brand. 'nightly' (02:00 IST): everything. 'midday' (14:00 IST): the paid sources again,
+    only when PAID_RUNS_PER_DAY is 2 or more. Each slot is queued at most once in 10 hours."""
+    if slot == "midday" and paid_per_day() < 2: return None
+    if conn.execute("SELECT 1 FROM pull_queue WHERE label=%s AND requested_at > now() - interval '10 hours'", [slot]).fetchone():
+        return None
+    return enqueue(conn, None, slot, ["--only", NIGHTLY if slot == "nightly" else ",".join(PAID_STEPS)], "schedule")
+
+def paid_ok(conn, cid, kind, pull_id=None):
+    """The guardrail for paid sources: at most PAID_RUNS_PER_DAY starts per brand and kind in 24 hours, spaced at least
+    PAID_MIN_GAP_HOURS apart (default: 22 h for once a day, 10 h for twice). Records the start when allowed.
+    Whatever asked for it (schedule, a button, a sign-up), the same limit applies; opening a page never asks."""
+    per_day = paid_per_day()
+    if per_day == 0: return False, "paid sources are switched off (PAID_RUNS_PER_DAY=0)"
+    gap = float(os.environ.get("PAID_MIN_GAP_HOURS", str(max(1, 24 / per_day - 2))))
+    n, last = conn.execute("""SELECT count(*), max(started_at) FROM paid_runs WHERE client_id=%s AND kind=%s
+                              AND started_at > now() - interval '24 hours'""", [cid, kind]).fetchone()
+    if n >= per_day: return False, f"already ran {n} time{'s' if n != 1 else ''} in 24 hours (limit {per_day} a day)"
+    if last and conn.execute("SELECT %s > now() - make_interval(secs => %s)", [last, gap * 3600]).fetchone()[0]:
+        return False, f"last run under {gap:g} hours ago"
+    conn.execute("INSERT INTO paid_runs (client_id, kind, pull_id) VALUES (%s,%s,%s)", [cid, kind, pull_id])
+    return True, ""
+
+def paid_next(conn, cid, kind):
+    """For screens: (True, '') if a paid run may start now for this brand, else (False, when it can next run)."""
+    per_day = paid_per_day()
+    if per_day == 0: return False, "switched off"
+    gap = float(os.environ.get("PAID_MIN_GAP_HOURS", str(max(1, 24 / per_day - 2))))
+    rows = [r[0] for r in conn.execute("""SELECT started_at FROM paid_runs WHERE client_id=%s AND kind=%s
+                                          AND started_at > now() - interval '24 hours' ORDER BY started_at""", [cid, kind])]
+    if not rows: return True, ""
+    nxt = max(rows[-1] + dt.timedelta(hours=gap), rows[0] + dt.timedelta(hours=24) if len(rows) >= per_day else rows[-1])
+    now = dt.datetime.now(dt.timezone.utc)
+    if len(rows) < per_day and nxt <= now: return True, ""
+    return False, nxt
+
+def ensure_fresh(conn, cid, who=None):
+    """Called when someone opens a brand. Starts a free refresh (Search Console, GA4, rankings, page checks) if the brand
+    has Search Console linked and its data is missing or more than 30 hours old, nothing is already waiting, and no
+    automatic refresh was queued in the last 2 hours. Paid sources are added only for a brand's very first pull, and
+    even then the daily limit applies. Returns the pull id or None."""
+    linked = conn.execute("SELECT gsc_site_url IS NOT NULL FROM client_integrations WHERE client_id=%s", [cid]).fetchone()
+    if not linked or not linked[0]: return None
+    busy = conn.execute("""SELECT EXISTS (SELECT 1 FROM pull_tasks WHERE client_id=%s AND status IN ('queued','running'))
+                           OR EXISTS (SELECT 1 FROM pull_queue WHERE client_id=%s AND label='auto' AND requested_at > now() - interval '2 hours')""",
+                        [cid, cid]).fetchone()[0]
+    if busy: return None
+    has_data = conn.execute("SELECT EXISTS (SELECT 1 FROM gsc_search_daily WHERE client_id=%s)", [cid]).fetchone()[0]
+    fresh = conn.execute("""SELECT EXISTS (SELECT 1 FROM collector_runs WHERE client_id=%s AND collector='gsc' AND status='ok'
+                            AND started_at > now() - interval '30 hours')""", [cid]).fetchone()[0]
+    if has_data and fresh: return None
+    only = FREE_REFRESH + ("" if has_data else ",ai,blogs,crawl")
+    return enqueue(conn, cid, "auto", ["--client-id", cid, "--only", only] + ([] if has_data else ["--force-weekly"]), who or "auto")
 
 # ------------------------------------------------------------------ steps
 def _daily(cid, step, a):
@@ -115,7 +170,7 @@ def step_ai(conn, task, deadline):
                                              sentiment=os.environ.get("AI_SENTIMENT", "1") != "0")
         out.update(tally); return {k: v for k, v in tally.items() if k != "more"}
     daily.log(conn, cid, "ai", go)
-    return str(out), ([("ai", {})] if out.get("more") else [])
+    return str(out), ([("ai", {"cont": True})] if out.get("more") else [])
 
 def step_blogs(conn, task, deadline):
     """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
@@ -132,7 +187,7 @@ def step_blogs(conn, task, deadline):
         note["written"] = blog_writer.write(conn, cid, key, n=1) if key and left > 0 else []
         return f"{note.get('added', 0)} new ideas, {len(note['written'])} draft written" + ("" if key else " (no OpenAI key: ideas only)")
     daily.log(conn, cid, "blogs", go)
-    more = [("blogs", {"left": left - 1, "researched": True})] if note.get("written") and left - 1 > 0 else []
+    more = [("blogs", {"left": left - 1, "researched": True, "cont": True})] if note.get("written") and left - 1 > 0 else []
     return f"{len(note.get('written') or [])} draft", more
 
 def step_crawl(conn, task, deadline):
@@ -143,9 +198,21 @@ def step_crawl(conn, task, deadline):
         **crawler.run(conn, cid, limit=int(os.environ.get("CRAWL_LIMIT", "500")), pause=0.2, deadline=deadline - 30)))
     return "crawled", []
 
+def step_semrush(conn, task, deadline):
+    """Semrush keyword and competitor data, within SEMRUSH_AUTO_UNITS a run and the lifetime cap (SEMRUSH_TOTAL_CAP)."""
+    if not os.environ.get("SEMRUSH_API_KEY"): return "no Semrush key on the server", []
+    units = task["args"].get("max_units") or int(os.environ.get("SEMRUSH_AUTO_UNITS", "50"))
+    if int(units) <= 0: return "automatic Semrush is off (SEMRUSH_AUTO_UNITS=0)", []
+    rc = _daily(task["client_id"], "semrush", {**task["args"], "force": True, "max_units": units})
+    return ("ok" if rc == 0 else "finished with errors (see the run log)"), []
+
 def run_task(conn, task, deadline):
     """-> (note, [(step, args)] to queue next)."""
     step = task["step"]
+    if step in PAID_STEPS and not task["args"].get("cont"):                 # the paid guardrail, once per paid run
+        ok, why = paid_ok(conn, task["client_id"], step, task["pull_id"])
+        if not ok: return f"skipped: {why}", []
+    if step == "semrush": return step_semrush(conn, task, deadline)
     if step == "gsc": return step_gsc(conn, task, deadline)
     if step == "gsc_history": return step_gsc(conn, task, deadline, history=True)
     if step == "ai": return step_ai(conn, task, deadline)

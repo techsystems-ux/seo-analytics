@@ -203,3 +203,13 @@ Triggers: the Pull buttons and sign-up (start at once), Vercel's daily schedule 
 allowed on the Hobby plan), and any Orbit page opened by the team while tasks wait and nothing has started for 3 minutes.
 Cut-off tasks are retried (three tries). Keys the pulls need go in Vercel's settings: OPENAI_API_KEY, SEMRUSH_API_KEY,
 APIFY_TOKEN, YOUTUBE_API_KEY. The Mac app no longer runs pulls (MAC_WORKER=1 brings the old behaviour back).
+
+## Automatic data, with a guardrail on paid sources (migration 020)
+Nobody presses Pull. Vercel's schedule queues every brand's full pull at 02:00 IST (`/cron/nightly`), and at 14:00 IST
+(`/cron/midday`) the paid sources again when `PAID_RUNS_PER_DAY` is 2. Opening a brand whose Search Console data is missing or
+older than 30 hours starts a free refresh at once (Search Console, GA4, rankings, page checks); a brand's very first pull also
+includes ChatGPT prompts, blog drafts and the crawl. Opening, refreshing or signing in never starts anything paid.
+Paid sources (ChatGPT prompts and blog drafts on OpenAI; Semrush) run at most `PAID_RUNS_PER_DAY` times per brand in 24 hours,
+spaced at least `PAID_MIN_GAP_HOURS` (default 22 h at once a day, 10 h at twice), whatever asks: schedule, button or sign-up.
+Every start is recorded in `paid_runs`. Semrush also stays within `SEMRUSH_AUTO_UNITS` a run (default 50) and the lifetime
+`SEMRUSH_TOTAL_CAP`. Set `PAID_RUNS_PER_DAY=0` to switch paid sources off. Change both in Vercel's settings, then redeploy.

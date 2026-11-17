@@ -55,7 +55,11 @@
 <tr><td>Apify (Reddit)</td><td>{{ 'Token set' if keys.APIFY_TOKEN else 'No token on the server (APIFY_TOKEN)' }} · paid per result, capped by APIFY_MAX_ITEMS and APIFY_TOTAL_ITEMS</td></tr>
 <tr><td>YouTube Data API</td><td>{{ 'Key set' if keys.YOUTUBE_API_KEY else 'No key on the server (YOUTUBE_API_KEY)' }} · free daily quota</td></tr></table>
 <p class="note">Keys live in the server's settings, never in the app. Search Console and GA4 are linked from <a href="{{ url_for('connections') }}">Google connections</a>.</p></section>
-<section class="card"><h2>Pull data now</h2><p class="note">Search Console, GA4, rankings and ChatGPT also run every night; page checks and the technical crawl every Monday. Semrush runs only when someone presses a button below.</p>
+<section class="card"><h2>Automatic refresh</h2><p class="note">Nobody needs to press anything. Every night at 02:00 IST Orbit refreshes Search Console, GA4,
+rankings, ChatGPT prompts, blog drafts and Semrush for every brand; page checks and the technical crawl run weekly. Opening a brand whose data is
+missing or stale starts a free refresh straight away. Paid sources (OpenAI and Semrush) run at most {{ paid_per_day }} time{{ 's' if paid_per_day != 1 }} a day per brand,
+whatever asks for them; Semrush also within {{ semrush_auto }} units a run and the lifetime cap.</p>
+<p class="note" style="margin-top:6px"><b>Refresh now (team only).</b> Free sources refresh straight away; paid ones only if today's limit allows.</p>
 <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
 {% for only,label in [('gsc,ga4,rank','Pull Search Console, GA4 and rankings'),('ai','Ask ChatGPT all approved prompts'),('pages','Find and check pages')] %}
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run"><input type="hidden" name="only" value="{{ only }}"><button class="btn {{ 'red' if loop.first else 'ln' }}">{{ label }}</button></form>{% endfor %}

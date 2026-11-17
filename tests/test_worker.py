@@ -99,8 +99,9 @@ with connect() as conn:
     n1 = worker.nightly(conn); n2 = worker.nightly(conn)
     steps = conn.execute("SELECT client_id::text, array_agg(step ORDER BY seq) FROM pull_tasks WHERE pull_id=%s GROUP BY 1", [n1]).fetchall()
 assert n1 and n2 is None and {s[0] for s in steps} == {A, B}
-assert steps[0][1] == ["gsc", "ga4", "rank", "ai", "pages", "reddit", "youtube", "blogs", "crawl"] and not any("semrush" in s for _, st in steps for s in st)
-print("nightly: every brand, once in 20 hours, Search Console to crawl, no Semrush")
+assert steps[0][1] == ["gsc", "ga4", "rank", "semrush", "ai", "pages", "reddit", "youtube", "blogs", "crawl"], steps
+with connect() as conn: assert worker.nightly(conn, "midday") is None                                     # once a day: no midday run
+print("nightly: every brand once a day, Search Console to crawl, Semrush included; no midday run at one paid run a day")
 
 # 4b. a pull queued the old way (for the Mac) is taken over
 with connect() as conn:
@@ -111,6 +112,59 @@ with connect() as conn:
     assert conn.execute("SELECT started_at IS NOT NULL FROM pull_queue WHERE pull_id=%s", [old]).fetchone()[0]
     assert conn.execute("SELECT status FROM pull_tasks t JOIN pull_queue q USING (pull_id) WHERE q.label='youtube' AND t.client_id=%s ORDER BY task_id DESC LIMIT 1", [B]).fetchone()[0] == "done"
 print("legacy: a pull queued for the Mac before this change is run by the server")
+
+# 6. the paid guardrail: whatever asks, OpenAI and Semrush run at most PAID_RUNS_PER_DAY per brand
+with connect() as conn:
+    conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM paid_runs")
+    p1 = worker.enqueue(conn, B, "ai,blogs", ["--client-id", B, "--only", "ai,blogs"], "seo@hovers.in")
+ai_calls.clear(); drafts.clear(); worker.work(budget=30, kick_after=False)
+first = (len(ai_calls), len(drafts))
+with connect() as conn: p2 = worker.enqueue(conn, B, "ai,blogs", ["--client-id", B, "--only", "ai,blogs"], "owner@beta.shop")
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    notes = [r[0] for r in conn.execute("SELECT note FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [p2])]
+    ok_now, nxt = worker.paid_next(conn, B, "ai")
+assert first[0] >= 1 and first[1] >= 1 and (len(ai_calls), len(drafts)) == first, (first, len(ai_calls), len(drafts))  # nothing more spent
+assert all(n.startswith("skipped: already ran 1 time in 24 hours") for n in notes) and not ok_now and nxt, notes
+os.environ.update(PAID_RUNS_PER_DAY="2")
+with connect() as conn:
+    p3 = worker.enqueue(conn, B, "ai", ["--client-id", B, "--only", "ai"], "x")
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    note = conn.execute("SELECT note FROM pull_tasks WHERE pull_id=%s", [p3]).fetchone()[0]
+    assert note.startswith("skipped: last run under 10 hours ago"), note                                  # twice a day, spaced
+    conn.execute("UPDATE paid_runs SET started_at = now() - interval '11 hours'")
+    p4 = worker.enqueue(conn, B, "ai", ["--client-id", B, "--only", "ai"], "x")
+    mid = worker.nightly(conn, "midday")
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    assert not conn.execute("SELECT note FROM pull_tasks WHERE pull_id=%s", [p4]).fetchone()[0].startswith("skipped")   # second run allowed
+    assert mid and [r[0] for r in conn.execute("SELECT DISTINCT step FROM pull_tasks WHERE pull_id=%s ORDER BY 1", [mid])] == ["ai", "blogs", "semrush"]
+os.environ.update(PAID_RUNS_PER_DAY="0")
+with connect() as conn: assert worker.paid_ok(conn, A, "semrush")[0] is False
+os.environ.update(PAID_RUNS_PER_DAY="1")
+print("guardrail: a second paid run in the day is skipped whoever asks; twice a day needs the gap; the midday slot runs only paid sources; 0 switches them off")
+
+# 7. data ready on open: a linked brand with no data starts its first pull; stale free data refreshes; nothing paid on revisits
+with connect() as conn:
+    conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM pull_queue WHERE label='auto'")
+    conn.execute("INSERT INTO client_integrations (client_id, gsc_site_url, google_connection_id) VALUES (%s,'sc-domain:beta.shop',%s) ON CONFLICT (client_id) DO UPDATE SET gsc_site_url=EXCLUDED.gsc_site_url", [B, gid])
+    first = worker.ensure_fresh(conn, B)
+    again = worker.ensure_fresh(conn, B)
+    steps = [r[0] for r in conn.execute("SELECT step FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [first])]
+assert first and again is None and steps == ["gsc", "ga4", "rank", "ai", "pages", "blogs", "crawl"], steps
+with connect() as conn:
+    conn.execute("UPDATE pull_tasks SET status='done'"); conn.execute("UPDATE pull_queue SET requested_at = now() - interval '3 hours' WHERE label='auto'")
+    conn.execute("""INSERT INTO gsc_search_daily (client_id, date, query, page, country, device, clicks, impressions, position, is_branded)
+                    VALUES (%s, current_date - 3, 'q', 'https://beta.shop/', 'ind', 'MOBILE', 1, 10, 5, false)""", [B])
+    conn.execute("INSERT INTO collector_runs (client_id, collector, status, started_at) VALUES (%s,'gsc','ok', now() - interval '40 hours')", [B])
+    stale = worker.ensure_fresh(conn, B)
+    steps = [r[0] for r in conn.execute("SELECT step FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [stale])]
+    conn.execute("UPDATE pull_tasks SET status='done'"); conn.execute("UPDATE pull_queue SET requested_at = now() - interval '3 hours' WHERE label='auto'")
+    conn.execute("INSERT INTO collector_runs (client_id, collector, status, started_at) VALUES (%s,'gsc','ok', now())", [B])
+    fresh = worker.ensure_fresh(conn, B)
+assert steps == ["gsc", "ga4", "rank", "pages"] and fresh is None, steps                                 # free only; nothing when fresh
+print("ready on open: a new brand's first pull starts by itself; stale data refreshes for free; fresh data starts nothing")
 
 # 5. the endpoints: locked without the secret; the schedule queues and works; the buttons start at once
 import app as webapp, dashboard

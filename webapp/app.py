@@ -43,12 +43,15 @@ def _cron_ok():
     return any(tok and secrets.compare_digest(tok, got) for tok in (os.environ.get("CRON_SECRET", ""), os.environ.get("CRON_TOKEN", "")))
 
 @app.get("/cron/nightly")
+@app.get("/cron/midday")
 def cron_nightly():
-    """Vercel's daily schedule (vercel.json): queue the nightly pull of every brand, then start working through it."""
+    """Vercel's daily schedules (vercel.json): 02:00 IST queues every brand's full pull; 14:00 IST queues the paid sources
+    again only when PAID_RUNS_PER_DAY is 2. Then the worker starts on it."""
     if not _cron_ok(): abort(403)
     import worker
-    with connect() as conn: pid = worker.nightly(conn)
-    return {"nightly_pull": pid, **worker.work()}
+    slot = "midday" if request.path.endswith("/midday") else "nightly"
+    with connect() as conn: pid = worker.nightly(conn, slot)
+    return {"slot": slot, "nightly_pull": pid, **worker.work()}
 
 @app.post("/worker/run")
 def worker_run():

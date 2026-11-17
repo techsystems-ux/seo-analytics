@@ -20,11 +20,11 @@ on-page checks. Nothing goes live until someone reviews it and clicks Publish.</
 {% if edit %}
 <section class="card" style="display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between">
   <div style="max-width:620px"><h2 style="margin:0">Write more posts</h2>
-    <p class="note" style="margin:4px 0 0">Refreshes the topic ideas and writes the next {{ 3 }} as drafts. Runs by itself every night too, keeping up to 6 drafts waiting.
+    <p class="note" style="margin:4px 0 0">Runs by itself every night, refreshing the topic ideas and writing the next drafts (up to 6 waiting). Writing uses OpenAI, so it runs at most {{ per_day }} time{{ 's' if per_day != 1 }} a day per brand{% if not can_write and next_at and next_at != 'switched off' %}; the next run can start {{ next_at.strftime('%d %b, %H:%M') }} UTC{% endif %}.
     {% if last %}Last run {{ last[0].strftime('%d %b, %H:%M') }}{% if last[1] == 'error' %} <span class="tag t-sev-error">failed</span>{% elif last[1] == 'running' %} <span class="tag t-na">running</span>{% endif %}.{% endif %}
     {% if not has_gsc %} Search Console data has not arrived yet, so the first topics lean on Google suggestions.{% endif %}</p></div>
   <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="btn red" name="what" value="run">Find topics and write drafts</button></form>
+    <button class="btn red" name="what" value="run" {{ 'disabled title="Already ran today"' if not can_write }}>Find topics and write drafts</button></form>
 </section>
 {% endif %}
 
