@@ -307,7 +307,7 @@ def tech_issues(conn, client_id, show="open"):
                                  ORDER BY array_position(ARRAY['error','warning','notice'], severity), pages DESC""", [client_id]),
                 ["code", "source", "title", "severity", "team", "fix", "status", "owner", "due", "pages", "first_seen", "last_seen"])
 
-def tech_issue_pages(conn, client_id, code, limit=200):
+def tech_issue_pages(conn, client_id, code, limit=500):
     crawl = conn.execute("""SELECT crawl_id FROM tech_issue_pages WHERE client_id=%s AND issue_code=%s
                             ORDER BY (SELECT finished_at FROM tech_crawls t WHERE t.crawl_id=tech_issue_pages.crawl_id) DESC NULLS LAST LIMIT 1""",
                          [client_id, code]).fetchone()
@@ -633,16 +633,33 @@ def headlines(kb, pb):
     if not out and (kb["n"] or pb["n"]): out.append(("flat", "No big moves since last month. Positions are holding."))
     return out[:5]
 
+# ------------------------------------------------------------------ technical audit checklist
+def tech_checklist(conn, client_id):
+    """The crawler's checklist with a tick or a count per item, from the latest Orbit crawl. None before the first crawl."""
+    import crawler
+    if not conn.execute("SELECT 1 FROM tech_crawls WHERE client_id=%s AND source='hovers' AND finished_at IS NOT NULL LIMIT 1", [client_id]).fetchone():
+        return None
+    open_ = {r[0]: (r[1], r[2]) for r in conn.execute("""SELECT issue_code, pages, status FROM tech_issues
+                                                         WHERE client_id=%s AND source='hovers' AND pages > 0""", [client_id])}
+    out = []
+    for group, items in crawler.CHECKLIST:
+        rows = [{"code": code, "name": name, "severity": crawler.ISSUES[code][0], "pages": open_.get(code, (0, None))[0],
+                 "status": open_.get(code, (0, None))[1]} for code, name in items]
+        out.append({"group": group, "items": rows, "passed": sum(1 for r in rows if not r["pages"])})
+    total = sum(len(g["items"]) for g in out)
+    return {"groups": out, "passed": sum(g["passed"] for g in out), "total": total}
+
 # ------------------------------------------------------------------ technical SEO index (Pro)
 TECH_PILLARS = [
     ("crawl", "Crawlability and indexation", "Status codes, index directives, canonicalisation and redirects that decide what Googlebot can crawl and index.",
-     ["page_4xx", "page_5xx", "noindex_in_sitemap", "canonical_broken", "canonical_other", "redirect_chain"]),
+     ["page_4xx", "page_5xx", "noindex_in_sitemap", "canonical_broken", "canonical_other", "redirect_chain", "soft_404",
+      "sitemap_bad_urls", "sitemap_missing", "sitemap_not_in_robots", "robots_missing"]),
     ("links", "Internal linking and link equity", "Broken and redirected internal links and orphan URLs that leak PageRank and crawl budget.",
      ["broken_internal_link", "link_to_redirect", "orphan_page"]),
     ("onpage", "On-page relevance and metadata", "Title tags, meta descriptions, heading hierarchy and image alt attributes that carry topical relevance and SERP CTR.",
      ["missing_title", "duplicate_title", "missing_description", "duplicate_description", "missing_h1", "multiple_h1", "img_missing_alt"]),
     ("intl", "Security and internationalisation", "HTTPS integrity (mixed content) and hreflang reciprocity for regional versions.",
-     ["mixed_content", "hreflang_broken"]),
+     ["mixed_content", "hreflang_broken", "http_not_https", "www_both_live"]),
     ("perf", "Performance and Core Web Vitals", "Server response (TTFB) from the crawl, plus LCP, INP and CLS from PageSpeed (field data where CrUX has enough traffic).",
      ["slow_page"]),
 ]

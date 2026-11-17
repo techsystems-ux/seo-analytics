@@ -185,3 +185,11 @@ session is narrowed to their brand (not staff), so another brand's rows cannot a
   Either app needs the redirect URL `https://orbit-hovers.vercel.app/shopify/callback` and, for stores outside the Hovers organisation,
   an IP allowlist (Shopify rule from 20 Nov 2026). Optional: `SHOPIFY_REDIRECT_URI`, `SHOPIFY_API_VERSION` (default 2026-10).
 - Test: `tests/test_execution.py` (OpenAI and Shopify faked).
+
+## Lean technical audit (migration 018)
+Issues, not pages, the way an analyst runs a site audit. The weekly crawl (`CRAWL_LIMIT`, default 500 pages, highest-traffic first)
+stores nothing per page: for each issue type it keeps the full count and the affected URLs of the latest crawl only, capped at
+500 for errors, 100 for warnings and 25 for notices. Site-wide checks run once per crawl: HTTP to HTTPS, one host (www or not),
+soft 404, robots.txt, sitemap present and listed, sitemap URLs live. The Technical screen shows them as an audit checklist.
+The on-page audit checks the top `PAGES_PER_RUN` (default 30) pages by traffic and keeps one small record per page.
+Migration 018 cleans up what earlier versions stored.

@@ -3,8 +3,26 @@
 {% block body %}
 {% set h = summary.get('hovers') %}{% set s = summary.get('semrush') %}
 <div class="top"><div><span class="kicker">Technical SEO · Site health and crawl</span><h1>{{ t('Technical health', 'Crawlability, indexation and site health') }}</h1>
-<p class="lead">A crawl of {{ client.domain }} that finds what stops Google reading the site: broken pages and links, redirects, missing tags, duplicates. Each issue type is one task with an owner and a due date. The next crawl checks the fix.</p></div>
+<p class="lead">A weekly crawl of up to 500 pages of {{ client.domain }}, highest-traffic pages first, run as an analyst would run a site audit:
+a checklist of what stops Google crawling and indexing the site, each failing item one task with an owner and a due date. Orbit keeps the issues and the
+affected URLs of the latest crawl, not copies of pages. The next crawl checks the fix.</p></div>
 <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Crawl site now (free)</button></form></div>
+
+{% if checklist %}<section class="card"><div class="top" style="align-items:flex-end"><div><h2>Audit checklist</h2>
+  <p class="note" style="margin:4px 0 0">{{ checklist.passed }} of {{ checklist.total }} checks pass in the latest crawl. Click a failing check for its URLs and the fix.</p></div></div>
+  <div class="ckl">{% for g in checklist.groups %}<div class="ckg"><b>{{ g.group }} <span class="note">{{ g.passed }}/{{ g['items']|length }}</span></b>
+    {% for i in g['items'] %}<div class="cki {{ 'ok' if not i.pages else i.severity }}">
+      {% if i.pages %}<span class="mk" aria-label="{{ i.severity }}">{{ '!' if i.severity == 'error' else '•' }}</span><a href="?show=all&issue={{ i.code|urlencode }}">{{ i.name }}</a><span class="ct">{{ i.pages|n }} URL{{ 's' if i.pages != 1 }}</span>
+      {% else %}<span class="mk" aria-label="pass">✓</span><span>{{ i.name }}</span>{% endif %}</div>{% endfor %}</div>{% endfor %}</div>
+</section>
+<style>
+.ckl{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:14px 22px;margin-top:12px}
+.ckg{display:flex;flex-direction:column;gap:5px}.ckg>b{font:700 11px var(--fh);letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:2px}
+.cki{display:grid;grid-template-columns:18px 1fr auto;gap:6px;align-items:baseline;font-size:13px}
+.cki .mk{width:16px;height:16px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--fh);color:#fff;background:#2E7D4F;align-self:center}
+.cki.error .mk{background:var(--red)}.cki.warning .mk{background:#C98A00}.cki.notice .mk{background:var(--mid)}
+.cki.ok span:last-child{color:var(--grey)}.cki a{color:var(--ink)}.cki .ct{font:600 11.5px var(--fn);color:var(--grey);white-space:nowrap}
+</style>{% endif %}
 
 {% if pro %}<section class="card"><div class="top" style="align-items:flex-end"><div><h2>Technical SEO index</h2>
   <p class="note" style="margin:4px 0 0">Five pillars scored 0–100 from open crawl issues, weighted by severity (error 10, warning 4, notice 1) and share of affected URLs{% if tix.crawled %} across {{ tix.crawled|n }} crawled URLs{% endif %}. Performance blends TTFB from the crawl with Lighthouse and CrUX.</p></div>
@@ -39,7 +57,7 @@
   <td class="r">{{ i.pages|n }}</td><td>{{ 'Developer' if i.team=='tech' else 'SEO' }}</td><td>{{ i.status|replace('_',' ') }}{% if i.owner %}<br><span class="note">{{ i.owner }}</span>{% endif %}</td>
   <td class="nw">{% if i.due %}<span class="{{ 'down' if i.due < today and i.status in ('open','in_progress') }}">{{ i.due.strftime('%d %b') }}</span>{% else %}–{% endif %}</td></tr>{% endfor %}</table>
   {% elif h or s %}<p class="empty">{{ 'Nothing open. Every issue from the last crawl is fixed.' if show=='open' else 'Nothing here.' }}</p>
-  {% else %}<p class="empty">No crawl yet. Press Crawl site now: it is free and takes 10 to 20 minutes for about 1,000 pages.</p>{% endif %}</div>
+  {% else %}<p class="empty">No crawl yet. Press Crawl site now: it is free and takes about 5 to 10 minutes for 500 pages.</p>{% endif %}</div>
 </section>
 
 <section class="card" style="display:flex;flex-direction:column;gap:12px">
@@ -54,7 +72,8 @@
     <div><label for="du">Due</label><input id="du" type="date" name="due" value="{{ sel.due.isoformat() if sel.due else '' }}"></div>
     <div><button class="btn blk">Save</button></div></form>
   <p class="note">Mark it Fixed when the change is live. The next crawl sets it to Verified if the issue is gone, or reopens it if not.</p>
-  <div class="tw">{% if pages %}<table><tr><th>Page ({{ pages|length }}{{ '+' if pages|length >= 200 }})</th><th>Detail</th></tr>
+  {% if pages and sel.pages > pages|length %}<p class="note" style="margin:0">Showing {{ pages|length }} of {{ sel.pages|n }} affected URLs. Orbit keeps {{ 'up to 500' if sel.severity == 'error' else 'a sample of ' ~ (100 if sel.severity == 'warning' else 25) }} per issue; the fix is usually one template change, and the next crawl re-counts them all.</p>{% endif %}
+  <div class="tw">{% if pages %}<table><tr><th>Page</th><th>Detail</th></tr>
   {% for p in pages %}<tr><td><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|path }}</a></td><td class="note">{{ p.detail or '' }}</td></tr>{% endfor %}</table>
   {% elif sel.source=='semrush' %}<p class="note">Semrush lists the pages for the top error types only, to save credits. Open Site Audit in Semrush for the rest.</p>
   {% else %}<p class="note">No pages in the latest crawl.</p>{% endif %}</div>

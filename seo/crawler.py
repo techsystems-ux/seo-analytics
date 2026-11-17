@@ -54,6 +54,23 @@ ISSUES = {
     "orphan_page":           ("notice", "seo",  "Page in the sitemap that no crawled page links to", "Link to it from a related collection, blog or menu."),
     "sitemap_not_in_robots": ("notice", "tech", "Sitemap not listed in robots.txt", "Add a Sitemap: line with the sitemap URL to robots.txt."),
 }
+# The audit checklist, grouped the way an analyst works through it (each item is one tick: pass, or how many URLs fail)
+CHECKLIST = [
+    ("Site set-up", [("http_not_https", "HTTP redirects to HTTPS"), ("www_both_live", "One version of the site (www or not)"),
+                     ("soft_404", "Missing pages return 404"), ("robots_missing", "robots.txt in place"),
+                     ("sitemap_missing", "XML sitemap in place"), ("sitemap_not_in_robots", "Sitemap listed in robots.txt"),
+                     ("sitemap_bad_urls", "Sitemap lists only live URLs")]),
+    ("Status codes and redirects", [("page_4xx", "No broken pages (4xx)"), ("page_5xx", "No server errors (5xx)"),
+                                    ("broken_internal_link", "No internal links to broken pages"), ("redirect_chain", "No redirect chains"),
+                                    ("link_to_redirect", "Internal links go straight to the final URL")]),
+    ("Indexing and canonicals", [("noindex_in_sitemap", "No noindex pages in the sitemap"), ("canonical_broken", "Canonicals point to live pages"),
+                                 ("canonical_other", "Canonicals are self-referencing"), ("hreflang_broken", "hreflang targets load"),
+                                 ("orphan_page", "Every sitemap page is linked from the site")]),
+    ("Titles and tags", [("missing_title", "Every page has a title"), ("duplicate_title", "Titles are unique"),
+                         ("missing_description", "Every page has a meta description"), ("duplicate_description", "Descriptions are unique"),
+                         ("missing_h1", "Every page has an H1"), ("multiple_h1", "One H1 per page"), ("img_missing_alt", "Images have alt text")]),
+    ("Speed and security", [("slow_page", f"Server responds within {SLOW_SECONDS:.0f}s"), ("mixed_content", "No http:// files on https pages")]),
+]
 KEEP_URLS = {"error": 500, "warning": 100, "notice": 25}      # affected URLs stored per issue; the count is always complete
 
 def host_key(url):

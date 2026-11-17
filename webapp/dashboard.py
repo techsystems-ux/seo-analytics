@@ -459,9 +459,10 @@ def technical(cid):
         sel = next((i for i in A.tech_issues(conn, cid, "all") if i["code"] == code), None) if code else None
         actions = semrush_actions(conn, cid)
         tix = A.tech_index(conn, cid)
+        checklist = A.tech_checklist(conn, cid)
     counts = {s: sum(1 for i in issues if i["severity"] == s) for s in ("error", "warning", "notice")}
     return view("technical.html", c, "technical", summary=summary, issues=issues, show=show, code=code, pages=pages, sel=sel,
-                counts=counts, actions=actions, today=__import__("datetime").date.today(), tix=tix)
+                counts=counts, actions=actions, today=__import__("datetime").date.today(), tix=tix, checklist=checklist)
 
 @bp.post("/c/<cid>/technical")
 def technical_save(cid):
