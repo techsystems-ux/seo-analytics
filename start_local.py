@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -70,7 +70,7 @@ def use_cloud(url):
     os.environ["DB_SET_ROLE"] = "aeo_app"
     print("Using the online database (same data as the Vercel copy).")
 
-DAILY = ["--only", "gsc,ga4,rank,ai,pages,crawl,youtube,reddit"]     # never Semrush: that is a button in Settings
+DAILY = ["--only", "gsc,ga4,rank,ai,pages,blogs,crawl,youtube,reddit"]     # never Semrush: that is a button in Settings
 
 def cloud_worker():
     """While the app is open on this Mac: run pulls queued from the online copy, one at a time, and the daily pull of

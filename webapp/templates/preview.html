@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Preview · {{ d.title }}</title>
+<meta name="description" content="{{ d.meta_description }}">
+<link rel="icon" href="https://www.google.com/s2/favicons?domain={{ d.domain }}&sz=64">
+<style>
+:root{--ink:#141414;--grey:#62615E;--hair:#E7E4DF;--bg:#FFFFFF;--soft:#F7F5F2;--red:#B20F00;--link:#8A1A10;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#EDEBE7;--grey:#A6A39D;--hair:#2E2D2B;--bg:#121212;--soft:#1B1B1A;--link:#F28B7D;color-scheme:dark}}
+:root[data-theme="dark"]{--ink:#EDEBE7;--grey:#A6A39D;--hair:#2E2D2B;--bg:#121212;--soft:#1B1B1A;--link:#F28B7D;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.72 Georgia,"Iowan Old Style","Times New Roman",serif;-webkit-font-smoothing:antialiased}
+.bar{position:sticky;top:0;z-index:2;background:var(--ink);color:var(--bg);font:500 12.5px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;padding:9px 16px;display:flex;gap:10px 18px;flex-wrap:wrap;align-items:center;justify-content:center;text-align:center}
+.bar b{font-weight:700}.bar a{color:inherit}
+.bar .pill{border:1px solid currentColor;border-radius:99px;padding:1px 9px;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+header.site{border-bottom:1px solid var(--hair)}
+header.site .w{display:flex;align-items:center;gap:10px;height:62px;font:700 15px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+header.site img{width:22px;height:22px;border-radius:5px}
+.w{max-width:740px;margin:0 auto;padding:0 20px}
+.crumb{font:500 12.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:var(--grey);margin:34px 0 10px;overflow-wrap:anywhere}
+h1{font:700 clamp(30px,5vw,44px)/1.12 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;letter-spacing:-.02em;margin:0 0 14px}
+.by{font:500 13.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:var(--grey);margin:0 0 28px}
+.ex{font-size:19px;color:var(--grey);margin:0 0 26px;font-style:italic}
+article h2{font:700 25px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;margin:38px 0 10px;letter-spacing:-.01em}
+article h3{font:700 19px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;margin:26px 0 8px}
+article p{margin:0 0 18px}article ul,article ol{margin:0 0 18px;padding-left:24px}article li{margin:4px 0}
+article a{color:var(--link);text-underline-offset:3px}
+article table{width:100%;border-collapse:collapse;margin:10px 0 22px;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;display:block;overflow-x:auto}
+article th,article td{border:1px solid var(--hair);padding:9px 11px;text-align:left;vertical-align:top}article th{background:var(--soft)}
+blockquote{margin:0 0 18px;padding:4px 18px;border-left:3px solid var(--hair);color:var(--grey)}
+.serp{margin:46px 0 60px;padding:18px 20px;border:1px solid var(--hair);border-radius:10px;background:var(--soft);font:14px/1.5 arial,sans-serif}
+.serp .k{font:700 11px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--grey);margin-bottom:10px}
+.serp .u{font-size:12.5px;color:var(--grey);overflow-wrap:anywhere}.serp .t{font-size:19px;color:#1a0dab;margin:2px 0}.serp .d{color:var(--grey)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .serp .t{color:#8AB4F8}}
+footer{border-top:1px solid var(--hair);padding:20px 0 40px;font:12.5px -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;color:var(--grey)}
+</style>
+</head>
+<body>
+<div class="bar" role="note">
+  {% if d.status == 'published' %}<span class="pill">Live</span><span>This post is published. <a href="{{ d.published_url }}">Open the live page</a></span>
+  {% else %}<span class="pill">Preview</span><span><b>Draft for review.</b> Not published on {{ d.domain }} yet; the store's theme will style the live post.</span>{% endif %}
+</div>
+<header class="site"><div class="w"><img src="https://www.google.com/s2/favicons?domain={{ d.domain }}&sz=64" alt="" onerror="this.remove()">{{ d.brand }}</div></header>
+<main class="w">
+  <div class="crumb">{{ d.url|replace('https://','') }}</div>
+  <h1>{{ d.title }}</h1>
+  <p class="by">By {{ d.author or d.brand }}{% if d.word_count %} · {{ ((d.word_count / 220)|round(0, 'ceil'))|int }} min read{% endif %}</p>
+  {% if d.excerpt %}<p class="ex">{{ d.excerpt }}</p>{% endif %}
+  <article>{{ body|safe }}</article>
+  <section class="serp" aria-label="Search listing">
+    <div class="k">How it should show in Google</div>
+    <div class="u">{{ d.url|replace('https://','') }}</div>
+    <div class="t">{{ d.meta_title or d.title }}</div>
+    <div class="d">{{ d.meta_description }}</div>
+  </section>
+</main>
+<footer><div class="w">Preview from Orbit by Hovers · last updated {{ d.updated_at.strftime('%d %b %Y, %H:%M') }} UTC</div></footer>
+</body>
+</html>

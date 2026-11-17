@@ -10,13 +10,23 @@ import analytics as A
 
 # Screens a client may open for their own brand (read-only). Everything else, and every form, is staff only.
 VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.answer", "dash.reddit_view", "dash.sources",
-                  "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download"}
+                  "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download", "dash.blogs", "dash.blog"}
+# What a brand's owner (the person who signed up for it) may also do: review, edit and publish its blog posts, connect its store.
+OWNER_ACTIONS = {"dash.blogs_post", "dash.blog_post", "dash.publishing", "dash.publishing_post"}
+
+def is_owner(cid):
+    """The signed-in client is listed as this brand's owner (self-serve sign-up), not just a viewer."""
+    if not is_viewer() or cid not in (session.get("viewer_clients") or []): return False
+    with _staff_connect() as conn:
+        return bool(conn.execute("SELECT 1 FROM client_viewers WHERE client_id::text=%s AND lower(email)=%s AND role='owner'",
+                                 [cid, session["viewer_email"].lower()]).fetchone())
+
+def can_edit(cid):
+    return bool(session.get("staff_email")) or is_owner(cid)
 
 def ui_mode():
-    """Simple: for brand owners and marketers who are not SEO specialists. Pro: for SEO teams (technical screens, SEO terms).
-    Staff default to Pro, client viewers to Simple; anyone can switch with the toggle in the top bar."""
-    m = session.get("ui_mode")
-    return m if m in ("simple", "pro") else ("pro" if session.get("staff_email") else "simple")
+    """One view for everyone: the full (Pro) SEO view. Kept as a function so templates and reports can still ask."""
+    return "pro"
 
 def is_viewer():
     return has_request_context() and not session.get("staff_email") and bool(session.get("viewer_email"))
@@ -49,7 +59,8 @@ def _gate():
     if session.get("staff_email"): return
     if session.get("viewer_email"):
         cid = (request.view_args or {}).get("cid")
-        if request.method == "GET" and request.endpoint in VIEWER_SCREENS and cid in (session.get("viewer_clients") or []):
+        mine = cid in (session.get("viewer_clients") or [])
+        if mine and ((request.method == "GET" and request.endpoint in VIEWER_SCREENS) or (request.endpoint in OWNER_ACTIONS and is_owner(cid))):
             with _staff_connect() as conn:
                 ends = conn.execute("SELECT trial_ends FROM clients WHERE client_id=%s", [cid]).fetchone()
             if ends and ends[0] and ends[0] < __import__("datetime").date.today():
@@ -89,6 +100,7 @@ def view(tpl, client=None, active=None, **ctx):
     return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES,
                            pro=pro, t=lambda simple, technical: technical if pro else simple,
                            viewer=session.get("viewer_email") if is_viewer() else None, viewer_brands=len(session.get("viewer_clients") or []),
+                           owner=is_owner(client["id"]) if client and is_viewer() else False,
                            intel=info, data_to=info["data_to"] if info else None, **ctx)
 
 # ------------------------------------------------------------------ formatting helpers for templates
@@ -536,7 +548,7 @@ def queue_pull(cid, label, args):
     from urllib.parse import urlencode
     with connect() as conn:
         conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,%s,%s,%s)",
-                     [cid, label, json.dumps(args), session.get("staff_email")])
+                     [cid, label, json.dumps(args), session.get("staff_email") or session.get("viewer_email")])
     back = (request.referrer or url_for("dash.clients")).split("#")[0]
     abort(redirect(back + ("&" if "?" in back else "?") + urlencode({"msg": QUEUED})))
 
@@ -813,3 +825,5 @@ def monthly_report_download(cid, month):
     name = _re.sub(r"[^A-Za-z0-9 ._-]", "", f"{c['name']} - SEO Report - {m.strftime('%B %Y')}.pptx")
     return send_file(io.BytesIO(data), as_attachment=True, download_name=name,
                      mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation")
+
+import execution  # noqa: E402,F401  Execution screens (blog posts, publishing) on this blueprint

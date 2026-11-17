@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Execution · Blog posts</span><h1>Blog posts for {{ client.name }}</h1>
+<p class="lead">Topics come from {{ client.name }}'s own search data: Search Console queries near page 1, ChatGPT questions that do not name the brand yet,
+Reddit questions and Google's suggestions. Orbit writes each one as a draft in the brand's rules, links it to real pages on the site and runs the
+on-page checks. Nothing goes live until someone reviews it and clicks Publish.</p></div></div>
+
+{% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
+
+<div class="grid">
+  <div class="card kpi"><div class="l">For review</div><div class="v">{{ tabcount.review }}</div><div class="s">Drafts waiting for a person</div></div>
+  <div class="card kpi"><div class="l">Published</div><div class="v">{{ tabcount.published }}</div><div class="s">Live on the store</div></div>
+  <div class="card kpi"><div class="l">Topic ideas</div><div class="v">{{ tabcount.ideas }}</div><div class="s">Ranked by search evidence</div></div>
+  <div class="card kpi"><div class="l">Store</div>
+    {% if store and store.status == 'active' %}<div class="v sm">{{ store.shop }}</div><div class="s"><span class="tag t-pass">Connected</span> · posts go to {{ store.blog_title or 'the store blog' }}</div>
+    {% elif store and store.status == 'reconnect' %}<div class="v sm">{{ store.shop }}</div><div class="s"><span class="tag t-sev-error">Connect again</span></div>
+    {% else %}<div class="v sm mute">Not connected</div><div class="s">{% if edit %}<a href="{{ url_for('dash.publishing', cid=client.id) }}">Connect Shopify</a> to publish{% else %}The Hovers team connects the store{% endif %}</div>{% endif %}</div>
+</div>
+
+{% if edit %}
+<section class="card" style="display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between">
+  <div style="max-width:620px"><h2 style="margin:0">Write more posts</h2>
+    <p class="note" style="margin:4px 0 0">Refreshes the topic ideas and writes the next {{ 3 }} as drafts. Runs by itself every night too, keeping up to 6 drafts waiting.
+    {% if last %}Last run {{ last[0].strftime('%d %b, %H:%M') }}{% if last[1] == 'error' %} <span class="tag t-sev-error">failed</span>{% elif last[1] == 'running' %} <span class="tag t-na">running</span>{% endif %}.{% endif %}
+    {% if not has_gsc %} Search Console data has not arrived yet, so the first topics lean on Google suggestions.{% endif %}</p></div>
+  <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn red" name="what" value="run">Find topics and write drafts</button></form>
+</section>
+{% endif %}
+
+<section class="card" style="display:flex;flex-direction:column;gap:14px">
+  <div class="seg">{% for k, label, _ in tabs %}<a class="{{ 'on' if tab == k }}" href="?tab={{ k }}">{{ label }} · {{ tabcount[k] }}</a>{% endfor %}</div>
+
+  {% if tab == 'ideas' %}
+    {% if edit %}<form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="add">
+      <div style="flex:1 1 320px"><label for="kw">Add a topic of your own</label><input id="kw" type="text" name="keyword" placeholder="e.g. how to clean silver jewellery at home"></div>
+      <button class="btn ln">Add to ideas</button><button class="btn blk" name="now" value="1">Add and write now</button></form>{% endif %}
+    {% if rows %}<div class="tw"><table><tr><th>Topic</th><th>Why this topic</th><th>Intent</th><th class="r">Priority</th>{% if edit %}<th></th>{% endif %}</tr>
+    {% for r in rows %}<tr><td><b>{{ r.target_keyword }}</b>{% if r.secondary_keywords %}<br><span class="note">Also: {{ r.secondary_keywords[:3]|join(' · ') }}</span>{% endif %}</td>
+      <td style="max-width:420px">{% for src, line in why(r.evidence, 2) %}<div class="note" style="margin:0"><span class="tag">{{ src }}</span> {{ line }}</div>{% endfor %}</td>
+      <td><span class="tag">{{ r.intent|title }}</span></td><td class="r">{{ r.priority|n }}</td>
+      {% if edit %}<td><form method="post" style="display:flex;gap:6px;justify-content:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="draft_id" value="{{ r.draft_id }}"><input type="hidden" name="tab" value="ideas">
+        <button class="btn blk" name="what" value="write">Write this next</button><button class="btn ln" name="what" value="discard">Not relevant</button></form></td>{% endif %}</tr>{% endfor %}</table></div>
+    {% else %}<p class="empty">No ideas yet. {{ 'Run "Find topics and write drafts" above.' if edit else 'They appear after the first run.' }}</p>{% endif %}
+
+  {% else %}
+    {% if rows %}<div class="posts">{% for r in rows %}{% set st = S[r.status] %}
+    <article class="post">
+      <div class="pm"><span class="tag {{ st[1] }}">{{ st[0] }}</span>{% if r.score is not none %}<span class="tag {{ 't-pass' if r.score >= 80 else 't-na' if r.score >= 60 else 't-sev-error' }}">Checks {{ r.score }}/100</span>{% endif %}
+        {% if r.word_count %}<span class="note">{{ r.word_count|n }} words</span>{% endif %}<span class="note">Keyword: <b>{{ r.target_keyword }}</b></span></div>
+      <h3>{% if r.status in ('writing',) %}{{ r.target_keyword }}{% else %}<a href="{{ url_for('dash.blog', cid=client.id, did=r.draft_id) }}">{{ r.title or r.target_keyword }}</a>{% endif %}</h3>
+      {% if r.excerpt %}<p class="ex">{{ r.excerpt }}</p>{% endif %}
+      {% if r.status == 'failed' %}<p class="note" style="color:var(--red)">{{ (r.error or '')[:200] }}</p>{% endif %}
+      <div class="why">{% for src, line in why(r.evidence, 2) %}<span><span class="tag">{{ src }}</span> {{ line }}</span>{% endfor %}</div>
+      <div class="pa">
+        {% if r.status != 'writing' and r.body_html %}<a class="btn ln" href="{{ url_for('dash.blog', cid=client.id, did=r.draft_id) }}">Review</a>{% endif %}
+        {% if r.preview_token and r.body_html %}<a class="btn ln" href="{{ preview_url(r.preview_token) }}" target="_blank" rel="noopener">Preview link</a>{% endif %}
+        {% if r.status == 'published' and r.published_url %}<a class="btn ln" href="{{ r.published_url }}" target="_blank" rel="noopener">View live</a><span class="note">{{ r.published_at.strftime('%d %b %Y') }}{{ ' · ' ~ r.published_by if r.published_by }}</span>{% endif %}
+        {% if edit and r.status in ('draft','approved') and r.body_html %}
+          <form method="post" action="{{ url_for('dash.blog_post', cid=client.id, did=r.draft_id) }}" onsubmit="return confirm('Publish this post on {{ (store.shop if store else 'the store')|e }} now?')"><input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn red" name="what" value="publish" {{ 'disabled title="Connect the store first"' if not (store and store.status == 'active') }}>Publish</button></form>{% endif %}
+        {% if edit and r.status == 'failed' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="draft_id" value="{{ r.draft_id }}"><button class="btn blk" name="what" value="write">Try again</button></form>{% endif %}
+        {% if edit and r.status == 'discarded' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="draft_id" value="{{ r.draft_id }}"><button class="btn ln" name="what" value="restore">Restore</button></form>{% endif %}
+      </div>
+    </article>{% endfor %}</div>
+    {% else %}<p class="empty">{{ {'review': 'Nothing waiting for review.' ~ (' Click "Find topics and write drafts" to start.' if edit else ''), 'approved': 'Nothing approved and unpublished.', 'published': 'Nothing published yet.', 'discarded': 'Nothing discarded.'}[tab] }}</p>{% endif %}
+  {% endif %}
+</section>
+<p class="note">How topics are ranked: Search Console queries by impressions in the last 30 days, with extra weight for positions 4 to 30 (a dedicated post moves these most) and for question-style searches; ChatGPT questions that do not name {{ client.name }}; Reddit questions; then Google's suggestions. Topics the site already covers are left out.</p>
+<style>
+.posts{display:flex;flex-direction:column;gap:0}
+.post{border-top:1px solid var(--row);padding:16px 0;display:flex;flex-direction:column;gap:8px}
+.post:first-child{border-top:0;padding-top:4px}
+.post h3{margin:0;font:700 17px/1.3 var(--fh)}.post h3 a{color:var(--ink);text-decoration:none}.post h3 a:hover{text-decoration:underline}
+.post .ex{margin:0;color:var(--grey);font-size:13.5px;max-width:880px}
+.pm{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.pm .note{margin:0}
+.why{display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--grey)}
+.pa{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.pa form{margin:0}.pa .note{margin:0}
+</style>
+{% endblock %}

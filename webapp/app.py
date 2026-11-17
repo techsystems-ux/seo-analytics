@@ -28,8 +28,7 @@ def _one_address():
 
 @app.get("/mode/<m>")
 def set_mode(m):
-    """Simple / Pro switch in the top bar; returns to the same screen."""
-    if m in ("simple", "pro"): session["ui_mode"] = m
+    """Old Simple / Pro switch links: there is one view now, so just go back."""
     back = request.referrer or "/"
     return redirect(back if back.startswith(request.host_url) or back.startswith("/") else "/")
 
@@ -220,7 +219,7 @@ def signup_create():
                 conn.execute("INSERT INTO client_viewers (client_id, email, added_by, role) VALUES (%s,%s,'self-serve sign-up','owner') ON CONFLICT DO NOTHING",
                              [new, email])
                 conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,'first pull',%s,%s)",
-                             [new, json.dumps(["--client-id", str(new), "--only", "gsc,ga4,rank,pages,crawl", "--force-weekly"]), email])
+                             [new, json.dumps(["--client-id", str(new), "--only", "gsc,ga4,rank,pages,blogs,crawl", "--force-weekly"]), email])
                 made.append(str(new))
     import portal
     portal.sign_in(email)
@@ -357,6 +356,58 @@ def import_submit(cid):
 def logout():
     check_csrf(); session.clear()
     return redirect(url_for("login", msg="Signed out."))
+
+# ------------------------------------------------------------------ Execution: public preview link and the Shopify connection
+@app.get("/p/<token>")
+def preview(token):
+    """A draft's preview link: anyone with the link can read it before it goes live (not indexed)."""
+    import json, blogs as B
+    if len(token) < 16: abort(404)
+    with connect() as conn:
+        r = conn.execute("""SELECT d.title, d.meta_title, d.meta_description, d.excerpt, d.body_html, d.faqs, d.status, d.published_url,
+                                   d.target_keyword, d.word_count, d.slug, d.updated_at, c.name, c.domain, s.author_name, s.blog_handle, s.primary_domain
+                            FROM content_drafts d JOIN clients c USING (client_id)
+                            LEFT JOIN cms_connections s ON s.client_id = d.client_id AND s.platform='shopify'
+                            WHERE d.preview_token=%s AND d.status <> 'discarded'""", [token]).fetchone()
+    if not r: abort(404)
+    k = ["title", "meta_title", "meta_description", "excerpt", "body_html", "faqs", "status", "published_url", "target_keyword", "word_count",
+         "slug", "updated_at", "brand", "domain", "author", "blog_handle", "primary_domain"]
+    d = dict(zip(k, r))
+    d["url"] = d["published_url"] or B.predicted_url(B.host(d["primary_domain"]) or d["domain"], d["blog_handle"], d["slug"])
+    resp = app.make_response(render_template("preview.html", d=d, body=B.article_body(d, with_schema=False)))
+    resp.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return resp
+
+@app.get("/shopify/callback")
+def shopify_callback():
+    """Shopify sends the store owner back here after they approve Orbit. Checks the state and Shopify's signature,
+    swaps the code for tokens (expiring, refreshed by Orbit), and loads the store's blogs."""
+    import shopify, dashboard
+    st = session.pop("shopify_oauth", None) or {}
+    cid = st.get("cid")
+    if not cid or request.args.get("state") != st.get("state") or request.args.get("shop") != st.get("shop"):
+        return redirect(url_for("login", err="The Shopify connection expired. Start it again from Publishing."))
+    allowed = staff() or (session.get("viewer_email") and cid in (session.get("viewer_clients") or []) and dashboard.is_owner(cid))
+    if not allowed: abort(403)
+    from urllib.parse import urlencode
+    back = url_for("dash.publishing", cid=cid)
+    go = lambda k, v: redirect(back + "?" + urlencode({k: v}))
+    with connect() as conn:
+        c = shopify.connection(conn, cid)
+        client_id, secret = shopify.app_creds(c)
+        if not client_id or not shopify.verify_hmac(request.args.to_dict(), secret):
+            return go("err", "Shopify's reply could not be verified. Please try again.")
+        if request.args.get("error") or not request.args.get("code"):
+            return go("err", "The store owner did not approve the connection.")
+        try:
+            tok = shopify.exchange_code(st["shop"], client_id, secret, request.args["code"])
+            if "write_content" not in tok["scope"].split(","):
+                return go("err", "Shopify did not grant permission to write blog posts. Approve the requested access.")
+            shopify.save_tokens(conn, cid, st["shop"], tok, staff() or session.get("viewer_email"))
+            n = len(shopify.load_store(conn, cid))
+        except Exception as e:
+            return go("err", f"Could not finish connecting: {e}"[:300])
+    return go("msg", f"Connected {st['shop']}. {n} blog{'s' if n != 1 else ''} found; posts go to the one selected below.")
 
 from dashboard import bp as dashboard_bp                   # Overview, Search, Competitors, AI visibility, Pages, Settings
 app.register_blueprint(dashboard_bp)

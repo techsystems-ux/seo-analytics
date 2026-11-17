@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 16
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 17
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:

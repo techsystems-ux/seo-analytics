@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="top"><div><span class="kicker">Execution · Publishing</span><h1>Where {{ client.name }}'s posts go</h1>
+<p class="lead">Connect the Shopify store once. Orbit asks only for access to the store's blogs (read and write content), never products, orders or
+customers. Posts are published only when someone clicks Publish on a reviewed draft.</p></div>
+<a class="btn ln" href="{{ url_for('dash.blogs', cid=client.id) }}">Blog posts</a></div>
+
+{% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
+{% if err %}<div class="msg" role="alert" style="border-left-color:var(--red)">{{ err }}</div>{% endif %}
+
+<div class="grid2">
+<section class="card" style="display:flex;flex-direction:column;gap:14px">
+  <div class="top"><h2 style="margin:0"><img src="https://www.google.com/s2/favicons?domain=shopify.com&sz=64" alt="" width="18" height="18" style="vertical-align:-3px;margin-right:6px">Shopify</h2>
+    {% if store and store.status == 'active' %}<span class="tag t-pass">Connected</span>{% elif store and store.status == 'reconnect' %}<span class="tag t-sev-error">Connect again</span>{% else %}<span class="tag t-na">Not connected</span>{% endif %}</div>
+
+  {% if store and store.status == 'active' %}
+    <p style="margin:0"><b>{{ store.shop }}</b>{% if store.primary_domain %} · <a href="{{ store.primary_domain }}" target="_blank" rel="noopener">{{ store.primary_domain|replace('https://','') }}</a>{% endif %}</p>
+    <p class="note" style="margin:0">Connected {{ store.connected_at.strftime('%d %b %Y') if store.connected_at }}{{ ' by ' ~ store.connected_by if store.connected_by }}.</p>
+    <form method="post" style="display:flex;flex-direction:column;gap:10px"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <div><label for="bl">Publish to this blog</label><select id="bl" name="blog_id">{% for b in store.blogs %}<option value="{{ b.id }}" {{ 'selected' if b.id == store.blog_id }}>{{ b.title }} (/blogs/{{ b.handle }})</option>{% endfor %}
+        {% if not store.blogs %}<option value="">No blog yet: Orbit creates "News" on the first publish</option>{% endif %}</select></div>
+      <div><label for="au">Author name on posts</label><input id="au" type="text" name="author" value="{{ store.author_name or '' }}" placeholder="e.g. the brand's editorial team or a named expert"></div>
+      <p class="note" style="margin:0">A named person with real expertise reads as more credible to Google (E-E-A-T) than the store name.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blk" name="what" value="settings">Save</button>
+        <button class="btn ln" name="what" value="reload" formnovalidate>Reload blogs from the store</button></div></form>
+    <form method="post" onsubmit="return confirm('Disconnect the store? Orbit will no longer be able to publish.')"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn ln" name="what" value="disconnect">Disconnect</button></form>
+  {% else %}
+    {% if store and store.status == 'reconnect' %}<p class="note" style="margin:0;color:var(--red)">{{ store.last_error or 'The store no longer accepts Orbit\'s access.' }}</p>{% endif %}
+    <form method="post" style="display:flex;flex-direction:column;gap:10px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="connect">
+      <div><label for="sh">Store address</label><input id="sh" type="text" name="shop" value="{{ (store.shop if store and store.shop else detected) or '' }}" placeholder="brand.myshopify.com" required></div>
+      {% if detected %}<p class="note" style="margin:0">Found on {{ client.domain }}: <b>{{ detected }}</b>.</p>
+      {% else %}<p class="note" style="margin:0">The .myshopify.com address is in Shopify admin, Settings, Domains.</p>{% endif %}
+      <button class="btn red" style="align-self:flex-start" {{ 'disabled' if not (shared or own_app) }}>Connect Shopify</button></form>
+    <p class="note" style="margin:0">You will see Shopify's own approval screen. Approve with a store owner or staff account that can install apps.</p>
+    {% if not (shared or own_app) %}<p class="note" style="margin:0;color:var(--red)">Shopify publishing is not switched on yet{{ ': add the Orbit Shopify app keys (SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET) in Vercel, or this store\'s own app below' if staff else '. The Hovers team is setting it up' }}.</p>{% endif %}
+  {% endif %}
+</section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:10px">
+  <h2 style="margin:0">What happens on Publish</h2>
+  <ol style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.65">
+    <li>The post is created on the selected blog with its title, body, excerpt, tags and author.</li>
+    <li>The meta title and meta description are set as the post's search listing.</li>
+    <li>FAQs are added at the end with FAQ schema; the theme adds its own Article schema.</li>
+    <li>The live link is saved in Orbit, and the post joins the site's page list for checks and internal links.</li>
+  </ol>
+  <p class="note" style="margin:0">Edits after publishing stay in Orbit until someone clicks Update live post. Hide on store unpublishes it without deleting it.</p>
+  <p class="note" style="margin:0">WordPress: next.</p>
+</section>
+</div>
+
+{% if staff %}
+<section class="card staff-only" style="display:flex;flex-direction:column;gap:10px">
+  <h2 style="margin:0">Hovers team: which Shopify app this store uses</h2>
+  <p class="note" style="margin:0">{% if own_app %}This store connects through <b>its own app</b> (client ID {{ store.app_client_id[:10] }}…).{% elif shared %}This store connects through the <b>shared Orbit app</b> (Vercel settings).{% else %}No app yet.{% endif %}
+  The shared app (public distribution) can be installed by any store once Shopify has reviewed it. Until then, or for a single client store, create an app with
+  custom distribution in the Shopify Dev Dashboard for that store and save its keys here. Either way, set its redirect URL to <code>{{ redirect_uri }}</code>,
+  its scopes to <code>read_content, write_content</code>, and an IP allowlist (required by Shopify for apps installed on stores outside your organisation).</p>
+  <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="app">
+    <div style="flex:1 1 220px"><label for="ai">Client ID</label><input id="ai" type="text" name="app_client_id" autocomplete="off"></div>
+    <div style="flex:1 1 220px"><label for="as">Client secret</label><input id="as" type="password" name="app_secret" autocomplete="new-password" style="font:400 13px var(--fb);padding:8px 10px;border:1px solid var(--hair);border-radius:3px;width:100%"></div>
+    <button class="btn blk">Save this store's app</button></form>
+  {% if own_app %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ln" name="what" value="app_remove">Use the shared Orbit app instead</button></form>{% endif %}
+  <p class="note" style="margin:0">The secret is stored encrypted and never shown again.</p>
+</section>
+{% endif %}
+{% endblock %}

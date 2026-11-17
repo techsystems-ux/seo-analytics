@@ -6,7 +6,8 @@
   first, weekly  Reddit (Apify) and YouTube, on their own once their keys are set
   on request     Semrush, from Settings only (lifetime credit cap, see semrush.py); SEMRUSH_AUTO=1 adds it to Mondays
 Each step is logged in collector_runs; one failure never stops the rest.
-Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,crawl] [--force-weekly]
+  every day      blog ideas and up to BLOGS_PER_RUN drafts for review (Execution screen); nothing is published automatically
+Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,crawl,blogs] [--force-weekly]
 """
 import argparse, datetime as dt, os, sys, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -117,6 +118,10 @@ def main():
             if "youtube" in only and os.environ.get("YOUTUBE_API_KEY") and (a.force_weekly or due(conn, cid, "youtube", 7)):
                 import youtube
                 ok &= log(conn, cid, "youtube", lambda: youtube.run(conn, cid, os.environ["YOUTUBE_API_KEY"]))
+            # Execution: blog ideas from the data pulled above, and drafts for review (OpenAI). Never publishes.
+            if "blogs" in only:
+                import blog_writer
+                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, os.environ.get("OPENAI_API_KEY")))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(

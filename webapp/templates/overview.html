@@ -51,7 +51,7 @@
 </div>
 
 {% if pro %}
-<div class="sep"><span>Pro detail</span></div>
+<div class="sep"><span>Performance detail</span></div>
 <div class="grid">
   <div class="card kpi"><div class="l">Hovers Visibility Score · ChatGPT</div>
     {% if vis and vis.you %}<div class="v">{{ vis.you.score|n }}</div><div class="s"><span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}</div>

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block body %}
+{% set st = S[d.status] %}
+<div class="top"><div><span class="kicker">Execution · Review</span><h1>{{ d.title or d.target_keyword }}</h1>
+<p class="lead"><span class="tag {{ st[1] }}">{{ st[0] }}</span> Target keyword <b>{{ d.target_keyword }}</b>{% if d.secondary_keywords %} · also {{ d.secondary_keywords[:4]|join(', ') }}{% endif %}
+{% if d.word_count %} · {{ d.word_count|n }} words{% endif %}{% if d.written_at %} · written {{ d.written_at.strftime('%d %b, %H:%M') }}{% endif %}{% if d.edited_by %} · edited by {{ d.edited_by }}{% endif %}</p></div>
+<a class="btn ln" href="{{ url_for('dash.blogs', cid=client.id, tab='published' if d.status=='published' else 'approved' if d.status=='approved' else 'review') }}">All posts</a></div>
+
+{% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
+{% if err %}<div class="msg" role="alert" style="border-left-color:var(--red)">{{ err }}</div>{% endif %}
+
+<form method="post" id="ed" class="rv">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<div class="rvmain">
+  <section class="card">
+    <h2>How it shows in Google</h2>
+    <div class="serp"><span class="su">{{ (store.primary_domain if store and store.primary_domain else 'https://' ~ client.domain)|replace('https://','') }} › blogs › {{ (store.blog_handle if store and store.blog_handle else 'news') }} › {{ d.slug }}</span>
+      <span class="st" id="sv_t">{{ d.meta_title or d.title }}</span><span class="sd" id="sv_d">{{ d.meta_description }}</span></div>
+    {% if edit %}<div class="fields">
+      <div><label for="f_title">Title (H1)</label><input id="f_title" type="text" name="title" value="{{ d.title }}" required></div>
+      <div><label for="f_mt">Meta title <span class="cnt" data-for="f_mt" data-max="60"></span></label><input id="f_mt" type="text" name="meta_title" value="{{ d.meta_title }}"></div>
+      <div><label for="f_md">Meta description <span class="cnt" data-for="f_md" data-max="155"></span></label><textarea id="f_md" name="meta_description" rows="2">{{ d.meta_description }}</textarea></div>
+      <div class="two"><div><label for="f_slug">URL handle</label><input id="f_slug" type="text" name="slug" value="{{ d.slug }}" {{ 'readonly' if d.external_id }}></div>
+        <div><label for="f_tags">Tags (comma separated)</label><input id="f_tags" type="text" name="tags" value="{{ d.tags|join(', ') }}"></div></div>
+      <div><label for="f_ex">Excerpt (shown on the blog list)</label><textarea id="f_ex" name="excerpt" rows="2">{{ d.excerpt }}</textarea></div>
+    </div>{% endif %}
+  </section>
+
+  <section class="card">
+    <div class="top"><h2>The post</h2>{% if edit %}<span class="note" style="margin:0">Click into the text to edit it.</span>{% endif %}</div>
+    {% if edit %}<div class="tb" role="toolbar" aria-label="Formatting">
+      <button type="button" data-cmd="formatBlock" data-v="h2">H2</button><button type="button" data-cmd="formatBlock" data-v="h3">H3</button>
+      <button type="button" data-cmd="formatBlock" data-v="p">Text</button><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button>
+      <button type="button" data-cmd="insertUnorderedList">• List</button><button type="button" data-cmd="insertOrderedList">1. List</button>
+      <button type="button" data-cmd="createLink">Link</button><button type="button" data-cmd="unlink">Unlink</button></div>{% endif %}
+    <article class="art">
+      <h1 class="ah">{{ d.title }}</h1>
+      <div id="body" class="ab" {{ 'contenteditable="true"' if edit }}>{{ (d.body_html or '')|safe }}</div>
+      <textarea name="body_html" id="body_in" hidden></textarea>
+    </article>
+  </section>
+
+  <section class="card">
+    <h2>Frequently asked questions</h2>
+    <p class="note">Shown at the end of the post, with FAQ schema so Google and AI assistants can read them.</p>
+    {% if edit %}<div class="faqs">{% for i in range(8) %}{% set f = d.faqs[i] if i < d.faqs|length else {} %}
+      <div class="faq"><input type="text" name="faq_q_{{ i }}" value="{{ f.q }}" placeholder="Question" aria-label="Question {{ i+1 }}">
+        <textarea name="faq_a_{{ i }}" rows="2" placeholder="Answer" aria-label="Answer {{ i+1 }}">{{ f.a }}</textarea></div>{% endfor %}</div>
+    {% else %}{% for f in d.faqs %}<h3 style="margin:14px 0 4px;font-size:15px">{{ f.q }}</h3><p style="margin:0">{{ f.a }}</p>{% endfor %}{% endif %}
+  </section>
+</div>
+
+<aside class="rvside">
+  <section class="card act">
+    {% if preview %}<label>Preview link</label><div class="copy"><input type="text" value="{{ preview }}" readonly id="pv" aria-label="Preview link"><a class="btn ln" href="{{ preview }}" target="_blank" rel="noopener">Open</a></div>
+      <p class="note" style="margin:0">Anyone with this link can read the draft. It is not indexed by Google.</p>{% endif %}
+    {% if d.status == 'published' %}<p style="margin:6px 0 0"><span class="tag t-pass">Live</span> <a href="{{ d.published_url }}" target="_blank" rel="noopener">{{ d.published_url|replace('https://','') }}</a></p>
+      <p class="note" style="margin:0">Published {{ d.published_at.strftime('%d %b %Y, %H:%M') }}{{ ' by ' ~ d.published_by if d.published_by }}.</p>{% endif %}
+    {% if edit %}
+      <div class="btns">
+        <button class="btn ln" name="what" value="save">Save changes</button>
+        {% if d.status in ('draft','failed') %}<button class="btn blk" name="what" value="approve">Approve</button>{% endif %}
+        {% if d.status == 'published' %}<button class="btn red" name="what" value="update" {{ 'disabled' if not (store and store.status=='active') }}>Update live post</button>
+        {% else %}<button class="btn red" name="what" value="publish" data-confirm="Publish this post on {{ store.shop if store else 'the store' }} now?" {{ 'disabled' if not (store and store.status=='active') }}>Publish to Shopify</button>{% endif %}
+      </div>
+      {% if not (store and store.status=='active') %}<p class="note" style="margin:0"><a href="{{ url_for('dash.publishing', cid=client.id) }}">Connect the Shopify store</a> to publish.</p>
+      {% elif d.status != 'published' %}<p class="note" style="margin:0">Goes to the <b>{{ store.blog_title }}</b> blog on {{ store.shop }} as <b>{{ store.author_name }}</b>, live straight away.</p>{% endif %}
+      <div class="btns sm">{% if d.status == 'published' %}<button class="btn ln" name="what" value="unpublish" data-confirm="Hide this post on the store?">Hide on store</button>
+        {% else %}<button class="btn ln" name="what" value="discard" data-confirm="Discard this draft?" formnovalidate>Discard</button>{% endif %}</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="top"><h2>Checks</h2>{% if d.score is not none %}<span class="tag {{ 't-pass' if d.score >= 80 else 't-na' if d.score >= 60 else 't-sev-error' }}">{{ d.score }}/100</span>{% endif %}</div>
+    <p class="note">The on-page checks Orbit runs on live pages{{ ', re-run on every save' if edit }}.</p>
+    {% for label, items in groups %}<div class="cg"><b>{{ label }}</b>
+      {% for r in items %}<div class="ck"><span class="dot {{ r.result }}" aria-label="{{ r.result }}"></span><div><span>{{ r.name }}</span>{% if r.result != 'pass' %}<em>{{ r.message }}</em>{% endif %}</div></div>{% endfor %}</div>{% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>Why this post</h2>
+    {% for src, line in why(d.evidence, 6) %}<p class="note" style="margin:6px 0 0"><span class="tag">{{ src }}</span> {{ line }}</p>{% endfor %}
+    {% if d.internal_links %}<h3 class="sh">Links to the site</h3>{% for u in d.internal_links %}<div class="note lk"><a href="{{ u }}" target="_blank" rel="noopener">{{ u|replace('https://','') }}</a></div>{% endfor %}{% endif %}
+    {% if d.sources %}<h3 class="sh">Sources cited</h3>{% for s in d.sources %}<div class="note lk"><a href="{{ s.url }}" target="_blank" rel="noopener nofollow">{{ s.title or s.url }}</a></div>{% endfor %}{% endif %}
+    {% if d.model %}<p class="note" style="margin-top:10px">Drafted by {{ d.model }}; read it before it goes live.</p>{% endif %}
+  </section>
+</aside>
+</form>
+
+<style>
+.rv{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.rvmain,.rvside{display:flex;flex-direction:column;gap:16px;min-width:0}
+.rvside{position:sticky;top:76px}
+@media (max-width:1100px){.rv{grid-template-columns:1fr}.rvside{position:static}}
+.serp{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border:1px solid var(--hair);border-radius:6px;margin:8px 0 14px;font-family:arial,sans-serif;max-width:640px}
+.serp .su{font-size:12px;color:#4d5156;overflow-wrap:anywhere}.serp .st{font-size:19px;color:#1a0dab;line-height:1.3}.serp .sd{font-size:13px;color:#4d5156;line-height:1.5}
+.fields{display:flex;flex-direction:column;gap:12px}.fields .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){.fields .two{grid-template-columns:1fr}}
+.cnt{font-weight:400;color:var(--grey)}.cnt.over{color:var(--red);font-weight:700}
+.tb{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0;position:sticky;top:60px;background:#fff;z-index:2;padding:6px 0;border-bottom:1px solid var(--row)}
+.tb button{font:600 12px var(--fh);border:1px solid var(--hair);background:#fff;border-radius:3px;padding:5px 10px;cursor:pointer}.tb button:hover{border-color:var(--ink)}
+.art{max-width:760px}.ah{font:700 30px/1.2 var(--fh);margin:6px 0 16px;letter-spacing:-.01em}
+.ab{font-size:15.5px;line-height:1.7;outline:none;min-height:200px}.ab[contenteditable]:focus{box-shadow:0 0 0 2px var(--tint);border-radius:4px}
+.ab h2{font:700 21px/1.3 var(--fh);margin:26px 0 8px}.ab h3{font:700 17px/1.35 var(--fh);margin:20px 0 6px}
+.ab p{margin:0 0 12px}.ab ul,.ab ol{margin:0 0 12px;padding-left:22px}.ab a{color:var(--red)}
+.ab table{border-collapse:collapse;margin:8px 0 16px;width:100%;font-size:14px}.ab th,.ab td{border:1px solid var(--hair);padding:7px 9px;text-align:left}
+.faqs{display:flex;flex-direction:column;gap:10px}.faq{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--row)}
+.act{display:flex;flex-direction:column;gap:10px}.copy{display:flex;gap:6px}.copy input{font-size:12px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}.btns .btn{flex:1 1 auto}.btns.sm .btn{flex:0 0 auto}
+.cg{margin-top:12px;display:flex;flex-direction:column;gap:6px}.cg>b{font:700 11px var(--fh);letter-spacing:.1em;text-transform:uppercase;color:var(--grey)}
+.ck{display:grid;grid-template-columns:10px 1fr;gap:8px;font-size:13px;align-items:start}.ck em{display:block;font-style:normal;color:var(--grey);font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;margin-top:6px;background:var(--mid)}.dot.pass{background:#2E7D4F}.dot.warn{background:#C98A00}.dot.fail{background:var(--red)}
+.sh{font:700 12px var(--fh);letter-spacing:.08em;text-transform:uppercase;color:var(--grey);margin:14px 0 4px}
+.lk{margin:2px 0;overflow-wrap:anywhere}
+</style>
+<script>
+(()=>{
+  const f=document.getElementById('ed'); if(!f) return;
+  const body=document.getElementById('body'), inp=document.getElementById('body_in');
+  document.querySelectorAll('.tb button').forEach(b=>b.addEventListener('click',()=>{
+    body.focus(); const c=b.dataset.cmd; let v=b.dataset.v||null;
+    if(c==='createLink'){v=window.prompt('Link address (https://…)'); if(!v) return;}
+    document.execCommand(c,false,c==='formatBlock'?'<'+v+'>':v);}));
+  f.addEventListener('submit',e=>{
+    const btn=e.submitter; if(btn&&btn.dataset.confirm&&!window.confirm(btn.dataset.confirm)){e.preventDefault();return;}
+    if(inp) inp.value=body.innerHTML;});
+  const sync=(id,out)=>{const el=document.getElementById(id),o=document.getElementById(out); if(el&&o) el.addEventListener('input',()=>o.textContent=el.value);};
+  sync('f_mt','sv_t'); sync('f_md','sv_d');
+  document.querySelectorAll('.cnt').forEach(c=>{const el=document.getElementById(c.dataset.for),max=+c.dataset.max;
+    const u=()=>{c.textContent=el.value.length+' / '+max; c.classList.toggle('over',el.value.length>max);}; el.addEventListener('input',u); u();});
+  const pv=document.getElementById('pv'); if(pv) pv.addEventListener('focus',()=>pv.select());
+})();
+</script>
+{% endblock %}

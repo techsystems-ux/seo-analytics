@@ -167,3 +167,21 @@ session is narrowed to their brand (not staff), so another brand's rows cannot a
 - Email link: a Resend account with the sending domain verified. Env `RESEND_API_KEY`, `MAIL_FROM` (e.g. `Hovers <reports@hovers.in>`).
   Links work once, for 15 minutes, at most 5 an hour per email; the page answers the same whether or not the email has access.
 - Removing an email in Settings ends that person's access on their next click.
+
+## Execution: blog posts to Shopify (migration 017)
+- **Topics** (`collectors/blog_writer.py`, free): Search Console questions and "best / how / vs" searches the site already shows for
+  (weighted toward positions 4-30), approved ChatGPT prompts whose latest answer does not name the brand, Reddit questions, and
+  Google's autocomplete for new sites. Near-duplicates merged (US/UK spellings folded); topics the site already covers are dropped.
+- **Drafts**: OpenAI (web search on) writes up to `BLOGS_PER_RUN` (3) a run, keeping at most `BLOG_QUEUE` (6) waiting for review,
+  in the brand rules card, linking only to real pages of the site. `seo/blogs.py` cleans the HTML (no scripts, one H1, no em dashes,
+  outside links nofollow, invented internal links removed), adds FAQs with FAQPage schema, and runs the live-page checks.
+  Runs nightly (`blogs` in the daily list) and from the Blog posts screen. Nothing is published automatically.
+- **Screens**: Execution, Blog posts (for review, approved, published, topic ideas); a review page to edit, approve and publish;
+  `/p/<token>` is a shareable, noindex preview link. Hovers staff and a brand's owner can edit and publish; viewers read.
+- **Shopify**: Execution, Publishing. OAuth with expiring offline tokens (refreshed automatically), scopes `read_content,write_content`,
+  posts created with `articleCreate` (SEO title and description as `global.title_tag` / `global.description_tag`).
+  Shared app: `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET` in Vercel (public distribution; needs Shopify App Store review to install on
+  any store). Per-store app: a custom-distribution app for one client store, keys saved on that brand's Publishing screen by staff.
+  Either app needs the redirect URL `https://orbit-hovers.vercel.app/shopify/callback` and, for stores outside the Hovers organisation,
+  an IP allowlist (Shopify rule from 20 Nov 2026). Optional: `SHOPIFY_REDIRECT_URI`, `SHOPIFY_API_VERSION` (default 2026-10).
+- Test: `tests/test_execution.py` (OpenAI and Shopify faked).
