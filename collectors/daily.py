@@ -47,13 +47,13 @@ def due(conn, client_id, name, days):
                                        FROM collector_runs WHERE client_id=%s AND collector=%s""", [client_id, name]).fetchone()
     return not running and (last_ok is None or last_ok < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days))
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl,youtube,reddit")
     ap.add_argument("--force-weekly", action="store_true")
     ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")
     ap.add_argument("--seeds", default="", help="topics for semrush_ideas, separated by ;")
     ap.add_argument("--research", default="", help="tool:query for a Semrush research lookup, e.g. keyword:silver anklets")
-    a = ap.parse_args(); only = set(a.only.split(",")); ok = True
+    a = ap.parse_args(argv); only = set(a.only.split(",")); ok = True
     import gsc, ga4
     from google_auth import SessionPool
     with connect() as conn:

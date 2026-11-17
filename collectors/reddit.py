@@ -9,7 +9,7 @@ The token (APIFY_TOKEN) is sent in a header, never in a URL, and never stored.
 
   python reddit.py --client-id UUID --max-items 200
 """
-import datetime as dt, math, os, re, sys
+import os, datetime as dt, math, re, sys
 from urllib.parse import quote
 import requests
 import community as cm
@@ -35,8 +35,9 @@ def thread_id(url):
 
 def call_actor(session, token, conn, client_id, run_input, max_items):
     if max_items > items_left(conn): raise LimitReached(f"needs up to {max_items} results; {items_left(conn)} left under APIFY_TOTAL_ITEMS")
-    r = session.post(API.format(actor=ACTOR), params={"timeout": 300}, json={**run_input, "maxItems": max_items},
-                     headers={"Authorization": f"Bearer {token}"}, timeout=330)
+    wait = int(os.environ.get("APIFY_WAIT", "300"))                 # the server worker sets less, to fit one run
+    r = session.post(API.format(actor=ACTOR), params={"timeout": wait}, json={**run_input, "maxItems": max_items},
+                     headers={"Authorization": f"Bearer {token}"}, timeout=wait + 30)
     if r.status_code >= 400: raise RuntimeError(f"Apify {r.status_code}: {r.text[:200]}")
     rows = r.json()[:max_items]
     conn.execute("INSERT INTO apify_usage (client_id, actor, items) VALUES (%s,%s,%s)", [client_id, ACTOR, len(rows)])

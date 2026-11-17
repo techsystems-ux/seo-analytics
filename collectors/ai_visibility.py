@@ -214,13 +214,18 @@ def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
         out[b["name"]] = s
     return out
 
-def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True):
+def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True, deadline=None):
+    """deadline (time.time()): stop starting new prompts after it; tally['more'] = 1 tells the caller to run again
+    (prompts already asked this cycle are skipped, so the next run picks up where this one stopped)."""
+    import time
     cycle = cycle or dt.date.today(); session = session or requests.Session()
     brands = tracked_brands(conn, client_id)
     prompts = conn.execute("SELECT prompt_id, text, region FROM prompts WHERE client_id=%s AND approved AND active ORDER BY created_at",
                            [client_id]).fetchall()
     tally = {}
     for pid, text, region in prompts:
+        if deadline and time.time() > deadline:
+            tally["more"] = 1; break
         for n in range(1, samples + 1):
             res = run_prompt(conn, session, key, client_id, pid, text, region, cycle, n, brands, sentiment)
             tally[res] = tally.get(res, 0) + 1

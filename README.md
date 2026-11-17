@@ -193,3 +193,13 @@ stores nothing per page: for each issue type it keeps the full count and the aff
 soft 404, robots.txt, sitemap present and listed, sitemap URLs live. The Technical screen shows them as an audit checklist.
 The on-page audit checks the top `PAGES_PER_RUN` (default 30) pages by traffic and keeps one small record per page.
 Migration 018 cleans up what earlier versions stored.
+
+## Server worker: no Mac (migration 019)
+Every pull runs on Vercel (`collectors/worker.py`). A pull is split into tasks, one step for one brand each, each short
+enough for one function run (`maxDuration` 300 s): Search Console in 10-day windows (first pull 90 days, then the 125 days
+before them, last), ChatGPT prompts and the crawl stop at a deadline and continue in the next task, blog drafts one per task.
+A run works for about 100 s, then starts the next run itself (`POST /worker/run`, bearer `CRON_SECRET`) while tasks are left.
+Triggers: the Pull buttons and sign-up (start at once), Vercel's daily schedule (`/cron/nightly`, 20:30 UTC = 02:00 IST,
+allowed on the Hobby plan), and any Orbit page opened by the team while tasks wait and nothing has started for 3 minutes.
+Cut-off tasks are retried (three tries). Keys the pulls need go in Vercel's settings: OPENAI_API_KEY, SEMRUSH_API_KEY,
+APIFY_TOKEN, YOUTUBE_API_KEY. The Mac app no longer runs pulls (MAC_WORKER=1 brings the old behaviour back).

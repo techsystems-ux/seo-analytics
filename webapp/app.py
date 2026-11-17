@@ -37,10 +37,25 @@ def healthz():
     return "ok"
 
 def _cron_ok():
-    """The nightly trigger (GitHub Actions) sends CRON_TOKEN as a bearer token. Without CRON_TOKEN set, these are off."""
-    tok = os.environ.get("CRON_TOKEN", "")
+    """Vercel's schedule and the worker's own follow-on runs send CRON_SECRET as a bearer token (CRON_TOKEN still works).
+    Without either set, these endpoints are off."""
     got = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-    return bool(tok) and secrets.compare_digest(tok, got)
+    return any(tok and secrets.compare_digest(tok, got) for tok in (os.environ.get("CRON_SECRET", ""), os.environ.get("CRON_TOKEN", "")))
+
+@app.get("/cron/nightly")
+def cron_nightly():
+    """Vercel's daily schedule (vercel.json): queue the nightly pull of every brand, then start working through it."""
+    if not _cron_ok(): abort(403)
+    import worker
+    with connect() as conn: pid = worker.nightly(conn)
+    return {"nightly_pull": pid, **worker.work()}
+
+@app.post("/worker/run")
+def worker_run():
+    """One worker run (about two minutes of tasks); it starts the next run itself while tasks are left."""
+    if not _cron_ok(): abort(403)
+    import worker
+    return worker.work()
 
 @app.post("/cron/daily")
 def cron_daily():
@@ -218,10 +233,11 @@ def signup_create():
                              [new, site, ga4, cid])
                 conn.execute("INSERT INTO client_viewers (client_id, email, added_by, role) VALUES (%s,%s,'self-serve sign-up','owner') ON CONFLICT DO NOTHING",
                              [new, email])
-                conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,'first pull',%s,%s)",
-                             [new, json.dumps(["--client-id", str(new), "--only", "gsc,ga4,rank,pages,blogs,crawl", "--force-weekly"]), email])
+                import worker
+                worker.enqueue(conn, str(new), "first pull", ["--client-id", str(new), "--only", "gsc,ga4,rank,pages,blogs,crawl", "--force-weekly"], email)
                 made.append(str(new))
-    import portal
+    import portal, worker
+    worker.kick()                                             # the first pull starts on the server right away
     portal.sign_in(email)
     session.pop("signup_conn", None)
     return redirect(url_for("dash.overview", cid=made[0], welcome=1))

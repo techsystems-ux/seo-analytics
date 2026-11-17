@@ -94,7 +94,20 @@ def intel_for(cid):
     _INTEL[cid] = (time.time(), out)
     return out
 
+def nudge_worker():
+    """Safety net: when tasks are waiting and none has started for three minutes (a follow-on run was lost), start one."""
+    if not ONLINE or not session.get("staff_email"): return
+    try:
+        with _staff_connect() as conn:
+            stuck = conn.execute("""SELECT EXISTS (SELECT 1 FROM pull_tasks WHERE status='queued')
+                                    AND NOT EXISTS (SELECT 1 FROM pull_tasks WHERE started_at > now() - interval '3 minutes')""").fetchone()[0]
+        if stuck:
+            import worker; worker.kick()
+    except Exception:
+        pass
+
 def view(tpl, client=None, active=None, **ctx):
+    nudge_worker()
     info = intel_for(client["id"]) if client else None
     pro = ui_mode() == "pro"
     return render_template(tpl, client=client, active=active, staff=session.get("staff_email"), csrf=csrf(), stages=STAGES,
@@ -541,15 +554,16 @@ def semrush_run(cid):
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
 
 ONLINE = bool(os.environ.get("VERCEL"))     # the online copy on Vercel: a request cannot outlive its response
-QUEUED = "Queued. The Hovers Mac runs it within a minute while the app is open there; results appear here as each step finishes."
+QUEUED = "Started on the Orbit server. Results appear here as each step finishes, usually within a few minutes."
 
 def queue_pull(cid, label, args):
-    """Online, a pull waits in pull_queue for the Mac (start_local.py runs it). Then the screen says it is queued."""
+    """Online, a pull is split into tasks (collectors/worker.py) and the server starts working through them at once."""
     import json
     from urllib.parse import urlencode
+    import worker
     with connect() as conn:
-        conn.execute("INSERT INTO pull_queue (client_id, label, args, requested_by) VALUES (%s,%s,%s,%s)",
-                     [cid, label, json.dumps(args), session.get("staff_email") or session.get("viewer_email")])
+        worker.enqueue(conn, cid, label, args, session.get("staff_email") or session.get("viewer_email"))
+    worker.kick()
     back = (request.referrer or url_for("dash.clients")).split("#")[0]
     abort(redirect(back + ("&" if "?" in back else "?") + urlencode({"msg": QUEUED})))
 

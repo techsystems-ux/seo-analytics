@@ -72,6 +72,10 @@ ON CONFLICT (client_id,date) DO UPDATE SET clicks=EXCLUDED.clicks, impressions=E
 
 def sync_client(conn, session, client_id, site_url, name, domain, aliases, days=7, lag=3, row_limit=25000):
     start, end = window(days, lag)
+    return sync_window(conn, session, client_id, site_url, name, domain, aliases, start, end, row_limit)
+
+def sync_window(conn, session, client_id, site_url, name, domain, aliases, start, end, row_limit=25000):
+    """One date window (the server worker pulls long histories in short windows, each inside one function run)."""
     terms = brand_terms(name, domain, aliases)
     detail = parse_rows(fetch_all(session, site_url, start, end, DIMS, row_limit), client_id, terms, competitor_terms(conn, client_id, terms))
     totals = parse_totals(fetch_all(session, site_url, start, end, ["date"], row_limit), client_id)

@@ -87,15 +87,17 @@ def fetch_chain(session, url, max_hops=5):
         return cur, r.status_code, (r.text if r.status_code == 200 else ""), hops, time.monotonic() - t0
     return cur, 310, "", hops, time.monotonic() - t0          # too many redirects
 
-def crawl(start_urls, session=None, limit=500, pause=0.5, sitemap_urls=()):
-    """Returns {url: record}. Only URLs on the site's own host are fetched."""
+def crawl(start_urls, session=None, limit=500, pause=0.5, sitemap_urls=(), deadline=None):
+    """Returns {url: record}. Only URLs on the site's own host are fetched. With a deadline (time.time()), the crawl stops
+    there with what it has (highest-traffic pages come first), so it fits inside one server run."""
+    import time
     s = session or requests.Session()
     site = host_key(start_urls[0])
     queue, seen, pages = [], set(), {}
     for u in start_urls:
         n = sitemap.normalise(u)
         if n not in seen: seen.add(n); queue.append(n)
-    while queue and len(pages) < limit:
+    while queue and len(pages) < limit and not (deadline and time.time() > deadline):
         url = queue.pop(0)
         try:
             final, status, html, hops, secs = fetch_chain(s, url)
@@ -234,7 +236,7 @@ def save(conn, client_id, pages, issues, started_at, today=None):
                         [client_id, list(issues)]).fetchall()
     return {"crawl_id": crawl_id, "pages": len(pages), "ok": len(ok), "health": health, **counts, "cleared": len(gone)}
 
-def run(conn, client_id, session=None, limit=500, pause=0.5):
+def run(conn, client_id, session=None, limit=500, pause=0.5, deadline=None):
     started = dt.datetime.now(dt.timezone.utc)
     domain = conn.execute("SELECT domain FROM clients WHERE client_id=%s", [client_id]).fetchone()[0]
     sm_urls = [r[0] for r in conn.execute("SELECT url FROM pages WHERE client_id=%s", [client_id])]
@@ -242,7 +244,7 @@ def run(conn, client_id, session=None, limit=500, pause=0.5):
     by_id = dict(conn.execute("SELECT page_id, url FROM pages WHERE client_id=%s", [client_id]).fetchall())
     home = sm_urls and next((u for u in sm_urls if sitemap.page_key(u) == "/"), None)
     start = [home or f"https://{domain.replace('https://', '').replace('http://', '').strip('/')}/"] + [by_id[i] for i in order if i in by_id]
-    pages = crawl(start, session, limit, pause)
+    pages = crawl(start, session, limit, pause, deadline=deadline)
     issues = find_issues(pages, sm_urls)
     for code, rows in site_checks(session or requests.Session(), domain).items(): issues[code] += rows
     return save(conn, client_id, pages, issues, started)

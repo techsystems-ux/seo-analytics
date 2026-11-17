@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql", "db/018_lean_audit.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql", "db/018_lean_audit.sql", "db/019_cloud_worker.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -73,7 +73,8 @@ def use_cloud(url):
 DAILY = ["--only", "gsc,ga4,rank,ai,pages,blogs,crawl,youtube,reddit"]     # never Semrush: that is a button in Settings
 
 def cloud_worker():
-    """While the app is open on this Mac: run pulls queued from the online copy, one at a time, and the daily pull of
+    """Retired: pulls now run on the Orbit server (collectors/worker.py). Kept only for MAC_WORKER=1.
+    While the app is open on this Mac: run pulls queued from the online copy, one at a time, and the daily pull of
     every brand once a day. Each pull is collectors/daily.py, with the same credit caps as a pull from the screen."""
     import json, time
     sys.path[:0] = [os.path.join(HERE, "collectors")]
@@ -153,7 +154,8 @@ def main():
         subprocess.Popen([sys.executable, "daily.py", "--only", "youtube,reddit"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ),
                          stdout=open(os.path.join(HERE, "logs", "jobs.log"), "a"), stderr=subprocess.STDOUT, start_new_session=True)
     if cloud:                                       # the daily pull (and the YouTube and Reddit refresh) runs from here
-        threading.Thread(target=cloud_worker, daemon=True).start()
+        if os.environ.get("MAC_WORKER") == "1":           # pulls run on the Orbit server now; the Mac does not
+            threading.Thread(target=cloud_worker, daemon=True).start()
     sys.path.insert(0, os.path.join(HERE, "webapp"))
     from app import app
     threading.Timer(2, lambda: webbrowser.open("http://localhost:8080")).start()

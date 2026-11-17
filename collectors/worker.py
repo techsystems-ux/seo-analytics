@@ -1,0 +1,213 @@
+"""The Orbit server worker: runs every pull on Vercel, with nothing on a Mac.
+
+A pull (a row in pull_queue: a button in Orbit, a trial's first pull, or the nightly pull) is split into tasks, one step
+for one brand each. work() runs tasks until its time budget is spent, then, if any are left, starts a fresh run of itself
+(kick), so a long nightly pull carries on run after run. Each task is short enough for one function run (Vercel stops a
+function after 300 seconds): long Search Console histories go in 10-day windows, ChatGPT prompts and the crawl stop at a
+deadline and continue in the next task, blog drafts are written one per task.
+
+Triggers: the Pull buttons and sign-up (enqueue + kick), Vercel's daily schedule (/cron/nightly), and any Orbit page a
+team member opens while tasks are waiting and nothing is running (a safety net).
+Same caps as before: Semrush only on request with a budget, Apify per-result limits, blog drafts per run.
+"""
+import datetime as dt, json, os, sys, time, traceback
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
+
+ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "pages", "semrush_ideas", "semrush_backlinks", "semrush_gap",
+         "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
+NIGHTLY = "gsc,ga4,rank,ai,pages,blogs,crawl,youtube,reddit"
+RUN_BUDGET = int(os.environ.get("WORKER_BUDGET", "100"))       # seconds a run keeps starting new tasks
+HARD_STOP = int(os.environ.get("WORKER_HARD_STOP", "270"))     # tasks must wrap up before this (Vercel stops at 300)
+STALE = "6 minutes"                                              # a task running longer was cut off
+MAX_PARALLEL = int(os.environ.get("WORKER_PARALLEL", "3"))
+GSC_WINDOW = 10                                                  # days per Search Console task
+
+def parse_args(args):
+    """pull_queue.args holds daily.py-style arguments: --client-id, --only, --force-weekly, --max-units, --seeds, --research."""
+    a, i, out = list(args or []), 0, {"only": NIGHTLY, "force": False}
+    while i < len(a):
+        k = a[i]
+        if k == "--force-weekly": out["force"] = True; i += 1; continue
+        if i + 1 < len(a) and k.startswith("--"):
+            out[k[2:].replace("-", "_")] = a[i + 1]; i += 2; continue
+        i += 1
+    return out
+
+def enqueue(conn, client_id, label, args, who=None):
+    """A pull as tasks. Marked started so an old Mac app never picks it up as well. Returns the pull id."""
+    o = parse_args(args)
+    pid = conn.execute("""INSERT INTO pull_queue (client_id, label, args, requested_by, started_at) VALUES (%s,%s,%s,%s,now())
+                          RETURNING pull_id""", [client_id, label, json.dumps(args), who]).fetchone()[0]
+    clients = [o["client_id"]] if o.get("client_id") else \
+              [str(r[0]) for r in conn.execute("SELECT client_id FROM clients WHERE status='active' ORDER BY created_at")]
+    steps = [s for s in ORDER if s in set(o["only"].split(","))]
+    if o.get("research") and "research" not in steps: steps.append("research")
+    extra = {k: o[k] for k in ("max_units", "seeds", "research") if o.get(k)}
+    for cid in clients:
+        for n, step in enumerate(steps):
+            conn.execute("INSERT INTO pull_tasks (pull_id, client_id, step, args, seq) VALUES (%s,%s,%s,%s,%s)",
+                         [pid, cid, step, json.dumps({**extra, "force": o["force"]}), n * 100])
+    return pid
+
+def nightly(conn):
+    """The once-a-day pull of every brand, unless one was queued in the last 20 hours."""
+    recent = conn.execute("SELECT 1 FROM pull_queue WHERE label='nightly' AND requested_at > now() - interval '20 hours'").fetchone()
+    if recent: return None
+    return enqueue(conn, None, "nightly", ["--only", NIGHTLY], "schedule")
+
+# ------------------------------------------------------------------ steps
+def _daily(cid, step, a):
+    import daily
+    argv = ["--client-id", cid, "--only", step] + (["--force-weekly"] if a.get("force") else [])
+    for k in ("max_units", "seeds", "research"):
+        if a.get(k): argv += [f"--{k.replace('_', '-')}", str(a[k])]
+    return daily.main(argv)
+
+def _windows(start, end, size=GSC_WINDOW):
+    out, d = [], start
+    while d <= end:
+        e = min(end, d + dt.timedelta(days=size - 1)); out.append((d, e)); d = e + dt.timedelta(days=1)
+    return out
+
+def step_gsc(conn, task, deadline, history=False):
+    """Search Console in 10-day windows: the latest week each night; 90 days the first time; then 7 months of history once."""
+    import gsc, daily
+    from google_auth import SessionPool
+    cid, a = task["client_id"], task["args"]
+    rows = gsc.clients_to_sync(conn, cid)
+    if not rows: return "Search Console not linked", []
+    c, site, name, domain, aliases, gconn = rows[0]
+    if "start" not in a:                                         # plan the windows, run the first, queue the rest
+        if history:
+            if daily.ran_ok(conn, cid, "gsc_history"): return "history already pulled", []
+            s, e = gsc.window(215, 3)
+            e = gsc.window(90, 3)[0] - dt.timedelta(days=1)          # the last 90 days come with the first pull
+        else:
+            s, e = gsc.window(7 if daily.has_rows(conn, "gsc_search_daily", cid) else 90, 3)
+        wins = _windows(s, e)
+        more = [(task["step"], {"start": str(x), "end": str(y), "last": i == len(wins) - 1}) for i, (x, y) in enumerate(wins)]
+        if not history and not daily.ran_ok(conn, cid, "gsc_history") and not conn.execute(
+                "SELECT 1 FROM pull_tasks WHERE client_id=%s AND step='gsc_history' AND status IN ('queued','running')", [cid]).fetchone():
+            more.append(("gsc_history", {"_seq": 9000}))           # once, at the end of the pull, so the screens fill first
+        return f"{len(wins)} windows planned", more
+    session = SessionPool(conn, gsc.SCOPE).get(gconn)
+    s, e = dt.date.fromisoformat(a["start"]), dt.date.fromisoformat(a["end"])
+    name_ = "gsc_history" if history and a.get("last") else "gsc_window" if history else "gsc"
+    ok = daily.log(conn, cid, name_, lambda: f"{gsc.sync_window(conn, session, c, site, name, domain, aliases, s, e)} rows, {s} to {e}")
+    if not ok: raise RuntimeError(f"Search Console {s} to {e} failed (see the run log)")
+    return f"{s} to {e}", []
+
+def step_ai(conn, task, deadline):
+    import ai_visibility, daily
+    key = os.environ.get("OPENAI_API_KEY")
+    if not key: return "no OpenAI key on the server", []
+    cid, out = task["client_id"], {}
+    def go():
+        tally, _ = ai_visibility.sync_client(conn, cid, key, int(os.environ.get("AI_SAMPLES", "1")), deadline=deadline - 60,
+                                             sentiment=os.environ.get("AI_SENTIMENT", "1") != "0")
+        out.update(tally); return {k: v for k, v in tally.items() if k != "more"}
+    daily.log(conn, cid, "ai", go)
+    return str(out), ([("ai", {})] if out.get("more") else [])
+
+def step_blogs(conn, task, deadline):
+    """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
+    import blog_writer, daily
+    cid, a = task["client_id"], task["args"]
+    key = os.environ.get("OPENAI_API_KEY")
+    left = a.get("left", blog_writer.PER_RUN)
+    note = {}
+    def go():
+        if not a.get("researched"):
+            conn.execute("""UPDATE content_drafts SET status='idea' WHERE client_id=%s AND status='writing'
+                            AND updated_at < now() - interval '1 hour'""", [cid])
+            note["added"] = blog_writer.research(conn, cid)
+        note["written"] = blog_writer.write(conn, cid, key, n=1) if key and left > 0 else []
+        return f"{note.get('added', 0)} new ideas, {len(note['written'])} draft written" + ("" if key else " (no OpenAI key: ideas only)")
+    daily.log(conn, cid, "blogs", go)
+    more = [("blogs", {"left": left - 1, "researched": True})] if note.get("written") and left - 1 > 0 else []
+    return f"{len(note.get('written') or [])} draft", more
+
+def step_crawl(conn, task, deadline):
+    import crawler, daily
+    cid, a = task["client_id"], task["args"]
+    if not daily.weekly_due(conn, cid, "crawl", a.get("force")): return "not due (weekly)", []
+    daily.log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(
+        **crawler.run(conn, cid, limit=int(os.environ.get("CRAWL_LIMIT", "500")), pause=0.2, deadline=deadline - 30)))
+    return "crawled", []
+
+def run_task(conn, task, deadline):
+    """-> (note, [(step, args)] to queue next)."""
+    step = task["step"]
+    if step == "gsc": return step_gsc(conn, task, deadline)
+    if step == "gsc_history": return step_gsc(conn, task, deadline, history=True)
+    if step == "ai": return step_ai(conn, task, deadline)
+    if step == "blogs": return step_blogs(conn, task, deadline)
+    if step == "crawl": return step_crawl(conn, task, deadline)
+    rc = _daily(task["client_id"], step, task["args"])          # ga4, rank, pages, reddit, youtube, semrush...: one call each
+    return ("ok" if rc == 0 else "finished with errors (see the run log)"), []
+
+# ------------------------------------------------------------------ the loop
+CLAIM = """UPDATE pull_tasks SET status='running', started_at=now(), attempts=attempts+1 WHERE task_id = (
+  SELECT t.task_id FROM pull_tasks t JOIN pull_queue q USING (pull_id)
+  WHERE t.status='queued' AND NOT EXISTS (SELECT 1 FROM pull_tasks e WHERE e.pull_id=t.pull_id AND e.client_id IS NOT DISTINCT FROM t.client_id
+                                            AND e.seq < t.seq AND e.status IN ('queued','running'))
+  ORDER BY (q.label = 'nightly'), t.pull_id, t.seq, t.task_id LIMIT 1 FOR UPDATE OF t SKIP LOCKED)
+RETURNING task_id, pull_id, client_id::text, step, args, seq, attempts"""
+
+def _finish_pulls(conn):
+    conn.execute("""UPDATE pull_queue q SET finished_at=now(),
+                      exit_code = CASE WHEN EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id AND t.status='error') THEN 1 ELSE 0 END
+                    WHERE q.finished_at IS NULL AND EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id)
+                      AND NOT EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id AND t.status IN ('queued','running'))""")
+
+def pending(conn):
+    return conn.execute("SELECT count(*) FILTER (WHERE status='queued'), count(*) FILTER (WHERE status='running') FROM pull_tasks").fetchone()
+
+def work(budget=RUN_BUDGET, hard_stop=HARD_STOP, connect=None, kick_after=True):
+    """Runs tasks for up to `budget` seconds. Returns a summary; starts another run if tasks are left."""
+    if connect is None: from common import connect
+    os.environ.setdefault("APIFY_WAIT", "180")
+    t0, done, failed = time.time(), 0, 0
+    with connect() as conn:
+        conn.execute(f"""UPDATE pull_tasks SET status = CASE WHEN attempts >= 3 THEN 'error' ELSE 'queued' END,
+                         note = 'cut off; ' || CASE WHEN attempts >= 3 THEN 'gave up after 3 tries' ELSE 'retrying' END
+                         WHERE status='running' AND started_at < now() - interval '{STALE}'""")
+        _finish_pulls(conn)
+        if pending(conn)[1] >= MAX_PARALLEL: return {"ran": 0, "busy": True}
+    while time.time() - t0 < budget:
+        with connect() as conn:
+            row = conn.execute(CLAIM).fetchone()
+        if not row: break
+        task = dict(zip(["task_id", "pull_id", "client_id", "step", "args", "seq", "attempts"], row))
+        try:
+            with connect() as conn:
+                note, more = run_task(conn, task, t0 + hard_stop)
+                for i, (step, args) in enumerate(more):
+                    seq = args.pop("_seq", task["seq"] + 1 + i)
+                    keep = {k: v for k, v in task["args"].items() if k not in ("start", "end", "last")}
+                    conn.execute("INSERT INTO pull_tasks (pull_id, client_id, step, args, seq) VALUES (%s,%s,%s,%s,%s)",
+                                 [task["pull_id"], task["client_id"], step, json.dumps({**keep, **args}), seq])
+                conn.execute("UPDATE pull_tasks SET status='done', finished_at=now(), note=%s WHERE task_id=%s", [str(note)[:300], task["task_id"]])
+            done += 1
+        except Exception as e:
+            failed += 1
+            with connect() as conn:
+                conn.execute("UPDATE pull_tasks SET status=CASE WHEN attempts >= 3 THEN 'error' ELSE 'queued' END, note=%s WHERE task_id=%s",
+                             [f"{type(e).__name__}: {e}"[:300] + "\n" + traceback.format_exc()[-600:], task["task_id"]])
+        with connect() as conn: _finish_pulls(conn)
+    with connect() as conn:
+        queued, running = pending(conn)
+    if queued and kick_after: kick()
+    return {"ran": done, "failed": failed, "queued": queued, "running": running, "seconds": round(time.time() - t0)}
+
+def kick():
+    """Start a run on the server without waiting for it (the request is sent; this side does not wait for the answer)."""
+    import requests
+    host, secret = os.environ.get("APP_HOST"), os.environ.get("CRON_SECRET")
+    if not host or not secret: return False
+    try:
+        requests.post(f"https://{host}/worker/run", headers={"Authorization": f"Bearer {secret}"}, timeout=2)
+    except Exception:
+        pass                                    # a timeout is expected: the run carries on without us
+    return True
