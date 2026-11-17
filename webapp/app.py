@@ -162,6 +162,45 @@ def login():
     import portal
     return portal.login_page("client" if request.args.get("as") == "client" else "team", err=request.args.get("err"), msg=request.args.get("msg"))
 
+# Client logos on the Orbit page: fetched once from each brand's own website by the server, served from Orbit's own address
+# (visitors' browsers never call the brands' sites) and cached for a week. A failed fetch shows the brand name instead.
+BRAND_LOGOS = {
+    "tupperware": ("Tupperware", "https://www.tupperware.com/cdn/shop/files/Tupp_80th_Logo_GIF.gif", "first-frame"),
+    # Sybil.ai: sybil.ai and thesybil.ai are both parked domains, so there is no logo to take yet. Add it here once the site is known.
+    "cradlewise": ("Cradlewise", "https://cradlewise.com/images/header/cradlewise-wordmark.svg", None),
+    "pack8": ("Pack8", "https://www.pack8.in/images-new/landing-page/pack8-logo.png", None),
+}
+_LOGO_CACHE = {}
+
+@app.get("/brand-logo/<key>")
+def brand_logo(key):
+    if key not in BRAND_LOGOS: abort(404)
+    import time
+    hit = _LOGO_CACHE.get(key)
+    if hit and hit[0] is None and time.time() - hit[2] < 3600:
+        abort(404)                                          # failed within the last hour: don't make every visitor wait on it
+    if not hit or hit[0] is None:
+        import requests, io
+        name, url, how = BRAND_LOGOS[key]
+        try:
+            r = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0 (Orbit by Hovers)"})
+            r.raise_for_status()
+            body, ctype = r.content, r.headers.get("Content-Type", "").split(";")[0] or "image/png"
+            if how == "first-frame":                        # Tupperware's header is an animated anniversary GIF; its first frame is the plain wordmark
+                from PIL import Image
+                im = Image.open(io.BytesIO(body)); im.seek(0); out = io.BytesIO()
+                im.convert("RGBA").save(out, "PNG"); body, ctype = out.getvalue(), "image/png"
+            if not ctype.startswith("image/"): raise ValueError(ctype)
+            _LOGO_CACHE[key] = (body, ctype)
+        except Exception:
+            _LOGO_CACHE[key] = (None, None, time.time())
+            abort(404)
+    body, ctype = _LOGO_CACHE[key][:2]
+    resp = app.make_response(body); resp.headers["Content-Type"] = ctype
+    resp.headers["Cache-Control"] = "public, max-age=604800, s-maxage=604800"
+    if ctype == "image/svg+xml": resp.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'"
+    return resp
+
 @app.post("/demo")
 def demo_request():
     """'Talk to sales' from the Orbit page. Stored for the Hovers team (Brands page); a hidden field catches simple bots."""

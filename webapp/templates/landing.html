@@ -1,119 +1,526 @@
-{% extends "_dark.html" %}
-{% block title %}Search intelligence for Google and AI answers{% endblock %}
-{% block css %}
-main{display:block;padding-block:0}
-.navlinks{display:flex;align-items:center;gap:22px;font-size:13px;color:var(--mut)}
-.navlinks a:hover{color:var(--fg)}
-.btn.sm{width:auto;height:38px;padding:0 18px;font-size:13px}
-.btn.ghost{border:1px solid var(--line2);color:var(--fg);background:transparent}.btn.ghost:hover{border-color:rgba(255,255,255,.35)}
-.btn.auto{width:auto}
-section.s{padding-block:clamp(56px,8vw,104px);position:relative}
-.hero2{padding-block:clamp(48px,7vw,96px) clamp(40px,6vw,72px)}
-.hero2 h1{font-size:clamp(42px,6.6vw,92px);line-height:.94;font-weight:800;letter-spacing:-.06em;margin:22px 0 24px;max-width:13ch}
-.hero2 h1 .r{color:var(--red-ink)}
-.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
-.sh{display:grid;grid-template-columns:1.2fr 1fr;gap:40px;align-items:end;margin-bottom:36px}
-.sh h2{font-size:clamp(30px,4vw,50px);line-height:1.04;font-weight:800;letter-spacing:-.045em;margin-top:14px}
-.sh p{color:var(--mut);max-width:46ch;justify-self:end}
-.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.c{padding:22px;border-radius:18px;border:1px solid var(--line);background:var(--panel);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;flex-direction:column;gap:10px;min-width:0}
-.c b.k{font-family:var(--mono);font-weight:500;font-size:11px;letter-spacing:.06em;color:var(--red-ink)}
-.c h3{font-size:19px;font-weight:700;letter-spacing:-.025em}
-.c p{color:var(--mut);font-size:14px}
-.c ul{margin:4px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
-.c li{font-size:13.5px;color:var(--fg2);display:grid;grid-template-columns:16px 1fr}
-.c li::before{content:"→";color:var(--red-ink);font-family:var(--mono);font-size:12px}
-.c.st b.k{color:var(--steel)}
-.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;counter-reset:s}
-.step{padding:24px;border-radius:18px;border:1px solid var(--line);background:var(--ink2);position:relative}
-.step i{font-style:normal;font-family:var(--mono);font-size:12px;color:var(--red-ink)}
-.step h3{font-size:20px;font-weight:800;letter-spacing:-.035em;margin:10px 0 8px}
-.step p{color:var(--mut);font-size:14px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.mode{padding:26px;border-radius:18px;border:1px solid var(--line);background:var(--panel)}
-.mode h3{font-size:22px;font-weight:800;letter-spacing:-.04em;margin:10px 0 8px}
-.mode p{color:var(--mut);font-size:14px}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
-.chips span{height:28px;display:inline-flex;align-items:center;padding:0 11px;border-radius:99px;border:1px solid var(--line2);font-size:12.5px;color:var(--fg2)}
-.demo{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,56px);align-items:start;padding:clamp(26px,4vw,48px);border-radius:24px;background:var(--red);position:relative;overflow:hidden}
-.demo::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(0,0,0,.2) 1px,transparent 1.4px);background-size:26px 26px;pointer-events:none}
-.demo>*{position:relative}
-.demo h2{font-size:clamp(30px,4vw,52px);font-weight:800;letter-spacing:-.05em;line-height:1}
-.demo p{color:#FFE6E2;margin-top:14px;max-width:42ch}
-.demo form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.demo label{color:#FFD9D3}
-.demo input,.demo textarea{width:100%;height:44px;padding:0 14px;border-radius:10px;border:1px solid rgba(255,255,255,.35);background:rgba(0,0,0,.22);color:#fff;font:inherit;font-size:14px}
-.demo textarea{height:84px;padding:10px 14px;resize:vertical}
-.demo input:focus,.demo textarea:focus{outline:2px solid #fff;outline-offset:-1px}
-.demo .full{grid-column:1/-1}
-.demo .btn{background:#fff;color:var(--ink)}.demo .btn:hover{background:#ececec}
-.faq{display:flex;flex-direction:column;gap:8px}
-.faq details{border:1px solid var(--line);border-radius:14px;background:var(--ink2);padding:0 20px}
-.faq summary{cursor:pointer;list-style:none;padding:18px 0;font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.015em;display:flex;justify-content:space-between;gap:12px}
-.faq summary::-webkit-details-marker{display:none}.faq summary::after{content:"+";font-family:var(--mono);color:var(--red-ink)}
-.faq details[open] summary::after{content:"–"}
-.faq p{color:var(--mut);padding-bottom:18px;font-size:14px}
-.ok{padding:14px 16px;border-radius:12px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.35);color:#fff}
-@media (max-width:980px){.cards,.steps{grid-template-columns:1fr 1fr}.two,.demo,.sh{grid-template-columns:1fr}.sh p{justify-self:start}.navlinks a.hide-m{display:none}}
-@media (max-width:620px){.cards,.steps{grid-template-columns:1fr}.demo form{grid-template-columns:1fr}.navlinks{gap:12px}}
-{% endblock %}
-{% block navright %}<nav class="navlinks" aria-label="Main"><a class="hide-m" href="#features">Features</a><a class="hide-m" href="#how">How it works</a><a class="hide-m" href="#demo">Pricing</a><a href="{{ url_for('login') }}">Sign in</a>
-<a class="btn red sm" href="{{ url_for('signup') }}">Start free trial</a></nav>{% endblock %}
-{% block main %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Orbit by Hovers · Search intelligence for Google and AI answers</title>
+<meta name="description" content="Orbit by Hovers tracks where your brand ranks on Google and whether ChatGPT recommends you, then drafts the blog posts that close the gap.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="{{ url_for('static', filename='hovers-logo.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* Orbit marketing page. Hovers brand: white canvas, grey #F5F5F5 surfaces, black type, Hovers Red #B20F00 as the one accent.
+   Typeface Mont (Heavy for display, SemiBold for labels, Regular for body); Montserrat stands in until the Mont files are in /static/fonts. */
+@font-face{font-family:"Mont";font-weight:900;font-display:swap;src:local("Mont Heavy"),local("Mont-Heavy"),url("/static/fonts/Mont-Heavy.woff2") format("woff2")}
+@font-face{font-family:"Mont";font-weight:600;font-display:swap;src:local("Mont SemiBold"),local("Mont-SemiBold"),url("/static/fonts/Mont-SemiBold.woff2") format("woff2")}
+@font-face{font-family:"Mont";font-weight:400;font-display:swap;src:local("Mont Regular"),local("Mont-Regular"),url("/static/fonts/Mont-Regular.woff2") format("woff2")}
+:root{
+  --red:#B20F00;--red-hi:#C91200;--red-tint:#FBEDEB;
+  --ink:#000;--ink2:#1A1A1A;--mut:#5C5C5C;--mut2:#8A8A8A;
+  --bg:#F5F5F5;--panel:#FFFFFF;--card:#F5F5F5;--line:#E7E7E7;--line2:#D9D9D9;
+  --ok:#1F7A4D;--ok-tint:#E8F5EE;
+  --f:"Mont","Montserrat",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:24px;--r2:16px;--ease:cubic-bezier(.2,.7,.1,1);color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/24px var(--f);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+button,input,textarea{font:inherit;color:inherit}
+h1,h2,h3,h4{margin:0;font-family:var(--f);text-wrap:balance}
+p{margin:0}
+:focus-visible{outline:2px solid var(--red);outline-offset:3px;border-radius:8px}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(0,0,0,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.035) 1px,transparent 1px);background-size:56px 56px;
+  mask-image:linear-gradient(180deg,#000 0,#000 40%,transparent 90%);-webkit-mask-image:linear-gradient(180deg,#000 0,#000 40%,transparent 90%)}
+.wrap{position:relative;z-index:1;width:100%;max-width:1240px;margin:0 auto;padding-inline:16px}
+@media (min-width:720px){.wrap{padding-inline:24px}}
+
+/* type */
+.h1{font-weight:900;font-size:clamp(38px,6.2vw,72px);line-height:1.02;letter-spacing:-.01em}
+.h2{font-weight:900;font-size:clamp(30px,4.2vw,52px);line-height:1.06;letter-spacing:-.01em}
+.h3{font-weight:600;font-size:20px;line-height:1.3;letter-spacing:.02em}
+.lead{color:var(--mut);font-size:clamp(16px,1.6vw,19px);line-height:1.6}
+.r{color:var(--red)}
+.pill-label{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 10px;border:1px solid var(--line2);background:#fff;border-radius:999px;
+  font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
+.pill-label i{width:8px;height:8px;border-radius:2px;background:var(--red);transform:rotate(45deg)}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 22px;border-radius:999px;border:1px solid transparent;
+  font-weight:600;font-size:15px;letter-spacing:.02em;cursor:pointer;transition:transform .2s var(--ease),background .2s,box-shadow .2s;white-space:nowrap}
+.btn:hover{transform:translateY(-1px)}
+.btn.blk{background:var(--ink);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+.btn.blk:hover{background:#222}
+.btn.red{background:var(--red);color:#fff}
+.btn.red:hover{background:var(--red-hi)}
+.btn.ln{background:#fff;border-color:var(--line2);color:var(--ink)}
+.btn.sm{min-height:40px;padding:0 18px;font-size:14px}
+.btn .arr{display:inline-grid;place-items:center;width:28px;height:28px;margin-right:-10px;border-radius:50%;background:#fff;color:var(--ink);transition:transform .2s var(--ease)}
+.btn.red .arr{color:var(--red)}
+.btn:hover .arr{transform:translateX(3px)}
+.btn .arr svg{width:14px;height:14px}
+
+/* announcement + nav */
+.bar{position:relative;z-index:3;background:var(--ink);color:#fff;font-size:13px;line-height:18px;text-align:center;padding:10px 16px}
+.bar b{font-weight:600}.bar a{text-decoration:underline;text-underline-offset:3px;margin-left:6px;white-space:nowrap}
+.nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.86);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:68px}
+.brand{display:inline-flex;align-items:center;gap:12px}
+.brand img{height:24px;width:auto}
+.brand .sep{width:1px;height:22px;background:var(--line2)}
+.brand b{font-weight:900;font-size:18px;letter-spacing:-.01em}
+.nav .links{display:flex;gap:28px;margin-left:auto;font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--ink2)}
+.nav .links a:hover{color:var(--red)}
+.nav .acts{display:flex;align-items:center;gap:10px}
+.nav .signin{font-weight:600;font-size:14px;padding:0 6px}
+@media (max-width:900px){.nav .links{display:none}.nav .acts{margin-left:auto}}
+@media (max-width:420px){.brand .sep,.brand b{display:none}.nav .signin{display:none}}
+
+/* panels */
+.panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.sec{padding-block:clamp(28px,4vw,40px)}
+.sh{text-align:center;max-width:760px;margin:0 auto clamp(28px,4vw,48px);display:flex;flex-direction:column;align-items:center;gap:16px}
+
+/* hero */
+.hero{padding-top:clamp(40px,7vw,88px);text-align:center}
+.hero .h1{max-width:980px;margin:22px auto 0}
+.hero .lead{max-width:680px;margin:22px auto 0}
+.hero .cta{display:flex;flex-wrap:wrap;gap:12px 18px;justify-content:center;align-items:center;margin-top:32px}
+.hero .alt{font-weight:600;font-size:14px;color:var(--mut);letter-spacing:.02em}
+.hero .alt a{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+.proof{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:center;margin-top:26px;font-size:14px;color:var(--ink2)}
+.proof span{display:inline-flex;align-items:center;gap:8px}
+.proof svg{width:18px;height:18px;flex:none;color:var(--red)}
+
+/* product frame */
+.frame{margin:clamp(36px,6vw,64px) auto 0;max-width:1120px;padding:10px;border-radius:28px;background:linear-gradient(180deg,#fff,#EFEFEF);border:1px solid var(--line);box-shadow:0 30px 80px -30px rgba(0,0,0,.22)}
+.app{border-radius:20px;background:#fff;border:1px solid var(--line);overflow:hidden;text-align:left}
+.app-top{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:#FAFAFA}
+.app-top i{width:10px;height:10px;border-radius:50%;background:#E2E2E2}
+.app-top span{margin-left:10px;font-size:12px;color:var(--mut2)}
+.app-top em{margin-left:auto;font-style:normal;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
+.app-body{display:grid;grid-template-columns:200px 1fr;min-height:420px}
+.app-side{border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
+.app-side b{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mut2);margin:12px 8px 4px}
+.app-side b:first-child{margin-top:0}
+.app-side span{padding:7px 10px;border-radius:8px}
+.app-side span.on{background:var(--bg);color:var(--ink);font-weight:600}
+.app-main{padding:22px;display:flex;flex-direction:column;gap:16px;background:#fff}
+.app-main h4{font-weight:900;font-size:22px;letter-spacing:-.01em}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--card);border-radius:14px;padding:14px}
+.kpi small{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
+.kpi strong{display:block;font-weight:900;font-size:24px;margin-top:6px}
+.kpi .up{font-size:12px;color:var(--ok);font-weight:600}
+.app-row{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
+.chart{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.chart small,.list small{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
+.chart svg{width:100%;height:150px}
+.list{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:9px;font-size:13px}
+.list div{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.list div span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#fff;border:1px solid var(--line2);white-space:nowrap}
+.tag.g{background:var(--ok-tint);border-color:transparent;color:var(--ok)}
+.tag.rd{background:var(--red-tint);border-color:transparent;color:var(--red)}
+@media (max-width:860px){.app-body{grid-template-columns:1fr}.app-side{display:none}.kpis{grid-template-columns:repeat(2,1fr)}.app-row{grid-template-columns:1fr}}
+
+/* logos */
+.logos{text-align:center;padding-block:clamp(40px,6vw,64px) clamp(20px,3vw,28px)}
+.logos p{font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+.logo-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:22px clamp(36px,7vw,88px);margin-top:26px}
+.logo-row figure{margin:0;height:44px;display:flex;align-items:center;justify-content:center}
+.logo-row img{max-height:36px;max-width:170px;width:auto;height:auto;filter:grayscale(1);opacity:.62;transition:filter .3s,opacity .3s}
+.logo-row img.tall{max-height:44px}
+.logo-row figure:hover img{filter:none;opacity:1}
+.logo-row .nm{display:none;font-weight:900;font-size:22px;letter-spacing:-.01em;color:#7A7A7A}
+.logo-row figure.fail img{display:none}.logo-row figure.fail .nm{display:block}
+
+/* problem panel with floating cards */
+.stage{padding:clamp(40px,6vw,72px) clamp(18px,4vw,56px);background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);background-size:40px 40px;background-color:#fff}
+.stage-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,5vw,64px);align-items:center}
+.stage-copy{display:flex;flex-direction:column;gap:18px;align-items:flex-start}
+.stage-copy .h2{max-width:520px}
+.float{position:relative;min-height:470px}
+.fc{position:absolute;background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 40px -18px rgba(0,0,0,.22);font-size:13px;line-height:1.45}
+.fc .who{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12px;letter-spacing:.04em;color:var(--mut)}
+.fc .dot{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:var(--ink);color:#fff;font-size:11px;font-weight:900}
+.fc q{display:block;quotes:none;margin-top:10px;color:var(--ink2)}
+.fc .rec{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.fc .rec div{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;background:var(--card)}
+.fc .rec div b{font-weight:600}
+.fc .rec div.you{background:#fff;border:1px dashed var(--line2);color:var(--mut2)}
+.fc1{left:0;top:0;width:min(340px,92%)}
+.fc2{right:0;top:250px;width:min(260px,70%)}
+.fc2 .pos{display:flex;align-items:baseline;gap:8px;margin-top:8px}
+.fc2 .pos strong{font-weight:900;font-size:40px;line-height:1}
+.fc2 .bar2{height:6px;border-radius:6px;background:var(--card);margin-top:12px;overflow:hidden}
+.fc2 .bar2 i{display:block;height:100%;width:22%;background:var(--red);border-radius:6px}
+.cursor{position:absolute;display:flex;align-items:flex-start;gap:4px;pointer-events:none}
+.cursor svg{width:18px;height:18px;flex:none}
+.cursor span{margin-top:12px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;white-space:nowrap}
+.cur-buyer{left:20%;top:310px}.cur-buyer span{background:var(--ink)}.cur-buyer svg{color:var(--ink)}
+@media (max-width:900px){.stage-grid{grid-template-columns:1fr}.float{min-height:460px}}
+@media (max-width:520px){.float{min-height:540px}.fc2{top:290px}.cur-buyer{left:8%;top:480px}}
+
+/* solution: source tags around a headline */
+.orbit{position:relative;padding:clamp(70px,10vw,130px) 16px;text-align:center;background:#fff}
+.orbit .core{position:relative;z-index:2;max-width:720px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:18px}
+.src{position:absolute;z-index:1;display:inline-flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:0 10px 26px -14px rgba(0,0,0,.25);font-weight:600;font-size:13px;letter-spacing:.02em;animation:bob 6s ease-in-out infinite}
+.src i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--card);font-style:normal;font-size:12px;font-weight:900}
+.src.red i{background:var(--red);color:#fff}
+.s1{left:6%;top:16%}.s2{right:7%;top:12%;animation-delay:-1s}.s3{left:3%;bottom:22%;animation-delay:-2s}
+.s4{right:4%;bottom:26%;animation-delay:-3s}.s5{left:22%;bottom:6%;animation-delay:-4s}.s6{right:22%;bottom:5%;animation-delay:-5s}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@media (max-width:860px){.orbit{padding-block:40px}.src{position:static;animation:none}.orbit .srcs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:28px}}
+@media (min-width:861px){.orbit .srcs{display:contents}}
+
+/* statement reveal */
+.statement{padding:clamp(56px,9vw,120px) 0;text-align:center}
+.statement p{max-width:1000px;margin:0 auto;font-weight:900;font-size:clamp(26px,3.8vw,48px);line-height:1.18;letter-spacing:-.01em}
+.statement p span{color:#C8C8C8;transition:color .35s}
+.statement p span.on{color:var(--ink)}
+.statement p span.on.r{color:var(--red)}
+.statement small{display:block;margin-top:22px;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+
+/* bento */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.b{background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:10px;min-height:340px;overflow:hidden;position:relative}
+.b.w3{grid-column:span 3}.b.w2{grid-column:span 2}.b.w4{grid-column:span 4}
+.b .ic{position:absolute;right:20px;top:20px;width:40px;height:40px;border-radius:12px;background:var(--red-tint);display:grid;place-items:center;color:var(--red)}
+.b .ic svg{width:20px;height:20px}
+.b .k{font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
+.b h3{font-weight:900;font-size:22px;line-height:1.2;letter-spacing:-.01em;max-width:80%}
+.b p{color:var(--mut);font-size:15px;line-height:1.55;max-width:460px}
+.ill{margin-top:auto;background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.ill .ln{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ill .ln span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ill .meter{height:6px;border-radius:6px;background:#E2E2E2;overflow:hidden;flex:0 0 90px}
+.ill .meter i{display:block;height:100%;background:var(--ink);border-radius:6px}
+.ill .meter i.r{background:var(--red)}
+.ill .chk{display:flex;align-items:center;gap:8px}
+.ill .chk svg{width:16px;height:16px;flex:none}
+.ill .post{display:flex;flex-direction:column;gap:4px}
+.ill .post b{font-weight:600}
+.ill .post em{font-style:normal;color:var(--ok);font-size:12px}
+.ill .acts{display:flex;gap:8px;margin-top:4px}
+.ill .acts span{padding:6px 12px;border-radius:999px;font-weight:600;font-size:12px;border:1px solid var(--line2);background:#fff}
+.ill .acts span.go{background:var(--red);color:#fff;border-color:var(--red)}
+@media (max-width:980px){.b.w2,.b.w3,.b.w4{grid-column:span 3}}
+@media (max-width:640px){.bento{grid-template-columns:1fr}.b.w2,.b.w3,.b.w4{grid-column:auto}.b{min-height:0}}
+
+/* how it works */
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:clamp(18px,3vw,28px)}
+.step{border-radius:20px;background:var(--card);padding:26px;display:flex;flex-direction:column;gap:12px}
+.step i{font-style:normal;font-weight:900;font-size:14px;color:#fff;background:var(--ink);width:36px;height:36px;border-radius:50%;display:grid;place-items:center}
+.step h3{font-weight:900;font-size:21px;letter-spacing:-.01em}
+.step p{color:var(--mut);font-size:15px;line-height:1.55}
+@media (max-width:820px){.steps{grid-template-columns:1fr}}
+
+/* dark trust card */
+.dark{background:var(--ink);color:#fff;border-radius:var(--r);padding:clamp(28px,5vw,56px);display:grid;grid-template-columns:1fr 1.5fr;gap:clamp(24px,4vw,48px);align-items:start}
+.dark .h2{color:#fff}
+.dark p.lead{color:#B4B4B4;margin-top:16px}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:#151515;border:1px solid #262626;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px}
+.tile svg{width:22px;height:22px;color:#FF5A45}
+.tile b{font-weight:600;font-size:16px;letter-spacing:.02em}
+.tile span{color:#A8A8A8;font-size:14px;line-height:1.5}
+@media (max-width:900px){.dark{grid-template-columns:1fr}}
+@media (max-width:520px){.tiles{grid-template-columns:1fr}}
+
+/* pricing + form */
+.demo{display:grid;grid-template-columns:1fr 1.15fr;gap:clamp(24px,4vw,56px);padding:clamp(24px,5vw,56px)}
+.demo .left{display:flex;flex-direction:column;gap:18px;align-items:flex-start}
+.demo ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:15px;color:var(--ink2)}
+.demo li{display:flex;gap:10px;align-items:flex-start}
+.demo li svg{width:18px;height:18px;flex:none;margin-top:3px;color:var(--red)}
+form.f{display:grid;grid-template-columns:1fr 1fr;gap:14px;background:var(--card);border-radius:20px;padding:clamp(18px,3vw,28px)}
+form.f .full{grid-column:1/-1}
+form.f label{display:block;font-weight:600;font-size:13px;letter-spacing:.02em;margin-bottom:6px}
+form.f input,form.f textarea{width:100%;min-height:48px;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);background:#fff;font-size:16px}
+form.f textarea{min-height:96px;resize:vertical}
+form.f input:focus,form.f textarea:focus{outline:2px solid var(--ink);outline-offset:0;border-color:transparent}
+form.f .btn{width:100%}
+.ok{background:var(--ok-tint);border-radius:20px;padding:28px;color:var(--ink2);align-self:start}
+.ok b{font-weight:900;font-size:20px;display:block;margin-bottom:6px;color:var(--ink)}
+@media (max-width:900px){.demo{grid-template-columns:1fr}}
+@media (max-width:520px){form.f{grid-template-columns:1fr}}
+
+/* faq */
+.faq{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.faq details{background:#fff;border:1px solid var(--line);border-radius:18px;padding:0 22px}
+.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;font-weight:600;font-size:17px;letter-spacing:.01em}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary i{flex:none;width:30px;height:30px;border-radius:50%;background:var(--card);display:grid;place-items:center;transition:transform .25s var(--ease)}
+.faq summary i svg{width:14px;height:14px}
+.faq details[open] summary i{transform:rotate(45deg);background:var(--ink);color:#fff}
+.faq details p{padding:0 0 20px;color:var(--mut);line-height:1.6;max-width:720px}
+
+/* final CTA band */
+.cta-band{position:relative;overflow:hidden;background:var(--ink);color:#fff;border-radius:var(--r);padding:clamp(36px,6vw,72px) clamp(22px,5vw,64px);display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center}
+.cta-band .h2{color:#fff}
+.cta-band p{color:#B4B4B4;margin-top:14px;max-width:520px}
+.cta-band .acts{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end}
+.cta-band>div{position:relative;z-index:1}
+.cta-band .btn.ln{background:transparent;color:#fff;border-color:#3A3A3A}
+.cta-band .rings{position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;border:1px solid #222;pointer-events:none}
+.cta-band .rings::before,.cta-band .rings::after{content:"";position:absolute;inset:60px;border-radius:50%;border:1px solid #222}
+.cta-band .rings::after{inset:130px;border-color:rgba(178,15,0,.55)}
+@media (max-width:860px){.cta-band{grid-template-columns:1fr}.cta-band .acts{justify-content:flex-start}}
+
+/* footer */
+footer{position:relative;z-index:1;margin-top:clamp(28px,4vw,40px);background:var(--ink);color:#fff;overflow:hidden}
+footer .cols{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:28px;padding-block:clamp(40px,6vw,64px) 24px}
+footer h5{margin:0 0 12px;font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A8A}
+footer ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:14px;color:#D6D6D6}
+footer ul a:hover{color:#fff;text-decoration:underline}
+footer .about b{font-weight:900;font-size:22px}
+footer .about p{color:#A8A8A8;font-size:14px;line-height:1.6;margin-top:10px;max-width:340px}
+footer .base{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;border-top:1px solid #222;padding-block:18px;font-size:13px;color:#8A8A8A}
+footer .wm{font-weight:900;font-size:clamp(90px,22vw,300px);line-height:.78;letter-spacing:-.03em;color:#111;text-align:center;user-select:none;margin-bottom:-.06em;white-space:nowrap}
+@media (max-width:760px){footer .cols{grid-template-columns:1fr 1fr}footer .about{grid-column:1/-1}}
+
+/* sticky CTA */
+.sticky{position:fixed;left:50%;bottom:18px;z-index:30;transform:translate(-50%,140%);transition:transform .35s var(--ease);display:flex;align-items:center;gap:6px;padding:6px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid var(--line);box-shadow:0 16px 40px -14px rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.sticky.show{transform:translate(-50%,0)}
+.sticky a.t{font-weight:600;font-size:14px;padding:0 14px;color:var(--ink2);white-space:nowrap}
+@media (max-width:420px){.sticky a.t{display:none}}
+
+/* reveal on scroll */
+.rv{opacity:0;transform:translateY(18px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}.rv{opacity:1;transform:none}.statement p span{color:var(--ink)}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-check" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor" opacity=".12"/><path d="M6 10.3l2.6 2.6L14.2 7.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-cursor" viewBox="0 0 18 18"><path d="M2 1.5l13 6.2-5.6 1.7-2.2 5.6z" fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></symbol>
+</svg>
+<div class="grid-bg" aria-hidden="true"></div>
+
+<div class="bar"><b>New in Orbit:</b> blog posts drafted from your own search data, reviewed by you, published to Shopify.<a href="#execute">See how</a></div>
+
+<header class="nav"><div class="wrap">
+  <a class="brand" href="/" aria-label="Orbit by Hovers, home"><img src="{{ url_for('static', filename='hovers-logo.svg') }}" alt="Hovers" width="94" height="24"><span class="sep" aria-hidden="true"></span><b>Orbit</b></a>
+  <nav class="links" aria-label="Main"><a href="#product">Product</a><a href="#features">Features</a><a href="#how">How it works</a><a href="#demo">Pricing</a><a href="#faq">FAQ</a></nav>
+  <div class="acts"><a class="signin" href="{{ url_for('login') }}">Sign in</a><a class="btn red sm" href="{{ url_for('signup') }}">Start free trial</a></div>
+</div></header>
+
 <main>
-<section class="hero2"><div class="wrap">
-  <span class="eyebrow"><i></i>search intelligence · google + chatgpt + communities</span>
-  <h1>Know where you rank. In Google <span class="r">and</span> in AI.</h1>
-  <p class="lead">Orbit connects to your Search Console and Google Analytics in one click, then tracks the keywords and AI prompts that bring you customers, the sites AI trusts in your category, and what competitors do there. Plain language for owners. Full technical depth for SEO teams.</p>
-  <div class="cta"><a class="btn red auto" href="{{ url_for('signup') }}">Start 14-day free trial</a><a class="btn ghost auto" href="#demo">Talk to sales</a></div>
-  <div class="facts"><span>Read-only Google access</span><span>No card needed for the trial</span><span>One-click Google connection</span></div>
-</div></section>
+<!-- hero -->
+<section class="hero"><div class="wrap">
+  <span class="pill-label"><i></i>Search intelligence · Google + ChatGPT</span>
+  <h1 class="h1">Know where you rank. In Google <span class="r">and</span> in AI.</h1>
+  <p class="lead">Orbit reads your Search Console and Google Analytics, asks ChatGPT the questions your buyers ask, and shows where competitors win. Then it drafts the posts that close the gap.</p>
+  <div class="cta">
+    <a class="btn blk" href="{{ url_for('signup') }}">Start 14-day free trial<span class="arr"><svg><use href="#i-arrow"/></svg></span></a>
+    <span class="alt">Not sure yet? <a href="#demo">Talk to sales</a></span>
+  </div>
+  <div class="proof">
+    <span><svg><use href="#i-check"/></svg>Read-only Google access</span>
+    <span><svg><use href="#i-check"/></svg>Data refreshed every day</span>
+    <span><svg><use href="#i-check"/></svg>No card for the trial</span>
+  </div>
 
-<section class="s" id="features"><div class="wrap">
-  <div class="sh"><div><span class="eyebrow"><i></i>what orbit tracks</span><h2>One view of your search visibility, old and new.</h2></div>
-    <p>Classic SEO and generative engine optimisation (GEO) side by side, so you see what moves revenue on Google and what makes AI assistants recommend you.</p></div>
-  <div class="cards">
-    <div class="c"><b class="k">01 · GOOGLE</b><h3>Keywords and rankings</h3><p>Positions, clicks and the pages that rank, straight from Search Console.</p>
-      <ul><li>Target keywords on page 1, week by week</li><li>Branded vs non-branded demand</li><li>Organic revenue from GA4</li></ul></div>
-    <div class="c"><b class="k">02 · AI ANSWERS</b><h3>AI visibility</h3><p>Does ChatGPT name you when buyers ask? Which brands does it pick instead?</p>
-      <ul><li>Mention rate and rank in the answer</li><li>Share of voice against competitors</li><li>The sources each answer cites</li></ul></div>
-    <div class="c st"><b class="k">03 · SOURCES</b><h3>Sources AI trusts</h3><p>The category sites models lean on, from Wikipedia and Quora to niche directories.</p>
-      <ul><li>Presets per niche, editable</li><li>Who appears there: you or competitors</li><li>Reddit and YouTube conversation maps</li></ul></div>
-    <div class="c"><b class="k">04 · COMPETITORS</b><h3>Competitive gaps</h3><p>Keywords and answers your competitors win and you don't.</p>
-      <ul><li>Keyword gap and SERP features</li><li>Backlink gap</li><li>Brands AI names in your place</li></ul></div>
-    <div class="c st"><b class="k">05 · TECHNICAL</b><h3>Technical SEO</h3><p>A crawl that scores crawlability, indexation, on-page and performance.</p>
-      <ul><li>Status codes, canonicals, hreflang</li><li>Core Web Vitals: LCP, INP, CLS</li><li>Each issue a task with an owner</li></ul></div>
-    <div class="c"><b class="k">06 · REPORT</b><h3>Monthly report</h3><p>A ready-to-share PowerPoint for the month, built from the data.</p>
-      <ul><li>Rankings, traffic and revenue</li><li>Work done and next month's plan</li><li>One click to download</li></ul></div>
+  <div class="frame rv" id="product" aria-label="Illustration of the Orbit overview screen">
+    <div class="app">
+      <div class="app-top" aria-hidden="true"><i></i><i></i><i></i><span>orbit · yourbrand.com</span><em>Illustration</em></div>
+      <div class="app-body">
+        <div class="app-side" aria-hidden="true">
+          <b>Analyse</b><span class="on">Overview</span><span>Keywords</span><span>AI visibility</span><span>Sources AI trusts</span><span>Competitors</span><span>Technical</span>
+          <b>Execute</b><span>Blog posts</span><span>Publishing</span>
+        </div>
+        <div class="app-main">
+          <h4>Overview</h4>
+          <div class="kpis">
+            <div class="kpi"><small>Keywords on page 1</small><strong>Rising</strong><span class="up">↑ vs last month</span></div>
+            <div class="kpi"><small>Named by ChatGPT</small><strong>Rising</strong><span class="up">↑ share of answers</span></div>
+            <div class="kpi"><small>Organic clicks</small><strong>Rising</strong><span class="up">↑ from Search Console</span></div>
+            <div class="kpi"><small>Drafts to review</small><strong>3</strong><span class="up" style="color:var(--red)">Ready today</span></div>
+          </div>
+          <div class="app-row">
+            <div class="chart"><small>Clicks and AI mentions, last 90 days</small>
+              <svg viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true">
+                <g stroke="#E3E3E3" stroke-width="1"><line x1="0" y1="30" x2="400" y2="30"/><line x1="0" y1="75" x2="400" y2="75"/><line x1="0" y1="120" x2="400" y2="120"/></g>
+                <path d="M0 118 C40 112 60 116 90 104 S150 96 180 90 S240 70 270 72 S330 48 360 40 S390 34 400 30" fill="none" stroke="#000" stroke-width="2.5"/>
+                <path d="M0 136 C50 134 80 132 120 128 S190 118 220 112 S290 96 320 90 S380 74 400 70" fill="none" stroke="#B20F00" stroke-width="2.5" stroke-dasharray="1 0"/>
+              </svg>
+              <div style="display:flex;gap:16px;font-size:12px;color:var(--mut)"><span>━ Clicks</span><span style="color:var(--red)">━ AI mentions</span></div>
+            </div>
+            <div class="list"><small>Who ChatGPT names</small>
+              <div><span>Competitor A</span><span class="tag">1st</span></div>
+              <div><span><b>Your brand</b></span><span class="tag g">2nd · up</span></div>
+              <div><span>Competitor B</span><span class="tag">3rd</span></div>
+              <div><span>Competitor C</span><span class="tag rd">dropped</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div></section>
 
-<section class="s" id="how"><div class="wrap">
-  <div class="sh"><div><span class="eyebrow"><i></i>how it works</span><h2>Connect once. Orbit does the reading.</h2></div><p>No tags to install and no spreadsheets. Orbit only reads data; it never changes your site, Search Console or Analytics.</p></div>
-  <div class="steps">
-    <div class="step"><i>01</i><h3>Connect Google</h3><p>Sign in with the Google account that sees your Search Console and Analytics. One consent screen covers both.</p></div>
-    <div class="step"><i>02</i><h3>Pick your site</h3><p>Orbit matches each site to its Analytics property, finds your category, competitors and the questions buyers ask.</p></div>
-    <div class="step"><i>03</i><h3>Watch it move</h3><p>Keywords, AI answers and sources refresh every day. Your monthly report is ready when the month ends.</p></div>
+<!-- client logos -->
+<section class="logos"><div class="wrap">
+  <p>Brands the Hovers team has worked with</p>
+  <div class="logo-row">
+    <figure><img src="{{ url_for('brand_logo', key='tupperware') }}" alt="Tupperware" class="tall" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Tupperware</span></figure>
+    <figure><img src="{{ url_for('brand_logo', key='cradlewise') }}" alt="Cradlewise" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Cradlewise</span></figure>
+    <figure><img src="{{ url_for('brand_logo', key='pack8') }}" alt="Pack8" class="tall" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Pack8</span></figure>
   </div>
 </div></section>
 
-<section class="s"><div class="wrap">
-  <div class="sh"><div><span class="eyebrow"><i></i>from insight to published page</span><h2>Find the gap. Publish the fix.</h2></div><p>Analytics shows what to write; Orbit drafts it and puts it on your store once you approve.</p></div>
-  <div class="two">
-    <div class="mode"><b class="k" style="font-family:var(--mono);font-size:11px;color:var(--red-ink)">ANALYSE</b><h3>Keywords, AI answers and the technical layer</h3><p>One view for founders and SEO teams alike: rankings, prompt visibility, citation sources, crawl and Core Web Vitals.</p>
-      <div class="chips"><span>Keywords on page 1</span><span>Citation share</span><span>SERP features</span><span>Crawl and indexation</span><span>Core Web Vitals</span></div></div>
-    <div class="mode"><b class="k" style="font-family:var(--mono);font-size:11px;color:var(--steel)">EXECUTE</b><h3>Blog posts written from your own search data</h3><p>Topics come from searches you already show for and questions AI does not answer with your name yet. Review, preview, then publish to Shopify in one click.</p>
-      <div class="chips"><span>Topics from Search Console</span><span>Review and edit</span><span>Shareable preview link</span><span>One-click Shopify publish</span><span>WordPress next</span></div></div>
+<!-- the problem -->
+<section class="sec"><div class="wrap">
+  <div class="panel stage rv">
+    <div class="stage-grid">
+      <div class="stage-copy">
+        <span class="pill-label"><i></i>The problem</span>
+        <h2 class="h2">Your buyers now ask ChatGPT first. It may be naming someone else.</h2>
+        <p class="lead">Search Console tells you about Google. Nothing tells you what AI assistants say about your category, which brands they recommend, or which sites they trust to decide. That is where the next customer is won or lost.</p>
+      </div>
+      <div class="float" aria-hidden="true">
+        <div class="fc fc1">
+          <div class="who"><span class="dot">AI</span>ChatGPT answer</div>
+          <q>"What are the best options for a first-time buyer?"</q>
+          <div class="rec">
+            <div><b>Competitor A</b><span class="tag">Recommended</span></div>
+            <div><b>Competitor B</b><span class="tag">Recommended</span></div>
+            <div class="you"><span>Your brand</span><span>not mentioned</span></div>
+          </div>
+        </div>
+        <div class="fc fc2">
+          <div class="who"><span class="dot" style="background:var(--red)">G</span>Google · your best page</div>
+          <div class="pos"><strong>#14</strong><span style="color:var(--mut)">page 2</span></div>
+          <div class="bar2"><i></i></div>
+          <div style="margin-top:8px;color:var(--mut);font-size:12px">Close to page 1. One focused post can move it.</div>
+        </div>
+        <div class="cursor cur-buyer"><svg><use href="#i-cursor"/></svg><span>Your buyer</span></div>
+      </div>
+    </div>
   </div>
 </div></section>
 
-<section class="s" id="demo"><div class="wrap">
-  <div class="demo">
-    <div><span class="eyebrow" style="color:#FFD9D3"><i style="background:#fff"></i>pricing</span><h2 style="margin-top:14px">Plans for brands and agencies.</h2>
-      <p>Pricing depends on the number of brands, prompts and markets you track. Tell us a little about your site and we'll show you Orbit on your own data.</p>
-      <p style="margin-top:10px">Prefer to try first? <a href="{{ url_for('signup') }}" style="text-decoration:underline;color:#fff">Start the free trial</a>.</p></div>
-    {% if sent %}<div class="ok" role="status"><b>Thanks, we have your request.</b><br>The Hovers team will get in touch at the email you gave.</div>
-    {% else %}<form method="post" action="{{ url_for('demo_request') }}">
+<!-- the solution -->
+<section class="sec" style="padding-top:0"><div class="wrap">
+  <div class="panel orbit rv">
+    <div class="core">
+      <span class="pill-label"><i></i>The solution</span>
+      <h2 class="h2">Every place your buyers search, in one view.</h2>
+      <p class="lead">Orbit brings Google and AI answers together, with the community and competitor signals that shape both. It reads; it never changes your accounts.</p>
+      <a class="btn blk" href="{{ url_for('signup') }}">See it on your site<span class="arr"><svg><use href="#i-arrow"/></svg></span></a>
+    </div>
+    <div class="srcs">
+      <span class="src s1"><i>G</i>Search Console</span>
+      <span class="src s2 red"><i>AI</i>ChatGPT answers</span>
+      <span class="src s3"><i>A</i>Google Analytics 4</span>
+      <span class="src s4"><i>S</i>Semrush</span>
+      <span class="src s5"><i>R</i>Reddit</span>
+      <span class="src s6"><i>▶</i>YouTube</span>
+    </div>
+  </div>
+</div></section>
+
+<!-- statement -->
+<section class="statement"><div class="wrap">
+  <p id="stmt">Rankings show where you stand on Google. Orbit adds what AI says about you, the sources it trusts, and the posts that would change its answer.</p>
+  <small>Built by Hovers for brands and their search teams</small>
+</div></section>
+
+<!-- features bento -->
+<section class="sec" id="features"><div class="wrap">
+  <div class="sh"><span class="pill-label"><i></i>What Orbit tracks</span><h2 class="h2">Classic SEO and AI visibility, side by side.</h2>
+    <p class="lead">Plain language at the top for owners. Full technical depth underneath for SEO teams.</p></div>
+  <div class="bento">
+    <article class="b w3 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 16l4-5 3 3 6-8"/></svg></span>
+      <span class="k">Google</span><h3>Keywords on page 1</h3><p>Positions, clicks and the pages that rank, straight from Search Console, with organic revenue from GA4.</p>
+      <div class="ill" aria-hidden="true">
+        <div class="ln"><span>best wireless earbuds under 5000</span><span class="meter"><i style="width:82%"></i></span><span class="tag g">#3</span></div>
+        <div class="ln"><span>how to clean white sneakers</span><span class="meter"><i style="width:64%"></i></span><span class="tag g">#6</span></div>
+        <div class="ln"><span>monsoon skincare routine</span><span class="meter"><i class="r" style="width:30%"></i></span><span class="tag">#14</span></div>
+      </div></article>
+    <article class="b w3 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="7"/><path d="M7 10h6M10 7v6"/></svg></span>
+      <span class="k">AI answers</span><h3>Does ChatGPT name you?</h3><p>The questions buyers ask, asked on a schedule. Mention rate, rank in the answer, and the brands named instead.</p>
+      <div class="ill" aria-hidden="true">
+        <div class="ln"><span>Named in answers</span><span class="meter"><i class="r" style="width:58%"></i></span><span class="tag rd">You</span></div>
+        <div class="ln"><span>Competitor A</span><span class="meter"><i style="width:71%"></i></span><span class="tag">A</span></div>
+        <div class="ln"><span>Competitor B</span><span class="meter"><i style="width:40%"></i></span><span class="tag">B</span></div>
+      </div></article>
+    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h12v12H4z"/><path d="M4 8h12M8 8v8"/></svg></span>
+      <span class="k">Sources</span><h3>Sites AI trusts</h3><p>The category sites and threads answers cite, and whether you or competitors appear there.</p>
+      <div class="ill" aria-hidden="true"><div class="ln"><span>Reddit threads</span><span class="tag">cited</span></div><div class="ln"><span>Category directories</span><span class="tag">cited</span></div><div class="ln"><span>YouTube reviews</span><span class="tag rd">gap</span></div></div></article>
+    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="8" r="3"/><circle cx="14" cy="12" r="3"/><path d="M2 17c1-3 3-4 5-4M19 18c-1-2-3-3-5-3"/></svg></span>
+      <span class="k">Competitors</span><h3>Gaps they win</h3><p>Keywords, answers and links competitors have and you don't, ranked by what is worth chasing.</p>
+      <div class="ill" aria-hidden="true"><div class="ln"><span>Keyword gap</span><span class="tag rd">open</span></div><div class="ln"><span>Backlink gap</span><span class="tag">tracked</span></div><div class="ln"><span>AI answer gap</span><span class="tag rd">open</span></div></div></article>
+    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V5z"/></svg></span>
+      <span class="k">Technical</span><h3>An audit like an analyst's</h3><p>Issues, not page dumps: broken pages, redirects, sitemap and robots problems, each with the URLs to fix.</p>
+      <div class="ill" aria-hidden="true">
+        <div class="chk"><svg style="color:var(--ok)"><use href="#i-check"/></svg>Sitemap listed in robots.txt</div>
+        <div class="chk"><svg style="color:var(--red)"><use href="#i-check"/></svg>Pages returning 404</div>
+        <div class="chk"><svg style="color:var(--ok)"><use href="#i-check"/></svg>One version of the site live</div>
+      </div></article>
+    <article class="b w4 rv" id="execute"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16l2-6 8-8 4 4-8 8z"/><path d="M12 4l4 4"/></svg></span>
+      <span class="k">Execute</span><h3>From the gap to a published post</h3><p>Topics come from searches you already show for and questions AI does not answer with your name yet. Orbit drafts each post in your brand's rules, links it to real pages, and checks it. Nothing goes live until someone on your side clicks Publish.</p>
+      <div class="ill" aria-hidden="true">
+        <div class="post"><b>How to clean white sneakers at home without damage</b><em>Draft · checks passed · 1,140 words</em></div>
+        <div class="acts"><span>Review</span><span>Preview link</span><span class="go">Publish to Shopify</span></div>
+      </div></article>
+    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 2h7l3 3v13H5z"/><path d="M8 9h5M8 12h5M8 15h3"/></svg></span>
+      <span class="k">Report</span><h3>Monthly report, ready</h3><p>A shareable deck for the month: rankings, traffic, AI visibility, work done and next month's plan.</p>
+      <div class="ill" aria-hidden="true"><div class="ln"><span>Report for last month</span><span class="tag g">ready</span></div></div></article>
+  </div>
+</div></section>
+
+<!-- how it works -->
+<section class="sec" id="how"><div class="wrap">
+  <div class="panel rv">
+    <div class="sh" style="margin:clamp(28px,4vw,48px) auto 0;padding-inline:16px"><span class="pill-label"><i></i>How it works</span><h2 class="h2">Connect once. Orbit does the reading.</h2>
+      <p class="lead">No tags to install and no spreadsheets to maintain.</p></div>
+    <div class="steps">
+      <div class="step"><i>1</i><h3>Connect Google</h3><p>Sign in with the Google account that sees your Search Console and Analytics. One consent screen, read-only.</p></div>
+      <div class="step"><i>2</i><h3>Pick your site</h3><p>Orbit matches the site to its Analytics property and finds your category, competitors and the questions buyers ask.</p></div>
+      <div class="step"><i>3</i><h3>Open it each morning</h3><p>Data refreshes overnight on its own. Drafts wait for review. The monthly report is ready when the month ends.</p></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- trust -->
+<section class="sec"><div class="wrap">
+  <div class="dark rv">
+    <div><span class="pill-label" style="background:#151515;border-color:#2A2A2A;color:#fff"><i></i>Built to be trusted</span>
+      <h2 class="h2" style="margin-top:18px">Your accounts stay yours.</h2>
+      <p class="lead">Orbit is made by Hovers, the team that runs search for the brands above. It is built the way we would want a tool to touch our own clients' data.</p></div>
+    <div class="tiles">
+      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg><b>Read-only Google access</b><span>Orbit cannot change Search Console or Analytics settings, users or data.</span></div>
+      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg><b>Refreshed every day</b><span>Data is ready when you open the dashboard. Nobody has to press pull.</span></div>
+      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10l4 4 8-8"/></svg><b>You approve every post</b><span>Store access covers blog content only, and only after you click Publish.</span></div>
+      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h14v10H3z"/><path d="M3 9h14"/></svg><b>Each brand kept apart</b><span>Data is separated per brand at the database level, hosted in Singapore.</span></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- pricing + sales form -->
+<section class="sec" id="demo"><div class="wrap">
+  <div class="panel demo rv">
+    <div class="left">
+      <span class="pill-label"><i></i>Pricing</span>
+      <h2 class="h2">Plans for brands and agencies.</h2>
+      <p class="lead">Pricing depends on the number of brands, AI questions and markets you track. Tell us about your site and we will show you Orbit on your own data.</p>
+      <ul>
+        <li><svg><use href="#i-check"/></svg>14-day free trial, no card</li>
+        <li><svg><use href="#i-check"/></svg>Client view for each brand you manage</li>
+        <li><svg><use href="#i-check"/></svg>Blog drafts and Shopify publishing included</li>
+      </ul>
+      <a class="btn ln" href="{{ url_for('signup') }}">Or start the free trial</a>
+    </div>
+    {% if sent %}<div class="ok" role="status"><b>Thanks, we have your request.</b>The Hovers team will get in touch at the email you gave.</div>
+    {% else %}<form class="f" method="post" action="{{ url_for('demo_request') }}">
       <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="source" id="src" value="">
       <div><label for="dn">Name</label><input id="dn" name="name" required autocomplete="name"></div>
       <div><label for="de">Work email</label><input id="de" name="email" type="email" required autocomplete="email"></div>
@@ -121,22 +528,68 @@ section.s{padding-block:clamp(56px,8vw,104px);position:relative}
       <div><label for="dw">Website</label><input id="dw" name="website" placeholder="brand.com"></div>
       <div class="full"><label for="dm">What would you like to see? (optional)</label><textarea id="dm" name="message"></textarea></div>
       <div class="full" style="display:none"><label for="hp">Leave empty</label><input id="hp" name="company_url" tabindex="-1" autocomplete="off"></div>
-      <div class="full"><button class="btn">Talk to sales</button></div>
+      <div class="full"><button class="btn blk">Talk to sales<span class="arr"><svg><use href="#i-arrow"/></svg></span></button></div>
     </form>{% endif %}
   </div>
 </div></section>
 
-<section class="s"><div class="wrap" style="max-width:860px">
-  <div style="margin-bottom:24px"><span class="eyebrow"><i></i>questions</span><h2 style="font-size:clamp(28px,3.4vw,42px);font-weight:800;letter-spacing:-.045em;margin-top:14px">Before you connect</h2></div>
+<!-- faq -->
+<section class="sec" id="faq"><div class="wrap">
+  <div class="sh"><span class="pill-label"><i></i>Questions</span><h2 class="h2">Before you connect</h2></div>
   <div class="faq">
-    <details><summary>What does Orbit access in my Google account?</summary><p>Read-only access to Search Console and Google Analytics for the properties you choose. Orbit cannot change settings, users or data in either, and you can remove access at any time from your Google account.</p></details>
-    <details><summary>Which AI assistants does Orbit track?</summary><p>ChatGPT today, asked from India with web search on, through the official API. Each tracked question is asked on a schedule and the answer, the brands it names and the sources it cites are stored.</p></details>
-    <details><summary>Do I need an SEO team to use it?</summary><p>No. The overview leads with the keywords and AI questions that matter and whether they are improving; the technical detail sits below it for SEO teams. Blog posts arrive as drafts you can read, edit and publish yourself.</p></details>
-    <details><summary>Does Orbit publish anything without me?</summary><p>No. Orbit writes drafts and checks them, but a post goes live only when someone on your side clicks Publish. Orbit's access to your store covers blog content only.</p></details>
-    <details><summary>What happens after the trial?</summary><p>Your data stays in place. Talk to us to choose a plan; nothing is charged automatically.</p></details>
-    <details><summary>Where is my data stored?</summary><p>In a managed Postgres database in Singapore. Each brand's data is separated at the database level, so one brand can never see another's.</p></details>
+    <details><summary>What does Orbit access in my Google account?<i><svg><use href="#i-plus"/></svg></i></summary><p>Read-only access to Search Console and Google Analytics for the properties you choose. Orbit cannot change settings, users or data in either, and you can remove access at any time from your Google account.</p></details>
+    <details><summary>Which AI assistants does Orbit track?<i><svg><use href="#i-plus"/></svg></i></summary><p>ChatGPT today, asked from India with web search on, through the official API. Each tracked question is asked on a schedule and the answer, the brands it names and the sources it cites are stored.</p></details>
+    <details><summary>Do I need an SEO team to use it?<i><svg><use href="#i-plus"/></svg></i></summary><p>No. The overview leads with the keywords and AI questions that matter and whether they are improving; the technical detail sits below it for SEO teams. Blog posts arrive as drafts you can read, edit and publish yourself.</p></details>
+    <details><summary>Does Orbit publish anything without me?<i><svg><use href="#i-plus"/></svg></i></summary><p>No. Orbit writes drafts and checks them, but a post goes live only when someone on your side clicks Publish. Orbit's access to your store covers blog content only.</p></details>
+    <details><summary>What happens after the trial?<i><svg><use href="#i-plus"/></svg></i></summary><p>Your data stays in place. Talk to us to choose a plan; nothing is charged automatically.</p></details>
+    <details><summary>Where is my data stored?<i><svg><use href="#i-plus"/></svg></i></summary><p>In a managed Postgres database in Singapore. Each brand's data is separated at the database level, so one brand can never see another's.</p></details>
+  </div>
+</div></section>
+
+<!-- final CTA -->
+<section class="sec"><div class="wrap">
+  <div class="cta-band rv">
+    <span class="rings" aria-hidden="true"></span>
+    <div><h2 class="h2">See where you stand in Google and in AI.</h2><p>Connect your site and the first view is ready within minutes. The full picture builds overnight.</p></div>
+    <div class="acts"><a class="btn red" href="{{ url_for('signup') }}">Start free trial<span class="arr"><svg><use href="#i-arrow"/></svg></span></a><a class="btn ln" href="#demo">Talk to sales</a></div>
   </div>
 </div></section>
 </main>
-<script>try{var q=new URLSearchParams(location.search);var s=[q.get('utm_source'),q.get('utm_campaign')].filter(Boolean).join(' / ');if(s)document.getElementById('src').value=s;}catch(e){}</script>
-{% endblock %}
+
+<footer>
+  <div class="wrap">
+    <div class="cols">
+      <div class="about"><b>Orbit</b><p>Search intelligence for Google and AI answers, by Hovers.</p></div>
+      <div><h5>Product</h5><ul><li><a href="#features">Features</a></li><li><a href="#execute">Blog posts</a></li><li><a href="#how">How it works</a></li></ul></div>
+      <div><h5>Company</h5><ul><li><a href="#demo">Pricing</a></li><li><a href="#demo">Talk to sales</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+      <div><h5>Account</h5><ul><li><a href="{{ url_for('signup') }}">Start free trial</a></li><li><a href="{{ url_for('login') }}">Sign in</a></li><li><a href="{{ url_for('login') }}?as=client">Client sign in</a></li></ul></div>
+    </div>
+    <div class="base"><span>© 2026 Hovers®. All rights reserved.</span><span>Pune · London · Kochi</span></div>
+  </div>
+  <div class="wm" aria-hidden="true">ORBIT</div>
+</footer>
+
+<div class="sticky" id="sticky" aria-hidden="true"><a class="t" href="#demo" tabindex="-1">Talk to sales</a><a class="btn red sm" href="{{ url_for('signup') }}" tabindex="-1">Start free trial</a></div>
+
+<script>
+try{var q=new URLSearchParams(location.search);var s=[q.get('utm_source'),q.get('utm_campaign')].filter(Boolean).join(' / ');var el=document.getElementById('src');if(s&&el)el.value=s;}catch(e){}
+(function(){
+  /* fade sections in */
+  var rv=document.querySelectorAll('.rv');
+  if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{rootMargin:'0px 0px -8% 0px'});rv.forEach(function(n){io.observe(n)});}
+  else rv.forEach(function(n){n.classList.add('in')});
+  /* statement: words darken as it scrolls through */
+  var p=document.getElementById('stmt'),red={"AI":1,"Orbit":1};
+  if(p){p.innerHTML=p.textContent.split(' ').map(function(w){return '<span'+(red[w.replace(/[^A-Za-z]/g,'')]?' class="r"':'')+'>'+w+'</span>'}).join(' ');}
+  var ws=p?p.querySelectorAll('span'):[],st=document.getElementById('sticky'),hero=document.querySelector('.hero .cta'),demo=document.getElementById('demo');
+  function tick(){
+    if(ws.length){var r=p.getBoundingClientRect(),vh=innerHeight,prog=Math.min(1,Math.max(0,(vh*.85-r.top)/(r.height+vh*.35)));var n=Math.round(prog*ws.length);
+      for(var i=0;i<ws.length;i++)ws[i].classList.toggle('on',i<n);}
+    if(st&&hero){var past=hero.getBoundingClientRect().bottom<0,dr=demo.getBoundingClientRect(),inDemo=dr.top<innerHeight&&dr.bottom>0;
+      var show=past&&!inDemo;st.classList.toggle('show',show);st.setAttribute('aria-hidden',show?'false':'true');st.querySelectorAll('a').forEach(function(a){a.tabIndex=show?0:-1});}
+  }
+  addEventListener('scroll',tick,{passive:true});addEventListener('resize',tick);tick();
+})();
+</script>
+</body>
+</html>
