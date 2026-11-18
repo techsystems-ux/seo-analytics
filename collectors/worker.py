@@ -38,9 +38,21 @@ def parse_args(args):
         i += 1
     return out
 
+def blog_count_limit():
+    return max(1, min(6, int(os.environ.get("BLOG_QUEUE", "6"))))
+
+
+def blog_count(value):
+    text = str(value)
+    if not text.isascii() or not text.isdecimal() or not 1 <= int(text) <= blog_count_limit():
+        raise ValueError("Invalid draft count")
+    return int(text)
+
+
 def enqueue(conn, client_id, label, args, who=None):
     """A pull as tasks. Marked started so an old Mac app never picks it up as well. Returns the pull id."""
     o = parse_args(args)
+    requested_blogs = blog_count(o["blog_count"]) if "blog_count" in o else None
     pid = conn.execute("""INSERT INTO pull_queue (client_id, label, args, requested_by, started_at) VALUES (%s,%s,%s,%s,now())
                           RETURNING pull_id""", [client_id, label, json.dumps(args), who]).fetchone()[0]
     clients = [o["client_id"]] if o.get("client_id") else \
@@ -50,8 +62,10 @@ def enqueue(conn, client_id, label, args, who=None):
     extra = {k: o[k] for k in ("max_units", "seeds", "research") if o.get(k)}
     for cid in clients:
         for n, step in enumerate(steps):
+            task_args = {**extra, "force": o["force"]}
+            if step == "blogs" and requested_blogs is not None: task_args["left"] = requested_blogs
             conn.execute("INSERT INTO pull_tasks (pull_id, client_id, step, args, seq) VALUES (%s,%s,%s,%s,%s)",
-                         [pid, cid, step, json.dumps({**extra, "force": o["force"]}), n * 100])
+                         [pid, cid, step, json.dumps(task_args), n * 100])
     return pid
 
 def adopt_waiting(conn):

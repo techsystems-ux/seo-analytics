@@ -10,7 +10,7 @@ import analytics as A
 
 # Screens a client may open for their own brand (read-only). Everything else, and every form, is staff only.
 VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.answer", "dash.reddit_view", "dash.sources",
-                  "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download", "dash.blogs", "dash.blog"}
+                  "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download", "dash.blogs", "dash.blog", "dash.activity_status"}
 # What a brand's owner (the person who signed up for it) may also do: review, edit and publish its blog posts, connect its store.
 OWNER_ACTIONS = {"dash.blogs_post", "dash.blog_post", "dash.publishing", "dash.publishing_post"}
 
@@ -589,19 +589,39 @@ QUEUED = "Started on the Orbit server. Results appear here as each step finishes
 def queue_pull(cid, label, args):
     """Online, a pull is split into tasks (collectors/worker.py) and the server starts working through them at once."""
     import json
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, urlsplit, urlunsplit, parse_qsl
     import worker
     with connect() as conn:
-        worker.enqueue(conn, cid, label, args, session.get("staff_email") or session.get("viewer_email"))
+        pull_id = worker.enqueue(conn, cid, label, args, session.get("staff_email") or session.get("viewer_email"))
     worker.kick()
     back = (request.referrer or url_for("dash.clients")).split("#")[0]
-    abort(redirect(back + ("&" if "?" in back else "?") + urlencode({"msg": QUEUED})))
+    parts = urlsplit(back)
+    query = dict(parse_qsl(parts.query)); query.update(msg=QUEUED, activity=pull_id)
+    abort(redirect(urlunsplit(parts._replace(query=urlencode(query)))))
 
-def start_job(cid, only, max_units=None, seeds="", research=""):
+@bp.get("/c/<cid>/activity/<int:pull_id>")
+def activity_status(cid, pull_id):
+    with connect() as conn:
+        client_or_404(conn, cid)
+        row = conn.execute("SELECT finished_at, exit_code FROM pull_queue WHERE pull_id=%s AND client_id::text=%s", [pull_id, cid]).fetchone()
+        if not row: abort(404)
+        tasks = conn.execute("SELECT step, status, note FROM pull_tasks WHERE pull_id=%s AND client_id::text=%s ORDER BY seq, task_id", [pull_id, cid]).fetchall()
+    labels = {"blogs": "Drafting blog", "ai": "Checking AI answers", "gsc": "Fetching Google Search data", "gsc_history": "Fetching search history", "ga4": "Fetching Analytics", "rank": "Updating rankings", "crawl": "Scanning pages", "index": "Checking indexing", "cwv": "Measuring page speed", "reddit": "Fetching Reddit", "youtube": "Fetching YouTube"}
+    items = [{"label": labels.get(step, "Fetching research data"), "state": "skipped" if status == "done" and (note or "").startswith("skipped:") else status} for step, status, note in tasks]
+    state = "error" if row[0] and row[1] else "finished" if row[0] else "running" if any(t["state"] == "running" for t in items) else "queued"
+    response = make_response({"state": state, "tasks": items})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def start_job(cid, only, max_units=None, seeds="", research="", blog_count=None):
     """Runs the daily job for one client in the background. Results go to the run log on screen; full output,
     errors included, is appended to logs/jobs.log in the project folder."""
     import datetime as dt
     extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else [])
+    if blog_count is not None:
+        import worker
+        extra += ["--blog-count", str(worker.blog_count(blog_count))]
     if ONLINE: queue_pull(cid, only, ["--client-id", cid, "--only", only, "--force-weekly"] + extra)
     logdir = os.path.join(HERE, "..", "logs"); os.makedirs(logdir, exist_ok=True)
     out = open(os.path.join(logdir, "jobs.log"), "a")

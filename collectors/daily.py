@@ -51,6 +51,8 @@ def due(conn, client_id, name, days):
 def main(argv=None):
     ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,index,cwv,crawl,youtube,reddit")
     ap.add_argument("--force-weekly", action="store_true")
+    from worker import blog_count
+    ap.add_argument("--blog-count", type=blog_count, default=None, help="maximum blog drafts for this manual run")
     ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")
     ap.add_argument("--seeds", default="", help="topics for semrush_ideas, separated by ;")
     ap.add_argument("--research", default="", help="tool:query for a Semrush research lookup, e.g. keyword:silver anklets")
@@ -130,7 +132,7 @@ def main(argv=None):
             # Execution: blog ideas from the data pulled above, and drafts for review (OpenAI). Never publishes.
             if "blogs" in only:
                 import blog_writer
-                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, os.environ.get("OPENAI_API_KEY_2")))
+                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, os.environ.get("OPENAI_API_KEY_2"), n=a.blog_count))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(

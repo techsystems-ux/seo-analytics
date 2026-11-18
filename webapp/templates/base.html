@@ -153,7 +153,7 @@ svg text{font-family:var(--fb)}
 <style>{% include "_layout.css" %}</style>
 <style>{% include "_ai-motion.css" %}</style>
 </head>
-<body class="{{ 'viewer' if viewer }}">
+<body class="{{ 'viewer' if viewer }}"{% if client %} data-orbit-activity-base="{{ url_for('dash.activity_status', cid=client.id, pull_id=0) }}"{% endif %}>
 {% set I = {
  'overview':'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
  'search':'<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',

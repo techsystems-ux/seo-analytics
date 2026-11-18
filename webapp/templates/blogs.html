@@ -23,8 +23,9 @@ on-page checks. Nothing goes live until someone reviews it and clicks Publish.</
     <p class="note" style="margin:4px 0 0">Runs by itself every night, refreshing the topic ideas and writing the next drafts (up to 6 waiting). Writing uses OpenAI, so it runs at most {{ per_day }} time{{ 's' if per_day != 1 }} a day per brand{% if not can_write and next_at and next_at != 'switched off' %}; the next run can start {{ next_at.strftime('%d %b, %H:%M') }} UTC{% endif %}.
     {% if last %}Last run {{ last[0].strftime('%d %b, %H:%M') }}{% if last[1] == 'error' %} <span class="tag t-sev-error">failed</span>{% elif last[1] == 'running' %} <span class="tag t-na">running</span>{% endif %}.{% endif %}
     {% if not has_gsc %} Search Console data has not arrived yet, so the first topics lean on Google suggestions.{% endif %}</p></div>
-  <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="hidden" name="csrf" value="{{ csrf }}">
-    <button class="btn red" name="what" value="run" {{ 'disabled title="Already ran today"' if not can_write }}>Find topics and write drafts</button></form>
+  <form method="post" data-orbit-work="blogs" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}">
+    <div style="width:100px"><label for="draft-count" style="margin:0 0 6px">Draft count</label><input id="draft-count" type="number" name="draft_count" min="1" max="{{ max_drafts }}" step="1" value="1" required aria-describedby="draft-count-help"></div>
+    <button class="btn red" name="what" value="run" {{ 'disabled title="Already ran today"' if not can_write }}>Generate drafts</button><p id="draft-count-help" class="note" style="flex-basis:100%;margin:0">Writes up to this many drafts. Choose 1 to review one first. Existing daily and review-queue limits still apply.</p></form>
 </section>
 {% endif %}
 
@@ -41,7 +42,7 @@ on-page checks. Nothing goes live until someone reviews it and clicks Publish.</
       <td><span class="tag">{{ r.intent|title }}</span></td><td class="r">{{ r.priority|n }}</td>
       {% if edit %}<td><form method="post" style="display:flex;gap:6px;justify-content:flex-end"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="draft_id" value="{{ r.draft_id }}"><input type="hidden" name="tab" value="ideas">
         <button class="btn blk" name="what" value="write">Write this next</button><button class="btn ln" name="what" value="discard">Not relevant</button></form></td>{% endif %}</tr>{% endfor %}</table></div>
-    {% else %}<p class="empty">No ideas yet. {{ 'Run "Find topics and write drafts" above.' if edit else 'They appear after the first run.' }}</p>{% endif %}
+    {% else %}<p class="empty">No ideas yet. {{ 'Run "Generate drafts" above.' if edit else 'They appear after the first run.' }}</p>{% endif %}
 
   {% else %}
     {% if rows %}<div class="posts">{% for r in rows %}{% set st = S[r.status] %}
@@ -63,7 +64,7 @@ on-page checks. Nothing goes live until someone reviews it and clicks Publish.</
         {% if edit and r.status == 'discarded' %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="draft_id" value="{{ r.draft_id }}"><button class="btn ln" name="what" value="restore">Restore</button></form>{% endif %}
       </div>
     </article>{% endfor %}</div>
-    {% else %}<p class="empty">{{ {'review': 'Nothing waiting for review.' ~ (' Click "Find topics and write drafts" to start.' if edit else ''), 'approved': 'Nothing approved and unpublished.', 'published': 'Nothing published yet.', 'discarded': 'Nothing discarded.'}[tab] }}</p>{% endif %}
+    {% else %}<p class="empty">{{ {'review': 'Nothing waiting for review.' ~ (' Click "Generate drafts" to start.' if edit else ''), 'approved': 'Nothing approved and unpublished.', 'published': 'Nothing published yet.', 'discarded': 'Nothing discarded.'}[tab] }}</p>{% endif %}
   {% endif %}
 </section>
 <p class="note">How topics are ranked: Search Console queries by impressions in the last 30 days, with extra weight for positions 4 to 30 (a dedicated post moves these most) and for question-style searches; ChatGPT questions that do not name {{ client.name }}; Reddit questions; then Google's suggestions. Topics the site already covers are left out.</p>

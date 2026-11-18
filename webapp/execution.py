@@ -73,12 +73,19 @@ def blogs(cid):
     tabcount = {k: sum(counts.get(x, 0) for x in v) for k, _, v in TABS}
     return view("blogs.html", c, "blogs", tab=tab, tabs=TABS, tabcount=tabcount, rows=rows, S=STATUS, why=why, store=s, last=last,
                 has_gsc=has_gsc, edit=can_edit(cid), msg=request.args.get("msg"), preview_url=preview_url,
-                can_write=can_write, next_at=next_at, per_day=worker.paid_per_day())
+                can_write=can_write, next_at=next_at, per_day=worker.paid_per_day(), max_drafts=worker.blog_count_limit())
 
 @bp.post("/c/<cid>/blogs")
 def blogs_post(cid):
     check_csrf()
     what, did = request.form.get("what"), request.form.get("draft_id")
+    import worker
+    write_count = 1
+    if what == "run":
+        try:
+            write_count = worker.blog_count(request.form.get("draft_count", "1"))
+        except ValueError:
+            return back_with(url_for("dash.blogs", cid=cid), f"Choose a whole number from 1 to {worker.blog_count_limit()}.")
     with connect() as conn:
         client_or_404(conn, cid)
         if what == "discard" and did:
@@ -104,7 +111,7 @@ def blogs_post(cid):
             when = nxt.astimezone(__import__("zoneinfo").ZoneInfo("Asia/Kolkata")).strftime("%d %b, %H:%M IST") if hasattr(nxt, "astimezone") else nxt
             return back_with(url_for("dash.blogs", cid=cid, tab=request.form.get("tab", "review")),
                              f"Saved. Drafts are written {worker.paid_per_day()} time(s) a day per brand to keep OpenAI costs predictable; the next run can start {when}.")
-    start_job(cid, "blogs")
+    start_job(cid, "blogs", blog_count=write_count)
     return back_with(url_for("dash.blogs", cid=cid, tab="review"), "Writing has started. Drafts appear here in a few minutes, each with a preview link.")
 
 @bp.get("/c/<cid>/blogs/<did>")
