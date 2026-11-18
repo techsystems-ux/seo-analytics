@@ -11,19 +11,19 @@ recommendation likelihood in LLM answers; gaps here are off-site GEO work, not o
 
 {% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
 
-<section class="card" style="display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between">
-  <div style="display:flex;flex-direction:column;gap:4px"><span class="note" style="margin:0">{{ t('Category', 'Niche preset') }}</span>
+<section class="card sources-summary">
+  <div class="sources-category"><span class="note">{{ t('Category', 'Niche preset') }}</span>
     <b style="font:700 16px var(--fh)">{{ niche_label or 'Not set' }}{% if guessed and not niche %} <span class="tag t-na">suggested</span>{% endif %}</b></div>
-  <form method="post" class="staff-only" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+  <form method="post" class="staff-only sources-niche-form">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="niche">
     <div><label for="ni">Set the niche</label><select id="ni" name="niche">
       <option value="">General (Wikipedia, Reddit, Quora, YouTube only)</option>
       {% for k, l in choices %}<option value="{{ k }}" {{ 'selected' if k == (niche or guessed) }}>{{ l }}</option>{% endfor %}</select></div>
     <button class="btn ln">Save</button></form>
-  <div class="grid" style="flex:1 1 420px;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;min-width:280px">
-    <div class="kpi" style="padding:0"><div class="l">{{ t('AI answers read', 'Answers sampled (30d)') }}</div><div class="v sm">{{ S.answers|n }}</div></div>
-    <div class="kpi" style="padding:0"><div class="l">{{ t('Sites AI quotes', 'Sources with citations') }}</div><div class="v sm">{{ S.sources|selectattr('answers')|list|length }} of {{ S.sources|length }}</div></div>
-    <div class="kpi" style="padding:0"><div class="l">{{ t('Where competitors lead', 'Co-occurrence gaps') }}</div><div class="v sm">{{ S.sources|selectattr('gap')|list|length }}</div></div>
+  <div class="grid sources-metrics">
+    <div class="kpi"><div class="l">{{ t('AI answers read', 'Answers sampled (30d)') }}</div><div class="v sm">{{ S.answers|n }}</div></div>
+    <div class="kpi"><div class="l">{{ t('Sites AI quotes', 'Sources with citations') }}</div><div class="v sm">{{ S.sources|selectattr('answers')|list|length }} of {{ S.sources|length }}</div></div>
+    <div class="kpi"><div class="l">{{ t('Where competitors lead', 'Co-occurrence gaps') }}</div><div class="v sm">{{ S.sources|selectattr('gap')|list|length }}</div></div>
   </div>
 </section>
 
