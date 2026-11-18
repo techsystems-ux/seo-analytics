@@ -3,7 +3,7 @@
 {% block body %}
 {% macro cwv(v, good, poor, unit='') %}{% if v is none %}<span class="mute">–</span>{% else %}<span class="tag {{ 't-pass' if v <= good else 't-fail' if v > poor else 't-warn' }}">{{ v|round(2) if unit == '' else v|n }}{{ unit }}</span>{% endif %}{% endmacro %}
 <div class="top"><div><span class="kicker">{{ t('Visibility · Google search', 'Organic search · Google Search Console + GA4') }}</span><h1>{{ t('How people find you on Google', 'Organic search performance') }}</h1>
-<p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the preceding {{ range_days }} days. {{ t('Branded searches include your brand name; non-branded are new customers finding you.', 'Branded/non-branded split by brand-term regex; position is impression-weighted average; CTR = clicks / impressions.') }}</p></div></div>
+</div></div>
 
 
 <section class="card" aria-label="Reporting dates">
@@ -19,7 +19,6 @@
     <button class="btn blk">Apply dates</button>
     {% if preset != 28 %}<a class="btn ln" href="{{ search_link(start=None, end=None) }}" title="Back to the last 28 days" aria-label="Clear date filter, back to the last 28 days">✕ Clear</a>{% endif %}
   </form>
-  <p class="note">Dates are inclusive. Latest Search Console data: {{ latest.strftime('%d %b %Y') }}. Comparisons use the previous equal-length period; dates without imported data may be empty.</p>
   {% if date_error %}<p role="alert" class="note down">{{ date_error }}</p>{% endif %}
 </section>
 
