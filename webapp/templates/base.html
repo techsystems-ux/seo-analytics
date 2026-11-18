@@ -150,6 +150,7 @@ svg text{font-family:var(--fb)}
 .pil{border:1px solid var(--hair);border-radius:6px;padding:14px;display:flex;flex-direction:column;gap:8px}.pil b{font:700 13px var(--fh)}
 .pil .pv{font:700 20px var(--fn)}.pil .note{margin:0}.cwv{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
 </style>
+<style>{% include "_layout.css" %}</style>
 </head>
 <body class="{{ 'viewer' if viewer }}">
 {% set I = {
@@ -253,5 +254,6 @@ document.querySelectorAll('details.grp').forEach(function(d){var k='orbit.grp.'+
   try{var v=localStorage.getItem(k);if(v!==null&&!d.querySelector('.tab.on'))d.open=v==='1';}catch(e){}
   d.addEventListener('toggle',function(){try{localStorage.setItem(k,d.open?'1':'0');}catch(e){}});});
 </script>
+<script>{% include "_layout.js" %}</script>
 </body>
 </html>
