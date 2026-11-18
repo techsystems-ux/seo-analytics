@@ -10,8 +10,13 @@ def pct_change(now, before):
     if not before: return None
     return round(100 * (float(now or 0) - float(before)) / float(before), 1)
 
-def periods(conn, client_id, days=28):
+def periods(conn, client_id, days=28, date_range=None):
     """Two back-to-back windows ending on the last day Search Console has data for."""
+    if date_range is not None:
+        start, end = date_range
+        length = (end - start).days + 1
+        if length < 1 or length > 366: raise ValueError("Choose a range of 1 to 366 days.")
+        return (start, end), (start - dt.timedelta(days=length), start - dt.timedelta(days=1))
     last = conn.execute("SELECT max(date) FROM gsc_search_daily WHERE client_id=%s", [client_id]).fetchone()[0]
     last = last or dt.date.today() - dt.timedelta(days=3)
     cur = (last - dt.timedelta(days=days - 1), last)
@@ -22,8 +27,8 @@ def rows(cur, cols):
     return [dict(zip(cols, r)) for r in cur.fetchall()]
 
 # ------------------------------------------------------------------ search
-def search_totals(conn, client_id, days=28):
-    cur, prev = periods(conn, client_id, days)
+def search_totals(conn, client_id, days=28, date_range=None):
+    cur, prev = periods(conn, client_id, days, date_range)
     q = """SELECT coalesce(sum(clicks),0), coalesce(sum(impressions),0),
                   coalesce(sum(clicks) FILTER (WHERE NOT is_branded),0), coalesce(sum(impressions) FILTER (WHERE NOT is_branded),0),
                   sum(position*impressions)/nullif(sum(impressions),0)
@@ -35,13 +40,15 @@ def search_totals(conn, client_id, days=28):
             "position": round(float(a[4]), 1) if a[4] else None,
             "nb_clicks_change": pct_change(a[2], b[2]), "clicks_change": pct_change(a[0], b[0])}
 
-def daily_clicks(conn, client_id, days=90):
-    return rows(conn.execute("""SELECT date, sum(clicks) FILTER (WHERE NOT is_branded) AS nonbranded, sum(clicks) FILTER (WHERE is_branded) AS branded
-                                FROM gsc_search_daily WHERE client_id=%s AND date > (SELECT max(date) FROM gsc_search_daily WHERE client_id=%s) - %s
-                                GROUP BY date ORDER BY date""", [client_id, client_id, days]), ["date", "nonbranded", "branded"])
+def daily_clicks(conn, client_id, days=90, date_range=None):
+    cur, _ = periods(conn, client_id, days, date_range)
+    return rows(conn.execute("""SELECT date, sum(clicks) FILTER (WHERE NOT is_branded), sum(clicks) FILTER (WHERE is_branded)
+                                FROM gsc_search_daily WHERE client_id=%s AND date BETWEEN %s AND %s
+                                GROUP BY date ORDER BY date""", [client_id, *cur]), ["date", "nonbranded", "branded"])
 
-def top_queries(conn, client_id, branded=None, limit=50, days=28):
-    cur, prev = periods(conn, client_id, days)
+
+def top_queries(conn, client_id, branded=None, limit=50, days=28, date_range=None):
+    cur, prev = periods(conn, client_id, days, date_range)
     flt = "" if branded is None else (" AND is_branded" if branded else " AND NOT is_branded")
     return rows(conn.execute(f"""WITH a AS (SELECT query, sum(clicks) c, sum(impressions) i, sum(position*impressions)/nullif(sum(impressions),0) p
                                              FROM gsc_search_daily WHERE client_id=%s AND date BETWEEN %s AND %s{flt} GROUP BY query),
@@ -52,8 +59,8 @@ def top_queries(conn, client_id, branded=None, limit=50, days=28):
                              [client_id, *cur, client_id, *prev, limit]),
                 ["query", "clicks", "impressions", "ctr", "position", "position_gain", "prev_clicks"])
 
-def top_pages(conn, client_id, limit=50, days=28):
-    cur, _ = periods(conn, client_id, days)
+def top_pages(conn, client_id, limit=50, days=28, date_range=None):
+    cur, _ = periods(conn, client_id, days, date_range)
     return rows(conn.execute("""SELECT page, sum(clicks), sum(impressions), round(100.0*sum(clicks)/nullif(sum(impressions),0),1),
                                        round(sum(position*impressions)/nullif(sum(impressions),0),1),
                                        (array_agg(query ORDER BY clicks DESC))[1]
@@ -62,10 +69,13 @@ def top_pages(conn, client_id, limit=50, days=28):
                 ["page", "clicks", "impressions", "ctr", "position", "top_query"])
 
 # ------------------------------------------------------------------ revenue
-def organic_revenue(conn, client_id, days=28):
-    end = conn.execute("SELECT max(date) FROM ga4_daily WHERE client_id=%s", [client_id]).fetchone()[0]
-    if not end: return None
-    start = end - dt.timedelta(days=days - 1)
+def organic_revenue(conn, client_id, days=28, date_range=None):
+    if date_range is not None:
+        start, end = date_range
+    else:
+        end = conn.execute("SELECT max(date) FROM ga4_daily WHERE client_id=%s", [client_id]).fetchone()[0]
+        if not end: return None
+        start = end - dt.timedelta(days=days - 1)
     r = conn.execute("""SELECT coalesce(sum(revenue) FILTER (WHERE channel_group='Organic Search'),0), coalesce(sum(revenue),0),
                                coalesce(sum(sessions) FILTER (WHERE channel_group='Organic Search'),0), coalesce(sum(sessions),0),
                                coalesce(sum(transactions) FILTER (WHERE channel_group='Organic Search'),0)
@@ -76,11 +86,14 @@ def organic_revenue(conn, client_id, days=28):
             "session_share": round(100 * r[2] / r[3], 1) if r[3] else None, "organic_orders": r[4],
             "organic_cvr": round(100 * r[4] / r[2], 2) if r[2] else None, "ai_sessions": ai[0], "ai_revenue": float(ai[1])}
 
-def revenue_by_landing(conn, client_id, limit=30, days=28):
+def revenue_by_landing(conn, client_id, limit=30, days=28, date_range=None):
     """Organic landing pages ranked by revenue, each with the Search Console query that sends it most clicks."""
-    end = conn.execute("SELECT max(date) FROM ga4_organic_landing WHERE client_id=%s", [client_id]).fetchone()[0]
-    if not end: return []
-    start = end - dt.timedelta(days=days - 1)
+    if date_range is not None:
+        start, end = date_range
+    else:
+        end = conn.execute("SELECT max(date) FROM ga4_organic_landing WHERE client_id=%s", [client_id]).fetchone()[0]
+        if not end: return []
+        start = end - dt.timedelta(days=days - 1)
     total = conn.execute("SELECT coalesce(sum(revenue),0) FROM ga4_organic_landing WHERE client_id=%s AND date BETWEEN %s AND %s",
                          [client_id, start, end]).fetchone()[0]
     out = rows(conn.execute("""WITH l AS (SELECT split_part(landing_page,'?',1) lp, sum(sessions) s, sum(transactions) t, sum(revenue) r
@@ -264,19 +277,20 @@ def semrush_by_feature(conn):
     return dict(conn.execute("SELECT coalesce(feature, 'keywords'), sum(units) FROM semrush_usage GROUP BY 1").fetchall())
 
 # ------------------------------------------------------------------ rankings
-def rankings(conn, client_id, days=28):
+def rankings(conn, client_id, days=28, date_range=None):
     """Tracked keywords: latest Search Console position (and Semrush's when tracked there), change over 7 days, 28-day clicks."""
+    cur, _ = periods(conn, client_id, days, date_range)
     out = rows(conn.execute("""
         WITH g AS (SELECT keyword, date, position, url, clicks, impressions FROM rank_positions WHERE client_id=%(c)s AND source='gsc'
-                   AND date > current_date - %(d)s),
+                   AND date BETWEEN %(start)s AND %(end)s),
              last AS (SELECT DISTINCT ON (keyword) keyword, date, position, url FROM g ORDER BY keyword, date DESC),
              wk AS (SELECT DISTINCT ON (keyword) keyword, position FROM g WHERE date <= (SELECT max(date) FROM g) - 7 ORDER BY keyword, date DESC),
              tot AS (SELECT keyword, sum(clicks) clicks, sum(impressions) impressions, min(position) best FROM g GROUP BY keyword),
-             sm AS (SELECT DISTINCT ON (keyword) keyword, position, date FROM rank_positions WHERE client_id=%(c)s AND source='semrush'
+             sm AS (SELECT DISTINCT ON (keyword) keyword, position, date FROM rank_positions WHERE client_id=%(c)s AND source='semrush' AND date <= %(end)s
                     ORDER BY keyword, date DESC)
         SELECT k.keyword, k.tags, k.target_url, last.position, last.date, last.url, wk.position, tot.clicks, tot.impressions, tot.best, sm.position, sm.date
         FROM rank_keywords k LEFT JOIN last USING (keyword) LEFT JOIN wk USING (keyword) LEFT JOIN tot USING (keyword) LEFT JOIN sm USING (keyword)
-        WHERE k.client_id=%(c)s ORDER BY last.position IS NULL, tot.clicks DESC NULLS LAST, k.keyword""", {"c": client_id, "d": days}),
+        WHERE k.client_id=%(c)s ORDER BY last.position IS NULL, tot.clicks DESC NULLS LAST, k.keyword""", {"c": client_id, "start": cur[0], "end": cur[1]}),
         ["keyword", "tags", "target", "position", "date", "url", "week_ago", "clicks", "impressions", "best", "semrush", "semrush_date"])
     feats = {r[0].lower(): (r[1], r[2]) for r in conn.execute("""SELECT DISTINCT ON (keyword) keyword, serp_features, serp_features_owned
                                                                 FROM semrush_keywords WHERE client_id=%s ORDER BY keyword, pulled_on DESC""", [client_id])}
@@ -287,9 +301,57 @@ def rankings(conn, client_id, days=28):
                                != r["target"].rstrip("/").split("://")[-1].removeprefix("www."))
     return out
 
-def rank_trend(conn, client_id, keyword, days=90):
+def rank_trend(conn, client_id, keyword, days=90, date_range=None):
+    cur, _ = periods(conn, client_id, days, date_range)
     return rows(conn.execute("""SELECT date, position FROM rank_positions WHERE client_id=%s AND keyword=%s AND source='gsc'
-                                AND date > current_date - %s ORDER BY date""", [client_id, keyword, days]), ["date", "position"])
+                                AND date BETWEEN %s AND %s ORDER BY date""", [client_id, keyword, *cur]), ["date", "position"])
+
+# ------------------------------------------------------------------ Search Console: countries, devices, indexing, sitemaps, vitals
+def search_by(conn, client_id, dim, days=28, date_range=None):
+    """Clicks, impressions, CTR and position by country or device, with the change in clicks against the period before."""
+    if dim not in ("country", "device"): raise ValueError(dim)
+    cur, prev = periods(conn, client_id, days, date_range)
+    out = rows(conn.execute(f"""WITH a AS (SELECT {dim} k, sum(clicks) c, sum(impressions) i, sum(position*impressions)/nullif(sum(impressions),0) p
+                                           FROM gsc_search_daily WHERE client_id=%s AND date BETWEEN %s AND %s GROUP BY 1),
+                                     b AS (SELECT {dim} k, sum(clicks) c FROM gsc_search_daily WHERE client_id=%s AND date BETWEEN %s AND %s GROUP BY 1)
+                                SELECT a.k, a.c, a.i, round(100.0*a.c/nullif(a.i,0),1), round(a.p,1), b.c
+                                FROM a LEFT JOIN b USING (k) ORDER BY a.c DESC, a.i DESC LIMIT 100""",
+                            [client_id, *cur, client_id, *prev]), ["key", "clicks", "impressions", "ctr", "position", "prev_clicks"])
+    for r in out: r["change"] = pct_change(r["clicks"], r["prev_clicks"])
+    return out
+
+def index_status(conn, client_id, state=None, limit=500):
+    """Google's index status per inspected URL (URL Inspection API), counted by coverage state; not-indexed pages first."""
+    summary = rows(conn.execute("""SELECT coalesce(coverage_state, 'Unknown'), verdict, count(*) FROM gsc_url_inspection WHERE client_id=%s
+                                   GROUP BY 1, 2 ORDER BY verdict IS NOT DISTINCT FROM 'PASS', 3 DESC""", [client_id]), ["state", "verdict", "n"])
+    flt = " AND coalesce(coverage_state, 'Unknown') = %s" if state else ""
+    pages = rows(conn.execute(f"""SELECT url, verdict, coverage_state, indexing_state, robots_state, fetch_state, last_crawl, crawled_as,
+                                         google_canonical, user_canonical, rich_types, inspected_at
+                                  FROM gsc_url_inspection WHERE client_id=%s{flt}
+                                  ORDER BY verdict IS NOT DISTINCT FROM 'PASS', last_crawl NULLS FIRST LIMIT %s""",
+                              [client_id, *([state] if state else []), limit]),
+                 ["url", "verdict", "coverage_state", "indexing_state", "robots_state", "fetch_state", "last_crawl", "crawled_as",
+                  "google_canonical", "user_canonical", "rich_types", "inspected_at"])
+    return {"summary": summary, "pages": pages, "total": sum(s["n"] for s in summary),
+            "indexed": sum(s["n"] for s in summary if s["verdict"] == "PASS")}
+
+def sitemaps(conn, client_id):
+    out = rows(conn.execute("""SELECT path, type, is_index, is_pending, last_submitted, last_downloaded, errors, warnings, contents, fetched_at
+                               FROM gsc_sitemaps WHERE client_id=%s ORDER BY is_index DESC, path""", [client_id]),
+               ["path", "type", "is_index", "is_pending", "last_submitted", "last_downloaded", "errors", "warnings", "contents", "fetched_at"])
+    for r in out: r["submitted"] = sum(int(c.get("submitted") or 0) for c in r["contents"] or [])
+    return out
+
+def vitals(conn, client_id):
+    """Latest PageSpeed result per page, mobile and desktop side by side. Field values are real Chrome users (CrUX)."""
+    res = rows(conn.execute("""SELECT DISTINCT ON (url, strategy) url, strategy, fetched_at, perf_score, lcp_ms, cls, tbt_ms, ttfb_ms,
+                                      field_lcp_ms, field_cls, field_inp_ms, field_category, error
+                               FROM pagespeed_results WHERE client_id=%s ORDER BY url, strategy, fetched_at DESC""", [client_id]),
+               ["url", "strategy", "fetched_at", "perf_score", "lcp_ms", "cls", "tbt_ms", "ttfb_ms", "field_lcp_ms", "field_cls",
+                "field_inp_ms", "field_category", "error"])
+    out = {}
+    for r in res: out.setdefault(r["url"], {"url": r["url"]})[r["strategy"]] = r
+    return sorted(out.values(), key=lambda p: ((p.get("mobile") or {}).get("perf_score") is None, (p.get("mobile") or {}).get("perf_score") or 0))
 
 # ------------------------------------------------------------------ technical audit
 def tech_summary(conn, client_id):

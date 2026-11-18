@@ -201,7 +201,7 @@ before them, last), ChatGPT prompts and the crawl stop at a deadline and continu
 A run works for about 100 s, then starts the next run itself (`POST /worker/run`, bearer `CRON_SECRET`) while tasks are left.
 Triggers: the Pull buttons and sign-up (start at once), Vercel's daily schedule (`/cron/nightly`, 20:30 UTC = 02:00 IST,
 allowed on the Hobby plan), and any Orbit page opened by the team while tasks wait and nothing has started for 3 minutes.
-Cut-off tasks are retried (three tries). Keys the pulls need go in Vercel's settings: OPENAI_API_KEY, SEMRUSH_API_KEY,
+Cut-off tasks are retried (three tries). Keys the pulls need go in Vercel's settings: OPENAI_API_KEY_2, SEMRUSH_API_KEY,
 APIFY_TOKEN, YOUTUBE_API_KEY. The Mac app no longer runs pulls (MAC_WORKER=1 brings the old behaviour back).
 
 ## Automatic data, with a guardrail on paid sources (migration 020)

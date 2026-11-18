@@ -8,13 +8,13 @@ import psycopg
 
 API = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 
-def fetch(url, strategy, key=None, retries=3):
+def fetch(url, strategy, key=None, retries=3, timeout=90):
     q = {"url": url, "strategy": strategy, "category": "performance"}
     if key: q["key"] = key
     req = f"{API}?{urllib.parse.urlencode(q)}"
     for attempt in range(retries):
         try:
-            with urllib.request.urlopen(req, timeout=90) as r:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503) and attempt < retries - 1:
@@ -50,6 +50,25 @@ def save(cur, client_id, url, strategy, row=None, error=None):
     cur.execute(
         f"INSERT INTO pagespeed_results (client_id,url,strategy,error,{','.join(COLS)}) VALUES (%s,%s,%s,%s,{','.join(['%s']*len(COLS))})",
         [client_id, url, strategy, error] + [row[c] for c in COLS])
+
+def sync_top_pages(conn, client_id, limit=10, cap=60):
+    """Core Web Vitals for the brand's top pages by Search Console clicks (90 days), mobile and desktop, each re-run
+    after 7 days. ponytail: stops starting new pages after `cap` seconds (a PSI call takes 10-30 s); the rest waits for
+    the next run. Returns pages measured."""
+    key, stop, done = os.environ.get("PSI_API_KEY"), time.time() + cap, 0
+    urls = [r[0] for r in conn.execute("""
+        SELECT g.page FROM (SELECT page, sum(clicks) c FROM gsc_search_daily WHERE client_id=%(c)s AND date > current_date - 90
+                            GROUP BY page ORDER BY c DESC LIMIT %(n)s) g
+        WHERE NOT EXISTS (SELECT 1 FROM pagespeed_results p WHERE p.client_id=%(c)s AND p.url=g.page AND p.error IS NULL
+                          AND p.fetched_at > now() - interval '7 days')
+        ORDER BY g.c DESC""", {"c": client_id, "n": limit})]
+    for url in urls:
+        for strategy in ("mobile", "desktop"):
+            if time.time() > stop: return done
+            try: save(conn, client_id, url, strategy, parse(fetch(url, strategy, key, retries=1, timeout=45)))
+            except Exception as e: save(conn, client_id, url, strategy, error=str(e)[:300])
+        done += 1
+    return done
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--limit", type=int)

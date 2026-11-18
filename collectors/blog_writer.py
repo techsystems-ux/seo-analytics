@@ -14,7 +14,7 @@
 Nothing is published here: a person reviews and publishes from the Execution screen.
 
 Usage: python blog_writer.py --client-id UUID [--write 3]
-Env: OPENAI_API_KEY; BLOG_MODEL (default OPENAI_MODEL); BLOGS_PER_RUN (3); BLOG_QUEUE (6 drafts waiting at most); BLOG_SUGGEST=0 to skip Google suggest
+Env: OPENAI_API_KEY_2; BLOG_MODEL (default OPENAI_MODEL); BLOGS_PER_RUN (3); BLOG_QUEUE (6 drafts waiting at most); BLOG_SUGGEST=0 to skip Google suggest
 """
 import argparse, datetime as dt, json, math, os, re, sys, time
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -281,4 +281,4 @@ if __name__ == "__main__":
     from common import connect
     ap = argparse.ArgumentParser(); ap.add_argument("--client-id", required=True); ap.add_argument("--write", type=int)
     a = ap.parse_args()
-    with connect() as conn: print(run(conn, a.client_id, os.environ.get("OPENAI_API_KEY"), a.write))
+    with connect() as conn: print(run(conn, a.client_id, os.environ.get("OPENAI_API_KEY_2"), a.write))

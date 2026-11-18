@@ -7,7 +7,8 @@
   on request     Semrush, from Settings only (lifetime credit cap, see semrush.py); SEMRUSH_AUTO=1 adds it to Mondays
 Each step is logged in collector_runs; one failure never stops the rest.
   every day      blog ideas and up to BLOGS_PER_RUN drafts for review (Execution screen); nothing is published automatically
-Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,crawl,blogs] [--force-weekly]
+  every day      Search Console sitemaps + URL index status, Core Web Vitals (PageSpeed) for top pages; each URL weekly
+Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,index,cwv,crawl,blogs] [--force-weekly]
 """
 import argparse, datetime as dt, os, sys, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +49,7 @@ def due(conn, client_id, name, days):
     return not running and (last_ok is None or last_ok < dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days))
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,crawl,youtube,reddit")
+    ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,index,cwv,crawl,youtube,reddit")
     ap.add_argument("--force-weekly", action="store_true")
     ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")
     ap.add_argument("--seeds", default="", help="topics for semrush_ideas, separated by ;")
@@ -83,9 +84,9 @@ def main(argv=None):
                 import semrush
                 ok &= log(conn, cid, "semrush", lambda: semrush.sync_client(conn, cid, os.environ["SEMRUSH_API_KEY"],
                           max_units=a.max_units or int(os.environ.get("SEMRUSH_MAX_UNITS", "500"))))
-            if "ai" in only and os.environ.get("OPENAI_API_KEY"):
+            if "ai" in only and os.environ.get("OPENAI_API_KEY_2"):
                 import ai_visibility
-                ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, os.environ["OPENAI_API_KEY"],
+                ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, os.environ["OPENAI_API_KEY_2"],
                           int(os.environ.get("AI_SAMPLES", "1")))[0])
             if "pages" in only and weekly_due(conn, cid, "pages", a.force_weekly):
                 import run_checks, sitemap
@@ -93,6 +94,14 @@ def main(argv=None):
                           **sitemap.sync_pages(conn, cid)))
                 limit = int(os.environ.get("PAGES_PER_RUN", "30"))       # the key pages by traffic, not the whole site
                 ok &= log(conn, cid, "pages", lambda: f"{len(run_checks.check_live(conn, cid, pause=0.5, limit=limit))} pages checked (top {limit} by priority)")
+            # Search Console sitemaps and index status, and Core Web Vitals for the top pages: free; each URL re-checked weekly
+            if "index" in only:
+                import gsc_index
+                for c, site, n, domain, aliases, gconn in gsc.clients_to_sync(conn, cid):
+                    ok &= log(conn, cid, "index", lambda: gsc_index.sync(conn, gpool["gsc"].get(gconn), c, site))
+            if "cwv" in only:
+                import pagespeed
+                ok &= log(conn, cid, "cwv", lambda: f"{pagespeed.sync_top_pages(conn, cid, int(os.environ.get('CWV_PAGES', '10')))} pages measured")
             # Manual Semrush features: only when named in --only, with an explicit budget (Settings shows the cost first)
             key = os.environ.get("SEMRUSH_API_KEY")
             manual = [f for f in ("semrush_ideas", "semrush_backlinks", "semrush_gap", "semrush_audit", "semrush_rank") if f in only]
@@ -121,7 +130,7 @@ def main(argv=None):
             # Execution: blog ideas from the data pulled above, and drafts for review (OpenAI). Never publishes.
             if "blogs" in only:
                 import blog_writer
-                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, os.environ.get("OPENAI_API_KEY")))
+                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, os.environ.get("OPENAI_API_KEY_2")))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(

@@ -15,7 +15,7 @@ Bands: 0-39 Not shortlisted, 40-59 Emerging, 60-79 Competitive, 80+ Leader.
 
 The API answer approximates what ChatGPT shows users; it is not a scrape of chatgpt.com.
 Usage: python ai_visibility.py --client-id UUID [--samples 1] [--date 2026-11-12]
-Env: OPENAI_API_KEY, OPENAI_MODEL (default below), AI_SENTIMENT=0 to skip the sentiment call
+Env: OPENAI_API_KEY_2, OPENAI_MODEL (default below), AI_SENTIMENT=0 to skip the sentiment call
 """
 import argparse, datetime as dt, json, os, re, sys
 from urllib.parse import urlparse
@@ -238,7 +238,7 @@ def main():
     ap.add_argument("--client-id", required=True); ap.add_argument("--samples", type=int, default=1); ap.add_argument("--date")
     a = ap.parse_args()
     with connect() as conn:
-        tally, scores = sync_client(conn, a.client_id, os.environ["OPENAI_API_KEY"], a.samples,
+        tally, scores = sync_client(conn, a.client_id, os.environ["OPENAI_API_KEY_2"], a.samples,
                                     dt.date.fromisoformat(a.date) if a.date else None, sentiment=os.environ.get("AI_SENTIMENT", "1") != "0")
         print("runs:", tally)
         for region, s in scores.items():

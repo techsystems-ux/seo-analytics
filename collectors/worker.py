@@ -16,11 +16,11 @@ import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
-ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "pages", "semrush_ideas", "semrush_backlinks", "semrush_gap",
+ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
-NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,blogs,crawl,youtube,reddit"
+NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,index,cwv,blogs,crawl,youtube,reddit"
 PAID_STEPS = ("ai", "blogs", "semrush")         # OpenAI (prompts, blog drafts) and Semrush: limited per brand per day
-FREE_REFRESH = "gsc,ga4,rank,pages"            # what opening a dashboard with stale data may start (costs nothing)
+FREE_REFRESH = "gsc,ga4,rank,pages,index,cwv"  # what opening a dashboard with stale data may start (costs nothing)
 RUN_BUDGET = int(os.environ.get("WORKER_BUDGET", "100"))       # seconds a run keeps starting new tasks
 HARD_STOP = int(os.environ.get("WORKER_HARD_STOP", "270"))     # tasks must wrap up before this (Vercel stops at 300)
 STALE = "6 minutes"                                              # a task running longer was cut off
@@ -162,7 +162,7 @@ def step_gsc(conn, task, deadline, history=False):
 
 def step_ai(conn, task, deadline):
     import ai_visibility, daily
-    key = os.environ.get("OPENAI_API_KEY")
+    key = os.environ.get("OPENAI_API_KEY_2")
     if not key: return "no OpenAI key on the server", []
     cid, out = task["client_id"], {}
     def go():
@@ -176,7 +176,7 @@ def step_blogs(conn, task, deadline):
     """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
     import blog_writer, daily
     cid, a = task["client_id"], task["args"]
-    key = os.environ.get("OPENAI_API_KEY")
+    key = os.environ.get("OPENAI_API_KEY_2")
     left = a.get("left", blog_writer.PER_RUN)
     note = {}
     def go():

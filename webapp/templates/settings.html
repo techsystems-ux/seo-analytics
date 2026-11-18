@@ -50,7 +50,7 @@
 <section class="card"><h2>Connections</h2><table>
 <tr><td>Search Console</td><td>{{ integ[0] if integ and integ[0] else 'Not linked' }}</td></tr>
 <tr><td>GA4</td><td>{{ integ[1] if integ and integ[1] else 'Not linked' }}</td></tr>
-<tr><td>OpenAI (ChatGPT)</td><td>{{ 'Key set' if keys.OPENAI_API_KEY else 'No key on the server' }}</td></tr>
+<tr><td>OpenAI (ChatGPT)</td><td>{{ 'Key set' if keys.OPENAI_API_KEY_2 else 'No key on the server' }}</td></tr>
 <tr><td>Semrush</td><td>{{ 'Key set' if keys.SEMRUSH_API_KEY else 'No key on the server' }} · {{ budget.used|n }} of {{ budget.cap|n }} credits used, {{ budget.left|n }} left (hard limit)</td></tr>
 <tr><td>Apify (Reddit)</td><td>{{ 'Token set' if keys.APIFY_TOKEN else 'No token on the server (APIFY_TOKEN)' }} · paid per result, capped by APIFY_MAX_ITEMS and APIFY_TOTAL_ITEMS</td></tr>
 <tr><td>YouTube Data API</td><td>{{ 'Key set' if keys.YOUTUBE_API_KEY else 'No key on the server (YOUTUBE_API_KEY)' }} · free daily quota</td></tr></table>

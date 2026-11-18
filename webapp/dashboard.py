@@ -1,6 +1,6 @@
 """Staff dashboard: Overview, Search performance, Competitors, AI visibility, Pages, Settings. One client at a time.
 Registered by app.py. Every screen reads through analytics.py."""
-import os, sys, json, secrets, subprocess, csv, io
+import os, sys, json, secrets, subprocess, csv, io, datetime as dt
 from flask import Blueprint, render_template, request, redirect, url_for, session, abort, has_request_context, make_response
 from markupsafe import Markup, escape
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -266,19 +266,37 @@ def sources_save(cid):
 @bp.get("/c/<cid>/search")
 def search(cid):
     tab = request.args.get("tab", "queries"); kind = request.args.get("kind", "nonbranded")
+    from date_ranges import select_range
+    if tab not in ('queries', 'pages', 'countries', 'devices', 'revenue', 'rankings', 'indexing', 'sitemaps', 'vitals'): tab = 'queries'
+    if kind not in ('all', 'branded', 'nonbranded'): kind = 'nonbranded'
+    state = request.args.get("state")
     with connect() as conn:
         c = client_or_404(conn, cid)
-        totals = A.search_totals(conn, cid)
-        chart = line_chart(A.daily_clicks(conn, cid, 90), ["nonbranded", "branded"])
-        data = {"queries": lambda: A.top_queries(conn, cid, {"all": None, "branded": True, "nonbranded": False}[kind]),
-                "pages": lambda: A.top_pages(conn, cid),
-                "revenue": lambda: A.revenue_by_landing(conn, cid),
-                "rankings": lambda: A.rankings(conn, cid)}[tab]()
-        rev = A.organic_revenue(conn, cid)
+        latest = A.periods(conn, cid)[0][1]
+        selected, date_error = select_range(request.args, latest)
+        # the preset the selected dates match (also after a tab change, which carries start/end), else None = custom dates
+        preset = next((n for n in (7, 28, 90) if selected == (latest - dt.timedelta(days=n - 1), latest)), None)
+        date_args = {'date_range': selected}
+        totals = A.search_totals(conn, cid, **date_args)
+        chart = line_chart(A.daily_clicks(conn, cid, **date_args), ["nonbranded", "branded"])
+        data = {"queries": lambda: A.top_queries(conn, cid, {"all": None, "branded": True, "nonbranded": False}[kind], **date_args),
+                "pages": lambda: A.top_pages(conn, cid, **date_args),
+                "countries": lambda: A.search_by(conn, cid, "country", **date_args),
+                "devices": lambda: A.search_by(conn, cid, "device", **date_args),
+                "revenue": lambda: A.revenue_by_landing(conn, cid, **date_args),
+                "rankings": lambda: A.rankings(conn, cid, **date_args),
+                "indexing": lambda: A.index_status(conn, cid, state),
+                "sitemaps": lambda: A.sitemaps(conn, cid),
+                "vitals": lambda: A.vitals(conn, cid)}[tab]()
+        rev = A.organic_revenue(conn, cid, **date_args)
         kw = request.args.get("kw")
-        trend = line_chart([{"date": t["date"], "pos": t["position"]} for t in A.rank_trend(conn, cid, kw)], ["pos"]) if kw and tab == "rankings" else None
+        trend = line_chart([{"date": t["date"], "pos": t["position"]} for t in A.rank_trend(conn, cid, kw, **date_args)], ["pos"]) if kw and tab == "rankings" else None
         actions = semrush_actions(conn, cid) if tab == "rankings" else {}
-    return view("search.html", c, "search", tab=tab, kind=kind, totals=totals, chart=chart, data=data, rev=rev, kw=kw, trend=trend, actions=actions)
+    def search_link(**changes):
+        values = dict(tab=tab, kind=kind, start=selected[0].isoformat(), end=selected[1].isoformat())
+        values.update(changes)
+        return url_for('dash.search', cid=cid, **values)
+    return view("search.html", c, "search", tab=tab, kind=kind, totals=totals, chart=chart, data=data, rev=rev, kw=kw, trend=trend, actions=actions, selected=selected, date_error=date_error, latest=latest, range_days=(selected[1]-selected[0]).days+1, search_link=search_link, preset=preset, state=state)
 
 @bp.post("/c/<cid>/rankings")
 def rankings_save(cid):
@@ -405,7 +423,7 @@ def settings(cid):
         project = conn.execute("SELECT semrush_project_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         actions, by_feature = semrush_actions(conn, cid), A.semrush_by_feature(conn)
         viewers = conn.execute("SELECT email, added_by, added_at, last_login FROM client_viewers WHERE client_id=%s ORDER BY email", [cid]).fetchall()
-    keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
+    keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY_2", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
     login = {"google": bool(os.environ.get("CLIENT_OAUTH_CLIENT_ID")), "email": bool(os.environ.get("RESEND_API_KEY"))}
     return view("settings.html", c, "settings", paid_per_day=int(os.environ.get("PAID_RUNS_PER_DAY", "1")), semrush_auto=int(os.environ.get("SEMRUSH_AUTO_UNITS", "50")), tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
                 msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature, viewers=viewers, login=login,

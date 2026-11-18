@@ -1,8 +1,27 @@
 {% extends "base.html" %}
 {% import "_semrush.html" as sm with context %}
 {% block body %}
+{% macro cwv(v, good, poor, unit='') %}{% if v is none %}<span class="mute">–</span>{% else %}<span class="tag {{ 't-pass' if v <= good else 't-fail' if v > poor else 't-warn' }}">{{ v|round(2) if unit == '' else v|n }}{{ unit }}</span>{% endif %}{% endmacro %}
 <div class="top"><div><span class="kicker">{{ t('Visibility · Google search', 'Organic search · Google Search Console + GA4') }}</span><h1>{{ t('How people find you on Google', 'Organic search performance') }}</h1>
-<p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the 28 days before. {{ t('Branded searches include your brand name; non-branded are new customers finding you.', 'Branded/non-branded split by brand-term regex; position is impression-weighted average; CTR = clicks / impressions.') }}</p></div></div>
+<p class="lead">Search Console and GA4, {{ totals.period[0].strftime('%d %b') }} to {{ totals.period[1].strftime('%d %b %Y') }}, against the preceding {{ range_days }} days. {{ t('Branded searches include your brand name; non-branded are new customers finding you.', 'Branded/non-branded split by brand-term regex; position is impression-weighted average; CTR = clicks / impressions.') }}</p></div></div>
+
+
+<section class="card" aria-label="Reporting dates">
+  <form method="get" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">
+    <input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="kind" value="{{ kind }}">
+    {% if kw %}<input type="hidden" name="kw" value="{{ kw }}">{% endif %}
+    <div class="seg" role="group" aria-label="Date range">
+      {% for n in [7,28,90] %}<a class="{{ 'on' if preset==n }}"{% if preset==n %} aria-current="true"{% endif %} href="{{ search_link(start=None, end=None, days=n) }}">Last {{ n }} days</a>{% endfor %}
+      {% if not preset %}<a class="on" aria-current="true" href="#range-start">{{ selected[0].strftime('%d %b') }} – {{ selected[1].strftime('%d %b %Y') }}</a>{% endif %}
+    </div>
+    <div><label for="range-start">Start date</label><input id="range-start" type="date" name="start" value="{{ selected[0] }}" max="{{ latest }}" required></div>
+    <div><label for="range-end">End date</label><input id="range-end" type="date" name="end" value="{{ selected[1] }}" max="{{ latest }}" required></div>
+    <button class="btn blk">Apply dates</button>
+    {% if preset != 28 %}<a class="btn ln" href="{{ search_link(start=None, end=None) }}" title="Back to the last 28 days" aria-label="Clear date filter, back to the last 28 days">✕ Clear</a>{% endif %}
+  </form>
+  <p class="note">Dates are inclusive. Latest Search Console data: {{ latest.strftime('%d %b %Y') }}. Comparisons use the previous equal-length period; dates without imported data may be empty.</p>
+  {% if date_error %}<p role="alert" class="note down">{{ date_error }}</p>{% endif %}
+</section>
 
 <div class="grid">
   <div class="card kpi"><div class="l">All clicks</div><div class="v">{{ totals.clicks|n }}</div><div class="s">{{ totals.clicks_change|delta }}</div></div>
@@ -17,22 +36,27 @@
 <section class="card" style="display:flex;flex-direction:column;gap:14px">
   <div class="top" style="align-items:center">
     <div class="seg" role="tablist">
-      <a class="{{ 'on' if tab=='queries' }}" href="?tab=queries&kind={{ kind }}">Queries</a>
-      <a class="{{ 'on' if tab=='pages' }}" href="?tab=pages">Pages</a>
-      <a class="{{ 'on' if tab=='revenue' }}" href="?tab=revenue">Revenue by landing page</a>
-      <a class="{{ 'on' if tab=='rankings' }}" href="?tab=rankings">Rankings</a></div>
-    {% if tab=='queries' %}<div class="seg"><a class="{{ 'on' if kind=='nonbranded' }}" href="?tab=queries&kind=nonbranded">Non-branded</a><a class="{{ 'on' if kind=='branded' }}" href="?tab=queries&kind=branded">Branded</a><a class="{{ 'on' if kind=='all' }}" href="?tab=queries&kind=all">All</a></div>{% endif %}
+      <a class="{{ 'on' if tab=='queries' }}" href="{{ search_link(tab='queries') }}">Queries</a>
+      <a class="{{ 'on' if tab=='pages' }}" href="{{ search_link(tab='pages') }}">Pages</a>
+      <a class="{{ 'on' if tab=='countries' }}" href="{{ search_link(tab='countries') }}">Countries</a>
+      <a class="{{ 'on' if tab=='devices' }}" href="{{ search_link(tab='devices') }}">Devices</a>
+      <a class="{{ 'on' if tab=='revenue' }}" href="{{ search_link(tab='revenue') }}">Revenue by landing page</a>
+      <a class="{{ 'on' if tab=='rankings' }}" href="{{ search_link(tab='rankings') }}">Rankings</a>
+      <a class="{{ 'on' if tab=='indexing' }}" href="{{ search_link(tab='indexing') }}">Indexed pages</a>
+      <a class="{{ 'on' if tab=='sitemaps' }}" href="{{ search_link(tab='sitemaps') }}">Sitemaps</a>
+      <a class="{{ 'on' if tab=='vitals' }}" href="{{ search_link(tab='vitals') }}">Core Web Vitals</a></div>
+    {% if tab=='queries' %}<div class="seg"><a class="{{ 'on' if kind=='nonbranded' }}" href="{{ search_link(tab='queries', kind='nonbranded') }}">Non-branded</a><a class="{{ 'on' if kind=='branded' }}" href="{{ search_link(tab='queries', kind='branded') }}">Branded</a><a class="{{ 'on' if kind=='all' }}" href="{{ search_link(tab='queries', kind='all') }}">All</a></div>{% endif %}
   </div>
   <div class="tw">
   {% if tab=='rankings' %}
     <p class="note">Daily Google position for each tracked keyword, from Search Console (free, average across devices and pages). Change compares with 7 days earlier. A Semrush column appears if the brand's Semrush Position Tracking is imported.</p>
-    {% if trend %}<div class="card" style="padding:14px"><div class="top" style="align-items:center"><h2>{{ kw }}</h2><a href="?tab=rankings">Close</a></div><p class="note">Position by day, last 90 days (lower is better).</p>{{ trend }}</div>{% endif %}
-    {% if data %}<table><tr><th>Keyword</th><th class="r">Position</th><th class="r">7-day change</th><th class="r">Best (28 days)</th><th class="r">Clicks (28 days)</th><th>Ranking page</th><th>On Google's page</th>{% if data|selectattr('semrush')|list %}<th class="r">Semrush</th>{% endif %}<th></th></tr>
-    {% for r in data %}<tr><td><a href="?tab=rankings&kw={{ r.keyword|urlencode }}">{{ r.keyword }}</a>{% if 'auto' in r.tags %} <span class="tag t-na">auto</span>{% endif %}</td>
+    {% if trend %}<div class="card" style="padding:14px"><div class="top" style="align-items:center"><h2>{{ kw }}</h2><a href="{{ search_link(tab='rankings') }}">Close</a></div><p class="note">Position by day, selected period (lower is better).</p>{{ trend }}</div>{% endif %}
+    {% if data %}<table><tr><th>Keyword</th><th class="r">Position</th><th class="r">7-day change</th><th class="r">Best (selected dates)</th><th class="r">Clicks (selected dates)</th><th>Ranking page</th><th>On Google's page</th>{% if data|selectattr('semrush')|list %}<th class="r">Semrush</th>{% endif %}<th></th></tr>
+    {% for r in data %}<tr><td><a href="{{ search_link(tab='rankings', kw=r.keyword) }}">{{ r.keyword }}</a>{% if 'auto' in r.tags %} <span class="tag t-na">auto</span>{% endif %}</td>
     <td class="r"><b>{{ r.position if r.position is not none else '–' }}</b></td>
     <td class="r">{% if r.change is none %}<span class="mute">–</span>{% elif r.change > 0 %}<span class="up">up {{ r.change }}</span>{% elif r.change < 0 %}<span class="down">down {{ -r.change }}</span>{% else %}<span class="mute">same</span>{% endif %}</td>
     <td class="r">{{ r.best if r.best is not none else '–' }}</td><td class="r">{{ r.clicks|n }}</td>
-    <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|path }}</a>{% if r.off_target %}<br><span class="down note">not the target page {{ r.target|path }}</span>{% endif %}{% else %}<span class="mute">not ranking in the last 28 days</span>{% endif %}</td>
+    <td>{% if r.url %}<a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|path }}</a>{% if r.off_target %}<br><span class="down note">not the target page {{ r.target|path }}</span>{% endif %}{% else %}<span class="mute">not ranking in the selected period</span>{% endif %}</td>
     <td style="max-width:220px">{{ sm.features(r.features[:3]) }}</td>
     {% if data|selectattr('semrush')|list %}<td class="r">{{ r.semrush|n if r.semrush else '–' }}</td>{% endif %}
     <td><form method="post" action="{{ url_for('dash.rankings_save', cid=client.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="remove" value="{{ r.keyword }}"><button class="btn ln" aria-label="Stop tracking {{ r.keyword }}">Remove</button></form></td></tr>{% endfor %}</table>
@@ -41,7 +65,52 @@
     <label for="kws">Track keywords, one per line. Optional target page after a |, e.g. silver anklets | https://{{ client.domain }}/collections/anklets</label>
     <textarea id="kws" name="keywords" rows="3"></textarea><div style="margin-top:10px"><button class="btn red">Track</button></div></form>
     <div style="margin-top:14px">{{ sm.run(actions.rank, 'Import Semrush Position Tracking') }}</div>
+  {% elif tab=='indexing' %}
+    <p class="note">Google's own index status for each page, from Search Console's URL Inspection (up to 2,000 pages a day). Pages that get search clicks are checked first, then the sitemap's pages; each is re-checked weekly. Not affected by the dates above.</p>
+    {% if data.total %}
+    <div class="grid">
+      <div class="card kpi"><div class="l">Pages inspected</div><div class="v">{{ data.total|n }}</div></div>
+      <div class="card kpi"><div class="l">Indexed</div><div class="v">{{ data.indexed|n }}</div><div class="s mute">{{ (100 * data.indexed / data.total)|round(1) }}% of inspected</div></div>
+      <div class="card kpi"><div class="l">Not indexed</div><div class="v">{{ (data.total - data.indexed)|n }}</div></div>
+    </div>
+    <div class="seg" role="group" aria-label="Index status">
+      <a class="{{ 'on' if not state }}" href="{{ search_link(tab='indexing', state=None) }}">All</a>
+      {% for s in data.summary %}<a class="{{ 'on' if state==s.state }}" href="{{ search_link(tab='indexing', state=s.state) }}">{{ s.state }} · {{ s.n|n }}</a>{% endfor %}
+    </div>
+    <table><tr><th>Page</th><th>Status</th><th>Last crawled</th><th>Crawled as</th><th>Google's canonical</th><th>Robots.txt</th><th>Rich results</th></tr>
+    {% for r in data.pages %}<tr><td><a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|path }}</a></td>
+      <td><span class="tag {{ {'PASS': 't-pass', 'FAIL': 't-fail', 'PARTIAL': 't-warn'}.get(r.verdict, 't-na') }}">{{ r.coverage_state or r.verdict or 'Unknown' }}</span></td>
+      <td>{{ r.last_crawl.strftime('%d %b %Y') if r.last_crawl else '–' }}</td><td>{{ (r.crawled_as or '–')|capitalize }}</td>
+      <td>{% if r.google_canonical and r.google_canonical != r.url %}<span class="down">{{ r.google_canonical|path }}</span>{% elif r.google_canonical %}<span class="mute">same page</span>{% else %}–{% endif %}</td>
+      <td>{{ 'Blocked' if r.robots_state == 'DISALLOWED' else 'Allowed' if r.robots_state == 'ALLOWED' else '–' }}</td>
+      <td>{{ r.rich_types or '–' }}</td></tr>{% endfor %}</table>
+    {% else %}<p class="empty">No pages inspected yet. They are checked in the next nightly pull, or when the brand's data is refreshed.</p>{% endif %}
+  {% elif tab=='sitemaps' %}
+    <p class="note">Sitemaps submitted in Search Console, with Google's last read and any errors. Not affected by the dates above.</p>
+    {% if data %}<table><tr><th>Sitemap</th><th>Type</th><th class="r">URLs submitted</th><th>Last submitted</th><th>Last read by Google</th><th class="r">Errors</th><th class="r">Warnings</th><th>Status</th></tr>
+    {% for r in data %}<tr><td><a href="{{ r.path }}" target="_blank" rel="noopener">{{ r.path|path }}</a></td><td>{{ 'Index' if r.is_index else (r.type or '–')|capitalize }}</td>
+      <td class="r">{{ r.submitted|n }}</td><td>{{ r.last_submitted.strftime('%d %b %Y') if r.last_submitted else '–' }}</td>
+      <td>{{ r.last_downloaded.strftime('%d %b %Y') if r.last_downloaded else '–' }}</td>
+      <td class="r">{% if r.errors %}<span class="down">{{ r.errors|n }}</span>{% else %}0{% endif %}</td><td class="r">{{ r.warnings|n }}</td>
+      <td>{% if r.is_pending %}<span class="tag t-na">Pending</span>{% elif r.errors %}<span class="tag t-fail">Has errors</span>{% elif r.warnings %}<span class="tag t-warn">Warnings</span>{% else %}<span class="tag t-pass">Success</span>{% endif %}</td></tr>{% endfor %}</table>
+    <p class="note">Read {{ data[0].fetched_at.strftime('%d %b %Y %H:%M') }}.</p>
+    {% else %}<p class="empty">No sitemaps read yet, or none submitted in Search Console.</p>{% endif %}
+  {% elif tab=='vitals' %}
+    <p class="note">Core Web Vitals for the top pages by search clicks, from PageSpeed Insights, re-measured weekly. <b>Real users</b> is Chrome field data (CrUX, the source of Search Console's report), shown when Google has enough traffic for the page; <b>Lab</b> is one simulated load. Good: LCP ≤ 2.5 s, INP ≤ 200 ms, CLS ≤ 0.1. Not affected by the dates above.</p>
+    {% if data %}<table><tr><th>Page</th><th>Device</th><th>Real users</th><th class="r">LCP</th><th class="r">INP</th><th class="r">CLS</th><th class="r">Lab score</th><th class="r">Lab LCP</th><th class="r">TBT</th><th>Measured</th></tr>
+    {% for p in data %}{% for dev in ['mobile', 'desktop'] %}{% set r = p.get(dev) %}{% if r %}<tr>
+      <td>{% if loop.first or not p.get('mobile') %}<a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|path }}</a>{% endif %}</td><td>{{ dev|capitalize }}</td>
+      {% if r.error %}<td colspan="7"><span class="down note">PageSpeed could not measure this page: {{ r.error[:120] }}</span></td>
+      {% else %}<td>{% if r.field_category %}<span class="tag {{ {'FAST': 't-pass', 'AVERAGE': 't-warn', 'SLOW': 't-fail'}.get(r.field_category, 't-na') }}">{{ {'FAST': 'Good', 'AVERAGE': 'Needs improvement', 'SLOW': 'Poor'}.get(r.field_category, r.field_category) }}</span>{% else %}<span class="mute">not enough traffic</span>{% endif %}</td>
+      <td class="r">{{ cwv(r.field_lcp_ms, 2500, 4000, ' ms') }}</td><td class="r">{{ cwv(r.field_inp_ms, 200, 500, ' ms') }}</td><td class="r">{{ cwv(r.field_cls, 0.1, 0.25) }}</td>
+      <td class="r">{% if r.perf_score is not none %}<span class="tag {{ 't-pass' if r.perf_score >= 90 else 't-fail' if r.perf_score < 50 else 't-warn' }}">{{ r.perf_score }}</span>{% else %}–{% endif %}</td>
+      <td class="r">{{ cwv(r.lcp_ms, 2500, 4000, ' ms') }}</td><td class="r">{{ r.tbt_ms|n }}{{ ' ms' if r.tbt_ms is not none }}</td>{% endif %}
+      <td>{{ r.fetched_at.strftime('%d %b') }}</td></tr>{% endif %}{% endfor %}{% endfor %}</table>
+    {% else %}<p class="empty">No Core Web Vitals yet. The top pages are measured in the next nightly pull, or when the brand's data is refreshed.</p>{% endif %}
   {% elif not data %}<p class="empty">No data for this view yet.</p>
+  {% elif tab in ('countries', 'devices') %}<table><tr><th>{{ 'Country' if tab=='countries' else 'Device' }}</th><th class="r">Clicks</th><th class="r">Change</th><th class="r">Impressions</th><th class="r">CTR</th><th class="r">Position</th></tr>
+    {% for r in data %}<tr><td>{{ r.key|upper if tab=='countries' else r.key|capitalize }}</td><td class="r">{{ r.clicks|n }}</td><td class="r">{{ r.change|delta }}</td>
+    <td class="r">{{ r.impressions|n }}</td><td class="r">{{ r.ctr if r.ctr is not none else '–' }}{% if r.ctr is not none %}%{% endif %}</td><td class="r">{{ r.position if r.position is not none else '–' }}</td></tr>{% endfor %}</table>
   {% elif tab=='queries' %}<table><tr><th>Query</th><th class="r">Clicks</th><th class="r">Impressions</th><th class="r">CTR</th><th class="r">Position</th><th class="r">Position change</th></tr>
     {% for r in data %}<tr><td>{{ r.query }}</td><td class="r">{{ r.clicks|n }}</td><td class="r">{{ r.impressions|n }}</td><td class="r">{{ r.ctr }}%</td><td class="r">{{ r.position }}</td>
     <td class="r">{% if r.position_gain is none %}<span class="mute">new</span>{% elif r.position_gain > 0 %}<span class="up">up {{ r.position_gain }}</span>{% elif r.position_gain < 0 %}<span class="down">down {{ -r.position_gain }}</span>{% else %}<span class="mute">same</span>{% endif %}</td></tr>{% endfor %}</table>

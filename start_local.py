@@ -3,7 +3,7 @@ Starts a private Postgres (pgserver) in ~/.hovers-connect/pgdata, applies the mi
 
   python start_local.py            -> connect page at http://localhost:8080 (opens the browser)
   python start_local.py collect    -> pull Search Console, GA4 and ChatGPT for every brand, and check pages
-Optional keys in .env (they stay on this computer): OPENAI_API_KEY, SEMRUSH_API_KEY
+Optional keys in .env (they stay on this computer): OPENAI_API_KEY_2, SEMRUSH_API_KEY
 """
 import os, sys, glob, threading, webbrowser, subprocess
 from urllib.parse import urlparse, parse_qs, quote
@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql", "db/018_lean_audit.sql", "db/019_cloud_worker.sql", "db/020_paid_runs.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql", "db/018_lean_audit.sql", "db/019_cloud_worker.sql", "db/020_paid_runs.sql", "db/021_gsc_index.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""
@@ -145,7 +145,7 @@ def main():
     load_seeds()
     load_sample_once()
     if len(sys.argv) > 1 and sys.argv[1] == "collect":
-        # Search Console, GA4, ChatGPT prompts (if OPENAI_API_KEY is in .env) and page checks. Never Semrush: that is a button in Settings.
+        # Search Console, GA4, ChatGPT prompts (if OPENAI_API_KEY_2 is in .env) and page checks. Never Semrush: that is a button in Settings.
         subprocess.run([sys.executable, "daily.py", "--only", "gsc,ga4,rank,ai,pages,crawl,youtube,reddit"], cwd=os.path.join(HERE, "collectors"), env=dict(os.environ))
         return
     # Reddit and YouTube fill themselves: if a key is set and the data is missing or a week old, pull now in the background
