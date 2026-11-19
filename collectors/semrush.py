@@ -5,7 +5,7 @@ Every call is logged with the API units it cost (semrush_usage). A run stops bef
 and the lifetime total can never pass SEMRUSH_TOTAL_CAP. Unit prices (per line returned, current data):
 domain_organic 10, domain_organic_organic 40, domain_domains 80.
 
-Hard limit: SEMRUSH_TOTAL_CAP (default 500) units across all calls ever made, including any loaded from seed files.
+Hard limit: SEMRUSH_TOTAL_CAP (default 500; set on the server) units across all calls ever made, including any loaded from seed files.
 Usage: python semrush.py --client-id UUID [--database in] [--keywords 20] [--competitors 5] [--gap 0] [--max-units 500]
 Env: SEMRUSH_API_KEY
 """
@@ -164,11 +164,13 @@ def sync_client(conn, client_id, key, database="in", n_keywords=20, n_competitor
     domain = conn.execute("SELECT domain FROM clients WHERE client_id=%s", [client_id]).fetchone()[0]
     domain = domain.lower().replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
     sm = Semrush(key, conn, client_id, max_units, session)
+    n_keywords = max(0, min(n_keywords, sm.max_units // UNIT_COST["domain_organic"]))   # fit the budget rather than fetch nothing
     done = []
     try:
         extra = {}
         words = brand_words(conn, client_id) if nonbranded else []
         if words: extra["display_filter"] = nonbranded_filter(words)
+        if not n_keywords: raise BudgetExceeded(f"no units left for keywords ({sm.max_units} left under the limits)")
         kws = parse_organic(sm.call("domain_organic", n_keywords, domain=domain, database=database,
                                     export_columns=ORGANIC_COLS, display_sort="tr_desc", **extra))
         store_keywords(conn, client_id, domain, database, day, kws)

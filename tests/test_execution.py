@@ -230,7 +230,7 @@ assert "Silver care tips" in page and "Find topics and write drafts" not in page
 assert v.post(f"/c/{A}/blogs/{d2}", data={"csrf": "tok", "what": "approve"}).headers["Location"].endswith("/portal")
 assert v.get(f"/c/{A}/publishing").headers["Location"].endswith("/portal")
 o = as_viewer("owner@gargi.shop")
-page = o.get(f"/c/{A}/blogs").get_data(as_text=True); assert "Find topics and write drafts" in page and ">Publishing<" in page
+page = o.get(f"/c/{A}/blogs").get_data(as_text=True); assert "Generate drafts" in page and ">Publishing<" in page
 r = o.post(f"/c/{A}/blogs/{d2}", data={"csrf": "tok", "what": "approve"}); assert "Approved" in r.headers["Location"]
 assert o.get(f"/c/{A}/publishing").status_code == 200 and "Save this store's app" not in o.get(f"/c/{A}/publishing").get_data(as_text=True)
 assert o.post(f"/c/{A}/publishing", data={"csrf": "tok", "what": "app", "app_client_id": "x", "app_secret": "y"}).status_code == 403

@@ -51,6 +51,7 @@ def due(conn, client_id, name, days):
 def main(argv=None):
     ap = argparse.ArgumentParser(); ap.add_argument("--client-id"); ap.add_argument("--only", default="gsc,ga4,rank,ai,semrush,pages,index,cwv,crawl,youtube,reddit")
     ap.add_argument("--force-weekly", action="store_true")
+    ap.add_argument("--manual", default=None, help="set by the team's refresh button; the worker reads it, nothing to do here")
     from worker import blog_count
     ap.add_argument("--blog-count", type=blog_count, default=None, help="maximum blog drafts for this manual run")
     ap.add_argument("--max-units", type=int, default=0, help="budget for a manual Semrush feature run (semrush_ideas etc.)")

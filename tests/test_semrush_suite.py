@@ -182,6 +182,10 @@ with connect() as conn:
     assert "1 untapped" in semrush_suite.sync_gap(conn, cid, "KEY", lines=30, max_units=2400, session=f)
     assert units(conn, "gap") == 80
 
+    before = conn.execute("SELECT coalesce(sum(units),0) FROM semrush_usage").fetchone()[0]
+    small = semrush.sync_client(conn, cid, "KEY", n_keywords=20, n_competitors=0, max_units=50, session=f, nonbranded=False)
+    spent = conn.execute("SELECT coalesce(sum(units),0) FROM semrush_usage").fetchone()[0] - before
+    assert "keywords" in small and "stopped" not in small and 0 < spent <= 50, (small, spent)          # a small budget fetches fewer, not none
     msg = semrush.sync_client(conn, cid, "KEY", n_keywords=20, n_competitors=0, max_units=200, session=f, nonbranded=False)
     sf = conn.execute("SELECT serp_features, serp_features_owned FROM semrush_keywords WHERE client_id=%s AND keyword='silver rings'", [cid]).fetchone()
     assert sf == ("5,11,52", "5"), sf

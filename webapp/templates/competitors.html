@@ -3,7 +3,8 @@
 {% block body %}
 <div class="top"><div><span class="kicker">{{ t('Visibility · Competitors', 'Competitive intelligence · SERP + LLM') }}</span><h1>{{ t('Who ' ~ client.name ~ ' competes with', 'SERP competitors and keyword gap') }}</h1>
 <p class="lead">Organic competitors from Semrush, and the brands ChatGPT names instead. Tracked competitors feed the keyword gap and the visibility score.</p></div>
-<span class="note staff-only">Semrush credits: <b>{{ budget.used|n }} of {{ budget.cap|n }}</b> used (hard limit)</span></div>
+<div class="staff-only" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">{{ sm.run(actions.keywords, 'Refresh Semrush now') }}
+<span class="note">Semrush credits: <b>{{ budget.used|n }} of {{ budget.cap|n }}</b> used (hard limit){% if actions.keywords.last %} · last refreshed {{ actions.keywords.last.strftime('%d %b, %H:%M') }} UTC{% endif %} · refreshes on its own nightly</span></div></div>
 
 {% if vis %}<section class="card"><h2>Hovers Visibility Score in ChatGPT</h2><p class="note">{{ vis.date.strftime('%d %b %Y') }} · mention 35%, position 25%, citation 25%, sentiment 15%</p>
 <div class="tw"><table><tr><th>Brand</th><th class="r">Score</th><th class="r">Named in</th><th class="r">Cited in</th><th class="r">Average position</th><th class="r">Share of voice</th></tr>

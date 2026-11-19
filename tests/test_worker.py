@@ -14,7 +14,7 @@ with psycopg.connect(owner, autocommit=True) as c: migrate(c)
 from cryptography.fernet import Fernet
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app", FLASK_SECRET="t", TOKEN_KEY=Fernet.generate_key().decode(),
                   GOOGLE_OAUTH_CLIENT_ID="x", GOOGLE_OAUTH_CLIENT_SECRET="x", OAUTH_REDIRECT_URI="http://localhost/cb",
-                  CRON_SECRET="s3cret-for-tests", OPENAI_API_KEY="sk-test")
+                  CRON_SECRET="s3cret-for-tests", OPENAI_API_KEY_2="sk-test")
 from common import connect
 import worker, gsc, daily, google_auth, ai_visibility, blog_writer, crawler
 
@@ -145,6 +145,33 @@ with connect() as conn: assert worker.paid_ok(conn, A, "semrush")[0] is False
 os.environ.update(PAID_RUNS_PER_DAY="1")
 print("guardrail: a second paid run in the day is skipped whoever asks; twice a day needs the gap; the midday slot runs only paid sources; 0 switches them off")
 
+# 6b. the team's "Refresh Semrush now" button: runs even after tonight's pull, but not twice in 30 minutes; it counts as the day's run
+with connect() as conn:
+    conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM paid_runs")
+    assert worker.paid_ok(conn, A, "semrush")[0]                                                         # tonight's run happened
+    conn.execute("UPDATE paid_runs SET started_at = now() - interval '3 hours'")                         # at 02:00, hours ago
+    btn = ["--client-id", A, "--only", "semrush", "--force-weekly", "--max-units", "400", "--manual", "1"]
+    m1 = worker.enqueue(conn, A, "semrush", btn, "seo@hovers.in")
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    m2 = worker.enqueue(conn, A, "semrush", btn, "seo@hovers.in")
+    auto = worker.enqueue(conn, A, "semrush", ["--client-id", A, "--only", "semrush"], None)
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    note = lambda pid: conn.execute("SELECT note FROM pull_tasks WHERE pull_id=%s", [pid]).fetchone()[0]
+    assert not note(m1).startswith("skipped"), note(m1)
+    assert note(m2).startswith("skipped: refreshed under 30 minutes ago"), note(m2)
+    assert note(auto).startswith("skipped: already ran"), note(auto)                                    # the schedule still once a day
+    conn.execute("UPDATE paid_runs SET started_at = now() - interval '31 minutes'")
+    m3 = worker.enqueue(conn, A, "semrush", btn, "seo@hovers.in")
+    ai_btn = worker.enqueue(conn, A, "ai", ["--client-id", A, "--only", "ai", "--manual", "1"], "x")
+    conn.execute("INSERT INTO paid_runs (client_id, kind) VALUES (%s,'ai')", [A])
+worker.work(budget=30, kick_after=False)
+with connect() as conn:
+    assert not note(m3).startswith("skipped"), note(m3)
+    assert note(ai_btn).startswith("skipped: already ran"), note(ai_btn)                                 # only Semrush has the button path
+print("refresh button: Semrush on demand outside the daily limit, at most once in 30 minutes; schedule and OpenAI unchanged")
+
 # 7. data ready on open: a linked brand with no data starts its first pull; stale free data refreshes; nothing paid on revisits
 with connect() as conn:
     conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM pull_queue WHERE label='auto'")
@@ -152,7 +179,7 @@ with connect() as conn:
     first = worker.ensure_fresh(conn, B)
     again = worker.ensure_fresh(conn, B)
     steps = [r[0] for r in conn.execute("SELECT step FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [first])]
-assert first and again is None and steps == ["gsc", "ga4", "rank", "ai", "pages", "blogs", "crawl"], steps
+assert first and again is None and steps == ["gsc", "ga4", "rank", "ai", "pages", "index", "cwv", "blogs", "crawl"], steps
 with connect() as conn:
     conn.execute("UPDATE pull_tasks SET status='done'"); conn.execute("UPDATE pull_queue SET requested_at = now() - interval '3 hours' WHERE label='auto'")
     conn.execute("""INSERT INTO gsc_search_daily (client_id, date, query, page, country, device, clicks, impressions, position, is_branded)
@@ -163,7 +190,7 @@ with connect() as conn:
     conn.execute("UPDATE pull_tasks SET status='done'"); conn.execute("UPDATE pull_queue SET requested_at = now() - interval '3 hours' WHERE label='auto'")
     conn.execute("INSERT INTO collector_runs (client_id, collector, status, started_at) VALUES (%s,'gsc','ok', now())", [B])
     fresh = worker.ensure_fresh(conn, B)
-assert steps == ["gsc", "ga4", "rank", "pages"] and fresh is None, steps                                 # free only; nothing when fresh
+assert steps == ["gsc", "ga4", "rank", "pages", "index", "cwv"] and fresh is None, steps                                 # free only; nothing when fresh
 print("ready on open: a new brand's first pull starts by itself; stale data refreshes for free; fresh data starts nothing")
 
 # 5. the endpoints: locked without the secret; the schedule queues and works; the buttons start at once

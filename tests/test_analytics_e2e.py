@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 20
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 21
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -61,8 +61,16 @@ class FakeSemrush:
 with connect() as conn:                                     # the seed carries 400 credits already spent: a pull that could pass 500 never calls
     assert A.semrush_budget(conn) == {"cap": 500, "used": 400, "left": 100}
     assert conn.execute("SELECT count(*) FROM semrush_keywords WHERE client_id=%s", [cid]).fetchone()[0] == 20
+    mark = conn.execute("SELECT max(usage_id) FROM semrush_usage").fetchone()[0]
+    small = FakeSemrush(); out = semrush.sync_client(conn, cid, "KEY", session=small)            # 100 left: fewer keywords, not none
+    assert len(small.urls) == 1 and "display_limit=10" in small.urls[0], small.urls
+    assert A.semrush_budget(conn)["used"] <= 500, A.semrush_budget(conn)
+    conn.execute("INSERT INTO semrush_usage (client_id, report, lines, units, feature) VALUES (%s,'top-up',0,%s,'keywords')",
+                 [cid, 500 - A.semrush_budget(conn)["used"]])                                       # now at the cap
     blocked = FakeSemrush(); out = semrush.sync_client(conn, cid, "KEY", session=blocked)
     assert blocked.urls == [] and "stopped" in out and "(0 units)" in out, out
+    conn.execute("DELETE FROM semrush_usage WHERE usage_id > %s", [mark])                         # back to the seed's 400 for what follows
+    conn.execute("DELETE FROM semrush_keywords WHERE client_id=%s AND pulled_on = current_date", [cid])
 semrush.TOTAL_CAP = 100000                                 # lift the cap only to exercise parsing against the fake API
 fs = FakeSemrush()
 with connect() as conn:
@@ -150,7 +158,7 @@ with connect() as conn:
 checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Gargi at a glance", "Keywords we are working on" if False else "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"],
           f"/c/{cid}/search": ["Non-branded clicks", "silver mangalsutra"], f"/c/{cid}/search?tab=revenue": ["/collections/mangalsutra", "100.0%"],
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
-          f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID"],
+          f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women", "Refresh Semrush now", "refreshes on its own nightly"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID", "Refresh Semrush now", "refresh on their own every night"],
           f"/c/{cid}/technical": ["Crawlability, indexation and site health", "Technical SEO index", "No crawl yet", "Import Site Audit"], f"/c/{cid}/ideas": ["Query demand", "No ideas yet"],
           f"/c/{cid}/search?tab=rankings": ["silver mangalsutra", "Track"], f"/c/{cid}/competitors?tab=backlinks": ["No backlink data yet", "Pull backlinks"],
           f"/c/{cid}/research/keyword": ["Keyword research", "No lookups yet", "disabled"], f"/c/{cid}/research/domain": ["Quick pick", "gargi.shop"],

@@ -92,7 +92,7 @@ writes a Neon Postgres database. Vercel cannot run long jobs, so data pulls run 
 
 The Render files (`render.yaml`, `Dockerfile`, `.github/workflows/nightly.yml`) are an alternative host and are not used.
 
-**Semrush credit limit.** `SEMRUSH_TOTAL_CAP` (600 online) is a lifetime limit on Semrush units across all brands and pulls,
+**Semrush credit limit.** `SEMRUSH_TOTAL_CAP` (10,000 online) is a lifetime limit on Semrush units across all brands and pulls,
 counted from `semrush_usage`, including the 400 units used to build Gargi's seed data. A call that could pass the limit is never made.
 Semrush never runs on the schedule (unless `SEMRUSH_AUTO=1`); it runs only from Settings, Data.
 
@@ -211,5 +211,8 @@ older than 30 hours starts a free refresh at once (Search Console, GA4, rankings
 includes ChatGPT prompts, blog drafts and the crawl. Opening, refreshing or signing in never starts anything paid.
 Paid sources (ChatGPT prompts and blog drafts on OpenAI; Semrush) run at most `PAID_RUNS_PER_DAY` times per brand in 24 hours,
 spaced at least `PAID_MIN_GAP_HOURS` (default 22 h at once a day, 10 h at twice), whatever asks: schedule, button or sign-up.
-Every start is recorded in `paid_runs`. Semrush also stays within `SEMRUSH_AUTO_UNITS` a run (default 50) and the lifetime
-`SEMRUSH_TOTAL_CAP`. Set `PAID_RUNS_PER_DAY=0` to switch paid sources off. Change both in Vercel's settings, then redeploy.
+Every start is recorded in `paid_runs`. Semrush also stays within `SEMRUSH_AUTO_UNITS` a run (default 400: 20 keywords
+at 10 units, plus 5 competitors at 40 once a month) and the lifetime `SEMRUSH_TOTAL_CAP`; a smaller budget fetches fewer
+keywords rather than none. **Refresh Semrush now** (Competitors header and Settings, team only) runs it on demand even
+after the nightly pull, at most once in `SEMRUSH_MANUAL_GAP_MIN` minutes per brand (default 30); it counts as the day's run.
+Set `PAID_RUNS_PER_DAY=0` to switch paid sources off. Change these in Vercel's settings, then redeploy.

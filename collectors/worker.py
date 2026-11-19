@@ -11,6 +11,9 @@ sources again when PAID_RUNS_PER_DAY >= 2), sign-up and the team's buttons, and 
 or stale (ensure_fresh: free sources only, except a brand's very first pull). Data is ready when people open Orbit.
 Guardrail for paid sources (paid_ok): ChatGPT prompts, blog drafts and Semrush run at most PAID_RUNS_PER_DAY times per brand
 in 24 hours, whatever asks; Semrush also within SEMRUSH_AUTO_UNITS a run and the lifetime SEMRUSH_TOTAL_CAP.
+One exception: the team's "Refresh Semrush now" button (--manual) runs even if the nightly pull already ran, at most once
+in MANUAL_GAP_MIN minutes per brand, and still within the lifetime cap. It counts as that day's run, so the next nightly
+pull within 22 hours skips Semrush rather than paying twice.
 """
 import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +29,8 @@ HARD_STOP = int(os.environ.get("WORKER_HARD_STOP", "270"))     # tasks must wrap
 STALE = "6 minutes"                                              # a task running longer was cut off
 MAX_PARALLEL = int(os.environ.get("WORKER_PARALLEL", "3"))
 GSC_WINDOW = 10                                                  # days per Search Console task
+MANUAL_GAP_MIN = int(os.environ.get("SEMRUSH_MANUAL_GAP_MIN", "30"))   # the refresh button: once per brand in this many minutes
+MANUAL_STEPS = ("semrush",)                                      # paid steps the team's refresh button may start outside the daily limit
 
 def parse_args(args):
     """pull_queue.args holds daily.py-style arguments: --client-id, --only, --force-weekly, --max-units, --seeds, --research."""
@@ -59,7 +64,7 @@ def enqueue(conn, client_id, label, args, who=None):
               [str(r[0]) for r in conn.execute("SELECT client_id FROM clients WHERE status='active' ORDER BY created_at")]
     steps = [s for s in ORDER if s in set(o["only"].split(","))]
     if o.get("research") and "research" not in steps: steps.append("research")
-    extra = {k: o[k] for k in ("max_units", "seeds", "research") if o.get(k)}
+    extra = {k: o[k] for k in ("max_units", "seeds", "research", "manual") if o.get(k)}
     for cid in clients:
         for n, step in enumerate(steps):
             task_args = {**extra, "force": o["force"]}
@@ -98,6 +103,14 @@ def paid_ok(conn, cid, kind, pull_id=None):
     if n >= per_day: return False, f"already ran {n} time{'s' if n != 1 else ''} in 24 hours (limit {per_day} a day)"
     if last and conn.execute("SELECT %s > now() - make_interval(secs => %s)", [last, gap * 3600]).fetchone()[0]:
         return False, f"last run under {gap:g} hours ago"
+    conn.execute("INSERT INTO paid_runs (client_id, kind, pull_id) VALUES (%s,%s,%s)", [cid, kind, pull_id])
+    return True, ""
+
+def manual_ok(conn, cid, kind, pull_id=None):
+    """The refresh button: outside the daily limit, but not twice within MANUAL_GAP_MIN minutes for one brand."""
+    last = conn.execute("SELECT max(started_at) FROM paid_runs WHERE client_id=%s AND kind=%s", [cid, kind]).fetchone()[0]
+    if last and conn.execute("SELECT %s > now() - make_interval(mins => %s)", [last, MANUAL_GAP_MIN]).fetchone()[0]:
+        return False, f"refreshed under {MANUAL_GAP_MIN} minutes ago"
     conn.execute("INSERT INTO paid_runs (client_id, kind, pull_id) VALUES (%s,%s,%s)", [cid, kind, pull_id])
     return True, ""
 
@@ -215,7 +228,7 @@ def step_crawl(conn, task, deadline):
 def step_semrush(conn, task, deadline):
     """Semrush keyword and competitor data, within SEMRUSH_AUTO_UNITS a run and the lifetime cap (SEMRUSH_TOTAL_CAP)."""
     if not os.environ.get("SEMRUSH_API_KEY"): return "no Semrush key on the server", []
-    units = task["args"].get("max_units") or int(os.environ.get("SEMRUSH_AUTO_UNITS", "50"))
+    units = task["args"].get("max_units") or int(os.environ.get("SEMRUSH_AUTO_UNITS", "400"))
     if int(units) <= 0: return "automatic Semrush is off (SEMRUSH_AUTO_UNITS=0)", []
     rc = _daily(task["client_id"], "semrush", {**task["args"], "force": True, "max_units": units})
     return ("ok" if rc == 0 else "finished with errors (see the run log)"), []
@@ -224,7 +237,8 @@ def run_task(conn, task, deadline):
     """-> (note, [(step, args)] to queue next)."""
     step = task["step"]
     if step in PAID_STEPS and not task["args"].get("cont"):                 # the paid guardrail, once per paid run
-        ok, why = paid_ok(conn, task["client_id"], step, task["pull_id"])
+        manual = step in MANUAL_STEPS and task["args"].get("manual")
+        ok, why = (manual_ok if manual else paid_ok)(conn, task["client_id"], step, task["pull_id"])
         if not ok: return f"skipped: {why}", []
     if step == "semrush": return step_semrush(conn, task, deadline)
     if step == "gsc": return step_gsc(conn, task, deadline)

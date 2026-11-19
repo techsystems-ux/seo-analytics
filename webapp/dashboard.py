@@ -425,7 +425,7 @@ def settings(cid):
         viewers = conn.execute("SELECT email, added_by, added_at, last_login FROM client_viewers WHERE client_id=%s ORDER BY email", [cid]).fetchall()
     keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY_2", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
     login = {"google": bool(os.environ.get("CLIENT_OAUTH_CLIENT_ID")), "email": bool(os.environ.get("RESEND_API_KEY"))}
-    return view("settings.html", c, "settings", paid_per_day=int(os.environ.get("PAID_RUNS_PER_DAY", "1")), semrush_auto=int(os.environ.get("SEMRUSH_AUTO_UNITS", "50")), tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
+    return view("settings.html", c, "settings", paid_per_day=int(os.environ.get("PAID_RUNS_PER_DAY", "1")), semrush_auto=int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")), tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
                 msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature, viewers=viewers, login=login,
                 portal_url=request.host_url.rstrip("/") + "/portal")
 
@@ -547,9 +547,13 @@ def semrush_actions(conn, cid, seeds=None):
     import semrush_suite as ss, semrush_projects as sp
     budget, key = A.semrush_budget(conn), bool(os.environ.get("SEMRUSH_API_KEY"))
     project = conn.execute("SELECT semrush_project_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
+    import worker
     tracked = len(ss.tracked_competitors(conn, cid))
+    last = conn.execute("SELECT max(called_at) FROM semrush_usage WHERE client_id=%s AND coalesce(feature,'keywords')='keywords' AND units > 0", [cid]).fetchone()[0]
+    recent = conn.execute("""SELECT 1 FROM paid_runs WHERE client_id=%s AND kind='semrush'
+                             AND started_at > now() - make_interval(mins => %s)""", [cid, worker.MANUAL_GAP_MIN]).fetchone()
     out = {
-        "keywords":  {"label": "Ranking keywords and competitors", "cost": 400, "where": "Competitors"},
+        "keywords":  {"label": "Refresh Semrush now: ranking keywords and competitors", "cost": int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")) or 400, "where": "Competitors"},
         "ideas":     {"label": "Content ideas: questions and related searches", "cost": ss.estimate("ideas", seeds=len(seeds or []) or 3), "where": "Content ideas"},
         "backlinks": {"label": "Backlinks and link prospects", "cost": ss.estimate("backlinks", competitors=min(tracked, 3)), "where": "Competitors"},
         "gap":       {"label": "Keyword gap: what competitors rank for and you don't", "cost": ss.estimate("gap"), "where": "Competitors"},
@@ -562,7 +566,9 @@ def semrush_actions(conn, cid, seeds=None):
         elif k in ("audit", "rank") and not project: why = "Add the Semrush project ID in Settings first"
         elif k == "gap" and not tracked: why = "Track at least one competitor first"
         elif a["cost"] > budget["left"]: why = f"Needs up to {a['cost']:,} credits; the limit leaves {budget['left']:,}"
+        elif k == "keywords" and recent: why = f"Refreshed under {worker.MANUAL_GAP_MIN} minutes ago; try again shortly"
         a.update(key=k, ready=why is None, why=why)
+    out["keywords"]["last"] = last
     return out
 
 @bp.post("/c/<cid>/semrush")
@@ -579,7 +585,7 @@ def semrush_run(cid):
     if not a["ready"]: return redirect(back + sep + urlencode({"msg": a["why"]}))
     with connect() as conn:                       # a real pull replaces the sample rows, never mixes with them
         import sample_semrush; sample_semrush.clear(conn, cid, only='semrush')
-    if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"])
+    if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"], manual=True)   # the refresh button: outside the daily limit
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
     return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
 
@@ -614,11 +620,12 @@ def activity_status(cid, pull_id):
     return response
 
 
-def start_job(cid, only, max_units=None, seeds="", research="", blog_count=None):
+def start_job(cid, only, max_units=None, seeds="", research="", blog_count=None, manual=False):
     """Runs the daily job for one client in the background. Results go to the run log on screen; full output,
     errors included, is appended to logs/jobs.log in the project folder."""
     import datetime as dt
-    extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else [])
+    extra = (["--max-units", str(max_units)] if max_units else []) + (["--seeds", seeds] if seeds else []) + (["--research", research] if research else []) \
+        + (["--manual", "1"] if manual else [])
     if blog_count is not None:
         import worker
         extra += ["--blog-count", str(worker.blog_count(blog_count))]

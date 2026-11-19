@@ -67,7 +67,9 @@ whatever asks for them; Semrush also within {{ semrush_auto }} units a run and t
 </div>
 <section class="card" style="display:flex;flex-direction:column;gap:12px"><div class="top" style="align-items:center"><h2>Semrush</h2>
 <span class="note"><b>{{ budget.used|n }} of {{ budget.cap|n }}</b> credits used · {{ budget.left|n }} left under the hard limit</span></div>
-<p class="note">Nothing here runs on its own. Each button shows the most it can spend; the pull stops before it would pass the limit. Raise SEMRUSH_TOTAL_CAP on the server only for spend you have approved.</p>
+<p class="note">Ranking keywords and competitors refresh on their own every night (up to {{ semrush_auto|n }} credits per brand; competitors once a month).
+{% if actions.keywords.last %}Last refreshed {{ actions.keywords.last.strftime('%d %b %Y, %H:%M') }} UTC. {% endif %}The refresh button below runs it now, even if tonight's pull already ran; the other features run only when pressed.
+Each button shows the most it can spend; a pull stops before it would pass the limit.</p>
 <div style="display:flex;flex-direction:column;gap:10px">{% for k in ['keywords','gap','backlinks','ideas','audit','rank'] %}{{ sm.run(actions[k]) }}{% endfor %}</div>
 {% if by_feature %}<p class="note">Spent so far: {% for f,u in by_feature.items() %}{{ f }} {{ u|n }}{{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
 <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;border-top:1px solid var(--line);padding-top:12px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="semrush_project">
