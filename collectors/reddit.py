@@ -7,6 +7,11 @@ APIFY_TOTAL_ITEMS for the product's lifetime (default 1000), counted in apify_us
 (APIFY_AUTO_ITEMS a run, default 150) once the token is set; topics and communities are found automatically.
 The token (APIFY_TOKEN) is sent in a header, never in a URL, and never stored.
 
+Scraper: harshmaur~reddit-scraper (no Reddit login needed). trudax~reddit-scraper-lite was used until 19 Nov 2026, when
+its keyword search started to require a Reddit session cookie; APIFY_REDDIT_ACTOR switches back if that changes. Orbit
+asks in one shape (the original one) and to_input() turns it into what the chosen scraper takes, with its result limits
+set so Apify cannot return, or charge for, more than the run allows.
+
   python reddit.py --client-id UUID --max-items 200
 """
 import os, datetime as dt, math, re, sys
@@ -15,7 +20,8 @@ import requests
 import community as cm
 from ai_visibility import tracked_brands
 
-ACTOR = os.environ.get("APIFY_REDDIT_ACTOR", "trudax~reddit-scraper-lite")
+ACTOR = os.environ.get("APIFY_REDDIT_ACTOR", "harshmaur~reddit-scraper")
+PRICE = {"harshmaur~reddit-scraper": (0.02, 0.002), "trudax~reddit-scraper-lite": (0.02, 0.004)}   # USD: start per GB, per result
 API = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
 TOTAL_ITEMS = int(os.environ.get("APIFY_TOTAL_ITEMS", "1000"))
 RUN_ITEMS = int(os.environ.get("APIFY_MAX_ITEMS", "300"))
@@ -33,24 +39,50 @@ def thread_id(url):
     m = re.search(r"/comments/([a-z0-9]+)", url or "", re.I)
     return m.group(1).lower() if m else None
 
+def to_input(run_input, max_items, actor=None):
+    """The request in the scraper's own terms. harshmaur~reddit-scraper limits per keyword or URL, so the run's limit is
+    split across them; the charge cap passed with the run (max_charge) stops it at max_items results either way."""
+    if (actor or ACTOR) != "harshmaur~reddit-scraper":
+        return {**run_input, "maxItems": max_items}
+    terms, urls = run_input.get("searches") or [], run_input.get("startUrls") or []
+    each = max(1, math.ceil(max_items / max(len(terms) + len(urls), 1)))
+    per_post = int(run_input.get("maxComments") or 0)
+    out = {"searchTerms": terms, "startUrls": urls,
+           "searchPosts": run_input.get("searchPosts", True), "searchComments": run_input.get("searchComments", False),
+           "searchCommunities": run_input.get("searchCommunities", False), "includeNSFW": run_input.get("includeNSFW", False),
+           "searchSort": run_input.get("sort", "relevance"), "searchTime": run_input.get("time", "all"),
+           "maxPostsCount": each, "maxCommentsCount": each, "maxCommunitiesCount": each,
+           "crawlCommentsPerPost": per_post > 0 and not run_input.get("skipComments"), "maxCommentsPerPost": per_post}
+    return out
+
+def max_charge(max_items, actor=None):
+    start, per = PRICE.get(actor or ACTOR, (0.02, 0.004))
+    return round(start + per * max_items + 0.005, 4)
+
 def call_actor(session, token, conn, client_id, run_input, max_items):
     if max_items > items_left(conn): raise LimitReached(f"needs up to {max_items} results; {items_left(conn)} left under APIFY_TOTAL_ITEMS")
     wait = int(os.environ.get("APIFY_WAIT", "300"))                 # the server worker sets less, to fit one run
-    r = session.post(API.format(actor=ACTOR), params={"timeout": wait}, json={**run_input, "maxItems": max_items},
+    r = session.post(API.format(actor=ACTOR), json=to_input(run_input, max_items),
+                     params={"timeout": wait, "memory": 1024, "maxItems": max_items, "maxTotalChargeUsd": max_charge(max_items)},
                      headers={"Authorization": f"Bearer {token}"}, timeout=wait + 30)
-    if r.status_code >= 400: raise RuntimeError(f"Apify {r.status_code}: {r.text[:200]}")
+    if r.status_code >= 400:                                         # Apify's own message, on one line, so the screen shows why
+        try: why = r.json().get("error", {}).get("message") or r.text
+        except (ValueError, AttributeError): why = r.text
+        raise RuntimeError(f"Apify {r.status_code}: {' '.join(str(why).split())[:240]}")
     rows = r.json()[:max_items]
     conn.execute("INSERT INTO apify_usage (client_id, actor, items) VALUES (%s,%s,%s)", [client_id, ACTOR, len(rows)])
     return rows
 
 def normalise(row):
     kind = "comment" if str(row.get("dataType", row.get("type", ""))).lower().startswith("comment") else "post"
-    sub = row.get("parsedCommunityName") or (row.get("communityName") or row.get("subreddit") or "").replace("r/", "") or None
-    rid = str(row.get("parsedId") or row.get("id") or thread_id(row.get("url")) or "")
+    sub = row.get("parsedCommunityName") or (row.get("communityName") or row.get("subredditName") or row.get("subreddit") or "").replace("r/", "") or None
+    url = row.get("postUrl") or row.get("url")
+    rid = str(row.get("parsedId") or row.get("id") or thread_id(url) or "")
     return {"item_id": rid.removeprefix("t3_").removeprefix("t1_").lower(), "kind": kind, "subreddit": sub,
-            "title": row.get("title"), "body": (row.get("body") or row.get("text") or "")[:4000], "url": row.get("url"),
-            "author": row.get("username") or row.get("author"), "score": row.get("upVotes") or row.get("score"),
-            "comments": row.get("numberOfComments") or row.get("numComments"), "created_at": row.get("createdAt") or row.get("created")}
+            "title": row.get("title") or row.get("postTitle"), "body": (row.get("body") or row.get("text") or "")[:4000], "url": url,
+            "author": row.get("authorName") or row.get("username") or row.get("author"), "score": row.get("upVotes") or row.get("score"),
+            "comments": row.get("commentsCount") or row.get("numberOfComments") or row.get("numComments"),
+            "created_at": row.get("createdAt") or row.get("created")}
 
 def save(conn, client_id, items, found_by, query, brands, today):
     n = 0
@@ -77,11 +109,11 @@ def community_relevance(c, topic_words):
 def save_communities(conn, client_id, rows, found_for, topic_words, today):
     out = []
     for r in rows:
-        if str(r.get("dataType", "")).lower() not in ("community", "subreddit") or r.get("over18"): continue
+        if str(r.get("dataType", "")).lower() not in ("community", "subreddit") or r.get("over18") or r.get("nsfw"): continue
         name = (r.get("parsedName") or r.get("name") or r.get("communityName") or "").replace("r/", "").strip("/") or None
         if not name: continue
-        c = {"name": name, "title": r.get("title"), "description": (r.get("description") or "")[:500],
-             "members": r.get("numberOfMembers") or r.get("members") or r.get("subscribers")}
+        c = {"name": name, "title": r.get("title"), "description": (r.get("publicDescription") or r.get("description") or "")[:500],
+             "members": r.get("membersCount") or r.get("numberOfMembers") or r.get("members") or r.get("subscribers")}
         c["relevance"] = community_relevance(c, topic_words)
         conn.execute("""INSERT INTO reddit_communities (client_id, name, title, description, members, found_for, relevance, pulled_on)
                         VALUES (%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (client_id, name) DO UPDATE SET members=EXCLUDED.members,

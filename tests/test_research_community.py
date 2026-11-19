@@ -107,6 +107,7 @@ with connect() as conn:
     conn.execute("""INSERT INTO citations (client_id, answer_id, url, domain) VALUES
                     (%s,%s,'https://www.reddit.com/r/IndianFashionAddicts/comments/abc12/where_to_buy/','reddit.com'),
                     (%s,%s,'https://www.youtube.com/watch?v=vidCITED001','youtube.com')""", [cid, aid, cid, aid])
+    reddit.ACTOR = "trudax~reddit-scraper-lite"                         # the pass logic, in the original request shape (the new scraper: 4b)
     base = reddit.items_used(conn); reddit.TOTAL_ITEMS = base + 60     # usage logs cannot be deleted by the app: test against what is there
     fa = FakeApify()
     out = reddit.run(conn, cid, "TOKEN", max_items=40, session=fa)
@@ -128,6 +129,54 @@ with connect() as conn:
     assert reddit.items_used(conn) - base == 60 and all(c["maxItems"] <= 60 - used for c in fa2.calls), reddit.items_used(conn)
     assert reddit.run(conn, cid, "TOKEN", 40, session=FakeApify()).startswith("stopped") if reddit.items_left(conn) == 0 else True
 print("reddit: cited thread and searches pulled through Apify with the token in a header; brands, tone, questions and pain points labelled; result limits hold")
+
+# 4b. harshmaur~reddit-scraper (since 19 Nov 2026: trudax's search began to need a Reddit login): same requests, its own input
+#     names and per-keyword limits, a charge cap sent with every run, its field names read, Apify's error shown on one line
+reddit.ACTOR = "harshmaur~reddit-scraper"
+i = reddit.to_input({"searches": ["silver anklets", "toe rings"], "searchCommunities": True, "searchPosts": False, "searchComments": False,
+                     "includeNSFW": False}, 15)
+assert i["searchTerms"] == ["silver anklets", "toe rings"] and i["searchCommunities"] and not i["searchPosts"] and i["maxCommunitiesCount"] == 8, i
+i = reddit.to_input({"searches": ["Gargi"], "searchPosts": True, "searchComments": True, "sort": "relevance", "time": "year",
+                     "maxComments": 0, "skipComments": True}, 12)
+assert (i["searchSort"], i["searchTime"], i["maxPostsCount"], i["maxCommentsCount"], i["crawlCommentsPerPost"]) == ("relevance", "year", 12, 12, False), i
+i = reddit.to_input({"startUrls": [{"url": "https://www.reddit.com/r/x/comments/a/b/"}, {"url": "https://www.reddit.com/r/x/comments/c/d/"}],
+                     "maxComments": 3, "skipComments": False}, 8)
+assert i["startUrls"][1]["url"].endswith("/c/d/") and i["crawlCommentsPerPost"] and i["maxCommentsPerPost"] == 3 and i["maxPostsCount"] == 4, i
+assert reddit.max_charge(100) == round(0.02 + 0.2 + 0.005, 4) and "maxItems" not in i
+post = {"dataType": "post", "id": "t3_1uofugt", "parsedId": "1uofugt", "title": "affordable silver jewellery", "body": "recs?",
+        "postUrl": "https://www.reddit.com/r/jewelry/comments/1uofugt/affordable_silver_jewellery/", "authorName": "a1", "upVotes": 20,
+        "commentsCount": 18, "communityName": "r/jewelry", "parsedCommunityName": "jewelry", "createdAt": "2026-07-05T22:43:26.000Z"}
+com = {"dataType": "comment", "id": "p6q0mg3", "postId": "t3_1w24q5a", "body": "nice jewellery", "authorName": "b2", "score": 3086,
+       "url": "https://www.reddit.com/r/sewing/comments/1w24q5a/x/p6q0mg3/", "subredditName": "sewing"}
+n1, n2 = reddit.normalise(post), reddit.normalise(com)
+assert (n1["item_id"], n1["url"], n1["author"], n1["comments"], n1["subreddit"]) == ("1uofugt", post["postUrl"], "a1", 18, "jewelry"), n1
+assert (n2["item_id"], n2["kind"], n2["subreddit"], n2["author"], n2["score"]) == ("p6q0mg3", "comment", "sewing", "b2", 3086), n2
+class FakeNew:
+    def __init__(s): s.calls = []
+    def post(s, url, params=None, json=None, headers=None, timeout=None):
+        s.calls.append((url, params, json))
+        if json.get("searchCommunities"):
+            return R(200, js=[{"dataType": "community", "name": "jewelry", "title": "JEWELRY", "membersCount": 390203, "nsfw": False,
+                               "publicDescription": "jewellery discussions", "description": "#SUB RULES ..."},
+                              {"dataType": "community", "name": "adultstuff", "nsfw": True}])
+        return R(200, js=[post, com])
+with connect() as conn:
+    reddit.TOTAL_ITEMS = reddit.items_used(conn) + 40
+    fn = FakeNew(); out = reddit.run(conn, cid, "TOKEN", max_items=20, session=fn)
+    assert all("harshmaur~reddit-scraper" in u and p["maxTotalChargeUsd"] <= reddit.max_charge(20) and p["maxItems"] <= 20
+               and "searches" not in j for u, p, j in fn.calls), fn.calls[0]
+    row = conn.execute("SELECT members, description FROM reddit_communities WHERE client_id=%s AND name='jewelry'", [cid]).fetchone()
+    assert row == (390203, "jewellery discussions"), row
+    assert not conn.execute("SELECT 1 FROM reddit_communities WHERE client_id=%s AND name='adultstuff'", [cid]).fetchone()
+    got = conn.execute("SELECT url, author, comments FROM reddit_items WHERE client_id=%s AND item_id='1uofugt'", [cid]).fetchone()
+    assert got == (post["postUrl"], "a1", 18), got
+class Fail:
+    def post(s, *a, **k):
+        return R(400, js={"error": {"type": "run-failed", "message": "Actor run did not succeed (run ID: X, status: FAILED)."}})
+with connect() as conn:
+    try: reddit.call_actor(Fail(), "TOKEN", conn, cid, {"searches": ["x"]}, 1); raise SystemExit("should fail")
+    except RuntimeError as e: assert str(e) == "Apify 400: Actor run did not succeed (run ID: X, status: FAILED).", e
+print("reddit (login-free scraper): requests translated with per-keyword limits and a charge cap; its fields read; Apify's error shown in full")
 
 # ---------------------------------------------------------------- YouTube
 class FakeYT:
