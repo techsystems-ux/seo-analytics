@@ -7,9 +7,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [os.path.join(HERE, "..", "collectors"), os.path.join(HERE, "..", "seo"), os.path.join(HERE, "..", "scripts")]
 from common import connect as _staff_connect
 import analytics as A
+import board as B, viz
 
 # Screens a client may open for their own brand (read-only). Everything else, and every form, is staff only.
-VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.answer", "dash.reddit_view", "dash.sources",
+VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai", "dash.ai_traffic", "dash.answer", "dash.reddit_view", "dash.sources",
                   "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download", "dash.blogs", "dash.blog", "dash.activity_status"}
 # What a brand's owner (the person who signed up for it) may also do: review, edit and publish its blog posts, connect its store.
 OWNER_ACTIONS = {"dash.blogs_post", "dash.blog_post", "dash.publishing", "dash.publishing_post"}
@@ -87,10 +88,12 @@ def intel_for(cid):
                                        (SELECT count(DISTINCT query) FROM gsc_search_daily WHERE client_id=%(c)s
                                           AND date > (SELECT max(date) - 7 FROM gsc_search_daily WHERE client_id=%(c)s)),
                                        (SELECT count(*) FROM pages WHERE client_id=%(c)s),
-                                       (SELECT count(*) FROM prompts WHERE client_id=%(c)s AND approved)""", {"c": cid}).fetchone()
-        out = {"data_to": r[0], "queries": r[1] or 0, "pages": r[2] or 0, "prompts": r[3] or 0}
+                                       (SELECT count(*) FROM prompts WHERE client_id=%(c)s AND approved),
+                                       (SELECT count(*) FROM rank_keywords WHERE client_id=%(c)s),
+                                       (SELECT max(finished_at) FROM collector_runs WHERE client_id=%(c)s AND status='ok')""", {"c": cid}).fetchone()
+        out = {"data_to": r[0], "queries": r[1] or 0, "pages": r[2] or 0, "prompts": r[3] or 0, "keywords": r[4] or 0, "updated": r[5]}
     except Exception:
-        out = {"data_to": None, "queries": 0, "pages": 0, "prompts": 0}
+        out = {"data_to": None, "queries": 0, "pages": 0, "prompts": 0, "keywords": 0, "updated": None}
     _INTEL[cid] = (time.time(), out)
     return out
 
@@ -197,22 +200,57 @@ def conn_trial(cid):
         r = conn.execute("SELECT trial_ends FROM clients WHERE client_id=%s", [cid]).fetchone()
     return r[0] if r else None
 
+@bp.app_context_processor
+def _viz_helpers():
+    return {"ring": viz.ring, "gauge": viz.gauge, "engine_label": lambda k: B.LABEL.get(k, k)}
+
+def _seo_by(conn, cid, ents):
+    """Google footprint per entity: competitors from Semrush (keywords, traffic, shared keywords); the brand from its own
+    Search Console queries and GA4 organic sessions, 28 days."""
+    sem = {}
+    for d, kw, tr, cm in conn.execute("""SELECT lower(replace(domain,'www.','')), max(organic_keywords), max(organic_traffic), max(common_keywords)
+                                         FROM competitors WHERE client_id=%s AND domain IS NOT NULL GROUP BY 1""", [cid]):
+        sem[d] = {"keywords": kw, "traffic": tr, "common": cm}
+    out = {}
+    for e in ents:
+        if e["primary"]:
+            q, ses = conn.execute("""SELECT (SELECT count(DISTINCT query) FROM gsc_search_daily WHERE client_id=%(c)s AND date > current_date - 28),
+                                            (SELECT sum(sessions) FROM ga4_daily WHERE client_id=%(c)s AND channel_group='Organic Search'
+                                             AND date > current_date - 28)""", {"c": cid}).fetchone()
+            out[""] = {"keywords": q, "traffic": ses, "common": None}
+        elif e["domain"]:
+            out[e["key"]] = sem.get(e["domain"].lower().replace("www.", ""))
+    return out
+
 @bp.get("/c/<cid>")
 def overview(cid):
+    tab = request.args.get("tab", "dashboard")
     with connect() as conn:
         c = client_or_404(conn, cid)
+        ents = B.entities(conn, cid)
+        focus = B.pick(ents, request.args.get("b"))
+        board, engs = B.ai_board(conn, cid, ents), B.engines(conn, cid)
+        pm = B.prompt_matrix(conn, cid, focus["key"], ents, engs)
+        aio = B.aio_keywords(conn, cid)
+        seo_by = _seo_by(conn, cid, ents)
         vis, search, rev = A.visibility(conn, cid), A.search_totals(conn, cid), A.organic_revenue(conn, cid)
-        cycle, prompts = A.prompt_results(conn, cid)
         last, gaps = A.keyword_gaps(conn, cid, 6)
-        pages = A.page_summary(conn, cid)
         chart = line_chart(A.daily_clicks(conn, cid, 90), ["nonbranded", "branded"])
         runs = A.last_runs(conn, cid)
         kb, pb = A.keyword_board(conn, cid), A.prompt_board(conn, cid)
-    won = sum(1 for p in prompts if p["rank"]); asked = sum(1 for p in prompts if p["answer_id"])
-    return view("overview.html", c, "overview", vis=vis, search=search, rev=rev, won=won, asked=asked, gaps=gaps,
-                fixes=sum(p["fails"] for p in pages), pages_checked=sum(1 for p in pages if p["checked_at"]), chart=chart, runs=runs,
-                kb=kb, pb=pb, news=A.headlines(kb, pb), welcome=request.args.get("welcome"),
-                trial=conn_trial(cid))
+    labels = [w.strftime("%d %b") for w in board["weeks"]]
+    trend = viz.lines(labels, [{"name": e["name"], "colour": e["colour"], "values": e["trend"]} for e in board["ents"]], ymax=100)
+    scored = [e for e in board["ents"] if e["score"] is not None]
+    vis_cols = viz.columns([e["name"] if len(e["name"]) <= 12 else e["name"][:11] + "…" for e in scored],
+                           [{"name": "Visibility", "colour": "#2F5BEA", "values": [e["score"] for e in scored]}], ymax=100)
+    sov_parts = [{"name": e["name"], "value": e["sov"] or 0, "colour": e["colour"]} for e in board["ents"]]
+    sov_donut = viz.donut(sov_parts, centre=f"{board['answers']:,}", sub="answers read")
+    return view("overview.html", c, "overview", tab=tab, ents=ents, focus=focus, board=board, engs=engs, pm=pm, aio=aio,
+                search_ov=B.search_overview(kb, aio), comp_seo=seo_by.get(focus["key"]) if not focus["primary"] else None, seo_by=seo_by,
+                trend=trend, vis_cols=vis_cols, sov_donut=sov_donut,
+                ranked=sorted(board["ents"], key=lambda e: -(e["score"] if e["score"] is not None else -1)),
+                vis=vis, search=search, rev=rev, gaps=gaps, chart=chart, runs=runs,
+                kb=kb, pb=pb, news=A.headlines(kb, pb), welcome=request.args.get("welcome"), trial=conn_trial(cid))
 
 @bp.get("/c/<cid>/sources")
 def sources(cid):
@@ -365,9 +403,30 @@ def ai(cid):
         vis = A.visibility(conn, cid)
         cycle, prompts = A.prompt_results(conn, cid)
         cited, others = A.top_cited_domains(conn, cid), A.untracked_brands(conn, cid)
+        ents = B.entities(conn, cid)
+        focus = B.pick(ents, request.args.get("b"))
+        board, engs = B.ai_board(conn, cid, ents), B.engines(conn, cid)
+        pm = B.prompt_matrix(conn, cid, focus["key"], ents, engs)
     if stage != "all": prompts = [p for p in prompts if p["stage"] == stage]
-    trend = line_chart([{"date": t["date"], "score": t["score"]} for t in (vis or {}).get("trend", [])], ["score"], ymax=100)
-    return view("ai.html", c, "ai", vis=vis, prompts=prompts, cycle=cycle, cited=cited, others=others, stage=stage, trend=trend)
+    by_id = {str(p["prompt_id"]): p for p in prompts}
+    rows = [dict(r, base=by_id[r["id"]]) for r in pm["rows"] if r["id"] in by_id]
+    me = next(e for e in board["ents"] if e["key"] == focus["key"])
+    trend = viz.lines([w.strftime("%d %b") for w in board["weeks"]], [{"name": me["name"], "colour": me["colour"], "values": me["trend"]}], ymax=100)
+    return view("ai.html", c, "ai", vis=vis, prompts=prompts, cycle=cycle, cited=cited, others=others, stage=stage, trend=trend,
+                ents=ents, focus=focus, board=board, engs=engs, pm=pm, rows=rows, me=me)
+
+@bp.get("/c/<cid>/ai-traffic")
+def ai_traffic(cid):
+    days = request.args.get("days", "28")
+    days = int(days) if days in ("7", "28", "90") else 28
+    with connect() as conn:
+        c = client_or_404(conn, cid)
+        tr, engs = B.ai_traffic(conn, cid, days), B.engines(conn, cid)
+    labels = [w.strftime("%d %b") for w in tr["weeks"]]
+    ai_chart = viz.lines(labels, [{"name": "AI sessions", "colour": "#B20F00", "values": tr["ai_weekly"]}])
+    org_chart = viz.lines(labels, [{"name": "Organic sessions", "colour": "#16A34A", "values": tr["org_weekly"]}])
+    src_cols = viz.columns([s["label"] for s in tr["sources"]], [{"name": "Sessions", "colour": "#2F5BEA", "values": [s["sessions"] for s in tr["sources"]]}])
+    return view("ai_traffic.html", c, "ai_traffic", tr=tr, engs=engs, days=days, ai_chart=ai_chart, org_chart=org_chart, src_cols=src_cols)
 
 @bp.get("/c/<cid>/ai/answer/<aid>")
 def answer(cid, aid):

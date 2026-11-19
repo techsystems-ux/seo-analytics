@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}AI traffic · {{ client.name }}{% endblock %}
+{% block body %}
+{% set a, o = tr.ai, tr.organic %}
+<section class="card" style="padding:16px 20px"><div class="ph" style="margin:0"><div><h2>AI traffic performance</h2>
+  <p class="sub">Visits to {{ client.domain }} that came from AI assistants, next to Google organic search. GA4{% if tr.last %}, data to {{ tr.last.strftime('%d %b %Y') }}{% endif %}.</p></div>
+  <nav class="ptabs">{% for d in (7, 28, 90) %}<a class="{{ 'on' if days == d }}" href="?days={{ d }}">Last {{ d }} days</a>{% endfor %}</nav></div></section>
+
+{% if not a.sessions and not o.sessions %}
+<section class="card"><p class="empty">No GA4 data yet. AI traffic appears once Google Analytics is connected for {{ client.name }} and the nightly refresh has run.</p></section>
+{% else %}
+<div class="g4">
+  {% for label, k, fmt in (('Sessions','sessions','n'), ('Engaged sessions','engaged','n'), ('New users','new_users','n'), ('Key events','key_events','n'), ('Purchases','transactions','n'), ('Revenue','revenue','n'), ('Engagement rate','engagement','pct'), ('Conversion rate','conversion','pct')) %}
+  <div class="kc"><small>{{ label }}</small><div class="two"><div><span class="a">AI</span><b>{{ (a[k]|pct(1) if fmt == 'pct' else a[k]|n) if a[k] is not none else '–' }}</b></div>
+    <div><span class="o">Organic</span><b>{{ (o[k]|pct(1) if fmt == 'pct' else o[k]|n) if o[k] is not none else '–' }}</b></div></div></div>{% endfor %}
+</div>
+
+<div class="g2">
+  <section class="card"><div class="ph"><div><h2>AI sessions</h2><p class="sub">Weekly sessions from AI assistants, last 13 weeks.</p></div>
+    <span class="note">{{ tr.share|pct(1) if tr.share is not none else '–' }} of AI + organic visits</span></div>{{ ai_chart }}</section>
+  <section class="card"><div class="ph"><div><h2>Organic sessions</h2><p class="sub">Weekly sessions from Google organic search, same weeks.</p></div></div>{{ org_chart }}</section>
+</div>
+
+<div class="g2">
+  <section class="card"><div class="ph"><div><h2>Sessions by AI source</h2><p class="sub">Last {{ days }} days.</p></div></div>
+    {% if tr.sources %}{% set mx = (tr.sources|map(attribute='sessions')|max) or 1 %}
+    {% for s in tr.sources %}<div class="lb" style="grid-template-columns:28px 110px minmax(0,1fr) 56px"><img class="lg" src="{{ s.logo }}" alt="" onerror="this.style.visibility='hidden'"><span style="font:600 12.5px var(--fb)">{{ s.label }}</span>
+      <span class="tr"><i style="width:{{ 100 * s.sessions / mx }}%"></i></span><span class="v">{{ s.sessions|n }}</span></div>{% endfor %}
+    <p class="note" style="margin:10px 0 0">GA4 sources counted: {{ tr.sources|map(attribute='sources')|sum(start=[])|join(', ') }}.</p>
+    {% else %}<p class="empty">No visits from AI assistants in this window.</p>{% endif %}</section>
+  <section class="card"><div class="ph"><div><h2>AI vs organic, quality</h2><p class="sub">Same window, per session.</p></div></div>
+    <table class="vs"><tr><th>Metric</th><th>AI</th><th>Organic</th></tr>
+      <tr><td>Engagement rate</td><td class="a">{{ a.engagement|pct(1) if a.engagement is not none else '–' }}</td><td>{{ o.engagement|pct(1) if o.engagement is not none else '–' }}</td></tr>
+      <tr><td>Conversion rate</td><td class="a">{{ a.conversion|pct(1) if a.conversion is not none else '–' }}</td><td>{{ o.conversion|pct(1) if o.conversion is not none else '–' }}</td></tr>
+      <tr><td>Revenue per session</td><td class="a">{{ (a.revenue / a.sessions)|round(1) if a.sessions else '–' }}</td><td>{{ (o.revenue / o.sessions)|round(1) if o.sessions else '–' }}</td></tr></table>
+    {% if a.engagement is not none and o.engagement is not none %}<div class="insight"><b>Read</b> · AI visitors engage {{ 'more' if a.engagement > o.engagement else 'less' }} than organic ones
+      ({{ a.engagement|pct(0) }} vs {{ o.engagement|pct(0) }}){% if a.conversion is not none and o.conversion is not none %} and convert {{ 'better' if a.conversion > o.conversion else 'worse' }} ({{ a.conversion|pct(1) }} vs {{ o.conversion|pct(1) }}){% endif %}.
+      {% if a.sessions < 100 %}Small numbers so far: read this as direction, not a result.{% endif %}</div>{% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

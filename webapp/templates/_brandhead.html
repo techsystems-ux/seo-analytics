@@ -1,0 +1,21 @@
+{# Brand header, Tesseract style: who this is, when it last refreshed, what Orbit tracks, and (where the screen supports it) a switcher
+   that shows the same screen through a competitor's numbers. #}
+{% set fe = focus if focus is defined and focus else None %}
+<section class="bh" aria-label="Brand">
+  <div class="bh-id">
+    <span class="bh-av" style="background:{{ fe.colour if fe else '#B20F00' }}">{{ (fe.name if fe else client.name)[:1]|upper }}
+      {% set d = fe.domain if fe else client.domain %}{% if d %}<img src="https://www.google.com/s2/favicons?domain={{ d }}&sz=64" alt="" onerror="this.remove()">{% endif %}</span>
+    <div><h1 class="bh-name">{{ fe.name if fe else client.name }}{% if fe and not fe.primary %} <span class="bh-badge cmp">Competitor</span>{% else %} <span class="bh-badge">Your brand</span>{% endif %}</h1>
+      <p class="bh-sub">Last updated: {{ intel.updated.strftime('%d %b %Y, %H:%M') ~ ' UTC' if intel and intel.updated else 'waiting for the first refresh' }}</p></div>
+  </div>
+  <div class="bh-meta">
+    {% set d = fe.domain if fe else client.domain %}{% if d %}<span><b>URL:</b> <a href="https://{{ d }}" target="_blank" rel="noopener">https://{{ d }}/</a></span>{% endif %}
+    <span><b>AI prompts:</b> {{ intel.prompts if intel else 0 }}</span>
+    <span><b>Google keywords:</b> {{ intel.keywords if intel else 0 }}</span>
+    {% if ents is defined and ents|length > 1 %}
+    <form method="get" class="bh-switch">{% for k, v in request.args.items() if k != 'b' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+      <label for="bh-b" class="sr">Show</label>
+      <select id="bh-b" name="b" onchange="this.form.submit()">{% for e in ents %}<option value="{{ e.key }}" {{ 'selected' if fe and fe.key == e.key }}>{{ e.name }}{{ ' (you)' if e.primary }}</option>{% endfor %}</select>
+      <noscript><button class="btn ln">Show</button></noscript></form>{% endif %}
+  </div>
+</section>

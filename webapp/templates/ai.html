@@ -1,37 +1,55 @@
 {% extends "base.html" %}
+{% block title %}Prompts · {{ client.name }}{% endblock %}
 {% block body %}
-<div class="top"><div><span class="kicker">{{ t('Visibility · AI answers', 'GEO · Generative engine visibility (ChatGPT)') }}</span><h1>{{ t('Is ' ~ client.name ~ ' in ChatGPT\'s answers?', 'LLM share of voice and citation rate') }}</h1>
-<p class="lead">Each approved prompt is asked daily through the OpenAI API with web search on, from India. This approximates what ChatGPT shows its users.{% if pro %} Metrics: mention rate, rank-in-answer, citation rate (own domain cited as a source), sentiment and share of voice across tracked entities; the visibility score weights mention 35%, position 25%, citation 25%, sentiment 15%.{% endif %}</p></div></div>
+{% set arg = {'b': focus.key} if focus.key else {} %}
+<section class="card"><div class="ph"><div><h2>LLM overview</h2><p class="sub">Brand mentions across the tracked prompts, per AI engine, last 30 days. Each prompt is asked through the engine's API with web search on, from India.</p></div>
+  {% if staff %}<a class="btn ln" href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">+ Add prompt</a>{% endif %}</div>
+  <div class="ents">{% for e in board.ents %}
+    <a class="ent{{ ' on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}">
+      <div class="ent-h"><span class="ent-n"><span class="dotav" style="background:{{ e.colour }}">{{ e.initial }}</span><span>{{ e.name }}</span></span><span class="pill{{ ' pri' if e.primary }}">{{ 'Primary' if e.primary else 'Competitor' }}</span></div>
+      <div class="hb-r"><span class="t" style="font-weight:500;color:var(--txt2)">Total mentions</span><span class="v" style="color:#14161A">{{ e.mentions }}/{{ board.answers }}</span>
+        <span class="tr"><i style="width:{{ (100 * e.mentions / board.answers) if board.answers else 0 }}%;background:var(--ok)"></i></span></div>
+      <div class="engs">{% for g in engs if g.tracked %}<span class="eng"><img class="lg sm" src="{{ g.logo }}" alt="{{ g.label }}" onerror="this.style.visibility='hidden'"><span class="v">{{ e.mentions_by.get(g.key, 0) }}</span></span>{% endfor %}</div>
+    </a>{% endfor %}</div>
+</section>
 
 {% if vis and vis.you %}
 <div class="grid">
-  <div class="card kpi"><div class="l">Hovers Visibility Score</div><div class="v">{{ vis.you.score|n }}</div><div class="s"><span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}</div></div>
-  <div class="card kpi"><div class="l">Named in answers · 35%</div><div class="v">{{ vis.you.mention_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.mention_rate or 0)*100 }}%"></i></div></div>
-  <div class="card kpi"><div class="l">Position when named · 25%</div><div class="v">{{ vis.you.avg_position|n if vis.you.avg_position else '–' }}</div><div class="s mute">average place among brands named</div></div>
-  <div class="card kpi"><div class="l">Site cited · 25%</div><div class="v">{{ vis.you.citation_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.citation_rate or 0)*100 }}%"></i></div></div>
+  <div class="card kpi"><div class="l">Hovers Visibility Score · {{ me.name }}</div><div class="v">{{ me.score|n if me.score is not none else '–' }}</div><div class="s">{% if me.primary %}<span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}{% else %}{{ me.change|delta(' pts') if me.change is not none else '' }}{% endif %}</div></div>
+  <div class="card kpi"><div class="l">Named in answers · 35%</div><div class="v">{{ me.mention_rate|pct if me.mention_rate is not none else '–' }}</div><div class="bar"><i style="width:{{ (me.mention_rate or 0)*100 }}%"></i></div></div>
+  <div class="card kpi"><div class="l">Position when named · 25%</div><div class="v">{{ me.avg_position|n if me.avg_position else '–' }}</div><div class="s mute">average place among brands named</div></div>
+  {% if me.primary %}<div class="card kpi"><div class="l">Site cited · 25%</div><div class="v">{{ vis.you.citation_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.citation_rate or 0)*100 }}%"></i></div></div>
   <div class="card kpi"><div class="l">Sentiment · 15%</div><div class="v">{{ vis.you.sentiment|pct }}</div><div class="s mute">100% = always positive</div></div>
+  {% else %}<div class="card kpi"><div class="l">Share of voice</div><div class="v">{{ me.sov|pct if me.sov is not none else '–' }}</div><div class="s mute">of all tracked brands named</div></div>
+  <div class="card kpi"><div class="l">Citations of its site</div><div class="v">{{ me.citations }}</div><div class="s mute">last 30 days</div></div>{% endif %}
 </div>
-<section class="card"><h2>Score over time</h2><p class="note">0 to 39 Not shortlisted · 40 to 59 Emerging · 60 to 79 Competitive · 80 and above Leader</p>{{ trend }}</section>
+<section class="card"><div class="ph"><div><h2>Trend analysis · {{ me.name }}</h2><p class="sub">0 to 39 Not shortlisted · 40 to 59 Emerging · 60 to 79 Competitive · 80 and above Leader</p></div>
+  <div class="mpill" style="margin:0">{% for e in board.ents %}<a class="{{ 'on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}"><span class="dotav" style="background:{{ e.colour }};width:20px;height:20px;font-size:10px">{{ e.initial }}</span>{{ e.name }}</a>{% endfor %}</div></div>
+  {{ trend }}</section>
 {% else %}<div class="card empty">No score yet. Approve prompts in Settings, then the next daily run (or Settings, Data, Ask ChatGPT now) produces one.</div>{% endif %}
 
-<section class="card" style="display:flex;flex-direction:column;gap:14px">
-<div class="top" style="align-items:center"><h2>Prompts{% if cycle %} · {{ cycle.strftime('%d %b %Y') }}{% endif %}</h2>
-<div class="seg"><a class="{{ 'on' if stage=='all' }}" href="?stage=all">All</a>{% for k,v in stages.items() %}<a class="{{ 'on' if stage==k }}" href="?stage={{ k }}">{{ v }}</a>{% endfor %}</div></div>
-<div class="tw"><table><tr><th>Prompt</th><th>Stage</th><th>{{ client.name }}</th><th>Site cited</th><th>Others named, in order</th><th></th></tr>
-{% for p in prompts %}<tr><td style="min-width:240px">{{ p.text }}</td><td>{{ stages[p.stage] }}</td>
-<td>{% if not p.answer_id %}{% if p.status=='error' %}<span class="tag t-fail" title="{{ p.error }}">Failed</span>{% else %}<span class="mute">not asked yet</span>{% endif %}
-{% elif p.rank %}<span class="tag t-blk">#{{ p.rank }}</span> <span class="note">{{ p.sentiment or '' }}</span>{% else %}<span class="tag t-fail">Not named</span>{% endif %}</td>
-<td>{% if p.answer_id %}{{ 'Yes' if p.cited else 'No' }}{% endif %}</td><td>{{ p.others or '–' }}</td>
+<section class="card">
+<div class="ph"><div><h2>LLM prompts{% if cycle %} · {{ cycle.strftime('%d %b %Y') }}{% endif %}</h2><p class="sub">Whether <b>{{ focus.name }}</b> is named in each engine's latest answer. Pick a brand to see its row.</p></div>
+  <div class="seg"><a class="{{ 'on' if stage=='all' }}" href="?stage=all{{ '&b=' ~ focus.key if focus.key }}">All</a>{% for k,v in stages.items() %}<a class="{{ 'on' if stage==k }}" href="?stage={{ k }}{{ '&b=' ~ focus.key if focus.key }}">{{ v }}</a>{% endfor %}</div></div>
+<div class="mpill">{% for e in board.ents %}<a class="{{ 'on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}"><span class="dotav" style="background:{{ e.colour }};width:20px;height:20px;font-size:10px">{{ e.initial }}</span>{{ e.name }}</a>{% endfor %}</div>
+<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Prompt</th><th>Stage</th>{% for e in engs %}<th class="e" style="width:auto;padding:10px 8px" title="{{ e.label }}"><img class="lg sm" src="{{ e.logo }}" alt="" onerror="this.style.display='none'">{{ e.label }}</th>{% endfor %}<th>Others named, in order</th><th></th></tr>
+{% for r in rows %}{% set p = r.base %}<tr><td class="t" style="min-width:240px">{{ r.text }}</td><td>{{ stages[r.stage] }}</td>
+{% for e in engs %}{% set cell = r.cells.get(e.key) %}<td class="c">
+  {% if e.key == 'chatgpt' and not p.answer_id and p.status == 'error' %}<span class="tag t-fail" title="{{ p.error }}">Failed</span>
+  {% elif not cell %}<span class="ck na" title="{{ 'Not asked yet' if e.tracked else 'Not tracked' }}">–</span>
+  {% elif cell.named %}<span class="ck r" title="Named">{{ '#' ~ cell.rank if cell.rank else '✓' }}</span>
+  {% else %}<span class="ck no" title="Not named">–</span>{% endif %}</td>{% endfor %}
+<td>{{ p.others or '–' }}</td>
 <td>{% if p.answer_id %}<a href="{{ url_for('dash.answer', cid=client.id, aid=p.answer_id) }}">Answer</a>{% endif %}</td></tr>
-{% else %}<tr><td colspan="6" class="empty">No approved prompts. <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Add or approve prompts.</a></td></tr>{% endfor %}</table></div></section>
+{% else %}<tr><td colspan="{{ 4 + engs|length }}" class="empty">No approved prompts. <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Add or approve prompts.</a></td></tr>{% endfor %}</table></div></section>
 
-<div class="grid2">
-<section class="card"><h2>Sites ChatGPT cites most</h2><p class="note">Last 30 days. These are the places to be mentioned.</p>
-{% if cited %}<table><tr><th>Site</th><th>Type</th><th class="r">Answers</th></tr>{% for c in cited %}<tr><td>{{ c.domain }}{% if c.is_client %} <span class="tag t-blk">you</span>{% endif %}</td><td>{{ c.type|replace('_',' ') }}</td><td class="r">{{ c.answers }}</td></tr>{% endfor %}</table>
+<div class="g2">
+<section class="card"><div class="ph"><div><h2>Sites AI cites most</h2><p class="sub">Last 30 days. These are the places to be mentioned.</p></div><a class="note" href="{{ url_for('dash.sources', cid=client.id) }}">All AI citations</a></div>
+{% if cited %}<table class="mx"><tr><th>Site</th><th>Type</th><th style="text-align:right">Answers</th></tr>{% for c in cited %}<tr><td class="t" style="white-space:nowrap"><img class="lg sm" src="https://www.google.com/s2/favicons?domain={{ c.domain }}&sz=32" alt="" onerror="this.style.display='none'" style="margin-right:8px">{{ c.domain }}{% if c.is_client %} <span class="pill pri">you</span>{% endif %}</td><td>{{ c.type|replace('_',' ') }}</td><td style="text-align:right">{{ c.answers }}</td></tr>{% endfor %}</table>
 {% else %}<p class="empty">No citations yet.</p>{% endif %}</section>
-<section class="card"><h2>Other brands ChatGPT names</h2><p class="note">Not tracked yet. Track the real competitors from Competitors.</p>
-{% if others %}<table><tr><th>Brand</th><th class="r">Answers</th><th></th></tr>{% for o in others %}<tr><td>{{ o.brand }}</td><td class="r">{{ o.answers }}</td>
-<td><form method="post" action="{{ url_for('dash.competitors_save', cid=client.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="add_name" value="{{ o.brand }}"><button class="btn ln">Track</button></form></td></tr>{% endfor %}</table>
+<section class="card"><div class="ph"><div><h2>Other brands AI names</h2><p class="sub">Not tracked yet. Track the real competitors.</p></div></div>
+{% if others %}<table class="mx"><tr><th>Brand</th><th style="text-align:right">Answers</th><th></th></tr>{% for o in others %}<tr><td class="t">{{ o.brand }}</td><td style="text-align:right">{{ o.answers }}</td>
+<td style="text-align:right"><form method="post" action="{{ url_for('dash.competitors_save', cid=client.id) }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="add_name" value="{{ o.brand }}"><button class="btn ln">Track</button></form></td></tr>{% endfor %}</table>
 {% else %}<p class="empty">None yet.</p>{% endif %}</section>
 </div>
 {% endblock %}

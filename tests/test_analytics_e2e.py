@@ -155,7 +155,7 @@ with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"
 with connect() as conn:
     aid = conn.execute("SELECT answer_id FROM answers WHERE client_id=%s", [cid]).fetchone()[0]
     pid = conn.execute("INSERT INTO pages (client_id, url, page_type, primary_keyword) VALUES (%s,'https://gargi.shop/collections/mangalsutra','collection','silver mangalsutra') RETURNING page_id", [cid]).fetchone()[0]
-checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Gargi at a glance", "Keywords we are working on" if False else "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"],
+checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Brand visibility score", "LLMs overview", "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"], f"/c/{cid}?tab=competitors": ["Brand visibility ranking", "Google footprint", "GIVA", "Primary"], f"/c/{cid}/ai-traffic": ["AI traffic performance"], f"/c/{cid}/ai?b=GIVA": ["LLM prompts", "GIVA"],
           f"/c/{cid}/search": ["Non-branded clicks", "silver mangalsutra"], f"/c/{cid}/search?tab=revenue": ["/collections/mangalsutra", "100.0%"],
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
           f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women", "Refresh Semrush now", "refreshes on its own nightly"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID", "Refresh Semrush now", "refresh on their own every night"],

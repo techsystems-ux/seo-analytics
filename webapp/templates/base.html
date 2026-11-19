@@ -152,6 +152,7 @@ svg text{font-family:var(--fb)}
 </style>
 <style>{% include "_layout.css" %}</style>
 <style>{% include "_ai-motion.css" %}</style>
+<style>{% include "_tess.css" %}</style>
 </head>
 <body class="{{ 'viewer' if viewer }}"{% if client %} data-orbit-activity-base="{{ url_for('dash.activity_status', cid=client.id, pull_id=0) }}"{% endif %}>
 {% set I = {
@@ -172,6 +173,7 @@ svg text{font-family:var(--fb)}
  'technical':'<path d="M14.7 6.3a4 4 0 015 5L12 19l-4 1 1-4z"/><path d="M3 21l3-3"/>',
  'ideas':'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.4.3.5.7.5 1.1v1h6v-1c0-.4.2-.8.5-1.1A6 6 0 0012 3z"/>',
  'settings':'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
+ 'ai_traffic':'<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
  'brands':'<path d="M3 9l9-6 9 6v11a1 1 0 01-1 1H4a1 1 0 01-1-1z"/><path d="M9 21v-7h6v7"/>'} %}
 {% macro group(label, keys, gid) %}<details class="grp" data-g="{{ gid }}"{{ ' open' if active in keys }}><summary><span>{{ label }}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="gi">{{ caller() }}</div></details>{% endmacro %}
 {% macro navlink(key, label, href) %}<a class="tab{{ ' on' if active==key }}" href="{{ href }}"{{ ' aria-current="page"' if active==key }}><svg viewBox="0 0 24 24" aria-hidden="true">{{ I[key]|safe }}</svg>{{ label }}</a>{% endmacro %}
@@ -181,15 +183,16 @@ svg text{font-family:var(--fb)}
   <a class="client" href="{{ url_for('portal.home') }}"{% if viewer_brands > 1 %} title="Switch brand"{% endif %}>
     <span class="bm"><span>{{ client.name[:1] }}</span><img src="https://www.google.com/s2/favicons?domain={{ client.domain }}&sz=128" alt="" onerror="this.remove()"></span>
     <span><b>{{ client.name }}</b><span class="s">{{ client.domain }}{{ ' · Switch brand' if viewer_brands > 1 }}</span></span></a>
-  {{ navlink('overview', 'Overview', url_for('dash.overview', cid=client.id)) }}
-  {% call group(t('Visibility','Search and GEO'), ['search','ai','competitors'], 'vis') %}
-  {{ navlink('search', t('Google search','Organic search (GSC)'), url_for('dash.search', cid=client.id)) }}
-  {{ navlink('ai', t('AI answers','AI visibility (GEO)'), url_for('dash.ai', cid=client.id)) }}
-  {{ navlink('competitors', t('Competitors','SERP competitors'), url_for('dash.competitors', cid=client.id)) }}{% endcall %}
-  {% call group('Community', ['sources','reddit','youtube'], 'com') %}
-  {{ navlink('sources', t('Sources AI trusts','Citation sources'), url_for('dash.sources', cid=client.id)) }}
+  {{ navlink('overview', 'Dashboard', url_for('dash.overview', cid=client.id)) }}
+  {% call group('AI search', ['ai','sources','ai_traffic','reddit','youtube'], 'aisrch') %}
+  {{ navlink('ai', 'Prompts', url_for('dash.ai', cid=client.id)) }}
+  {{ navlink('sources', 'AI citations', url_for('dash.sources', cid=client.id)) }}
+  {{ navlink('ai_traffic', 'AI traffic', url_for('dash.ai_traffic', cid=client.id)) }}
   {{ navlink('reddit', 'Reddit', url_for('dash.reddit_view', cid=client.id)) }}
   {{ navlink('youtube', 'YouTube', url_for('dash.youtube_view', cid=client.id)) }}{% endcall %}
+  {% call group('Google search', ['search','competitors'], 'gsrch') %}
+  {{ navlink('search', 'Search performance', url_for('dash.search', cid=client.id)) }}
+  {{ navlink('competitors', 'Keywords and competitors', url_for('dash.competitors', cid=client.id)) }}{% endcall %}
   {% call group('Execution', ['blogs','publishing'], 'exe') %}
   {{ navlink('blogs', 'Blog posts', url_for('dash.blogs', cid=client.id)) }}
   {% if owner %}{{ navlink('publishing', 'Publishing', url_for('dash.publishing', cid=client.id)) }}{% endif %}{% endcall %}
@@ -202,15 +205,16 @@ svg text{font-family:var(--fb)}
   <a class="client" href="{{ url_for('dash.clients') }}" title="Switch brand">
     <span class="bm"><span>{{ client.name[:1] }}</span><img src="https://www.google.com/s2/favicons?domain={{ client.domain }}&sz=128" alt="" onerror="this.remove()"></span>
     <span><b>{{ client.name }}</b><span class="s">{{ client.domain }} · Switch brand</span></span></a>
-  {{ navlink('overview', 'Overview', url_for('dash.overview', cid=client.id)) }}
-  {% call group(t('Visibility','Search and GEO'), ['search','ai','competitors'], 'vis') %}
-  {{ navlink('search', t('Google search','Organic search (GSC)'), url_for('dash.search', cid=client.id)) }}
-  {{ navlink('ai', t('AI answers','AI visibility (GEO)'), url_for('dash.ai', cid=client.id)) }}
-  {{ navlink('competitors', t('Competitors','SERP competitors'), url_for('dash.competitors', cid=client.id)) }}{% endcall %}
-  {% call group('Community', ['sources','reddit','youtube'], 'com') %}
-  {{ navlink('sources', t('Sources AI trusts','Citation sources'), url_for('dash.sources', cid=client.id)) }}
+  {{ navlink('overview', 'Dashboard', url_for('dash.overview', cid=client.id)) }}
+  {% call group('AI search', ['ai','sources','ai_traffic','reddit','youtube'], 'aisrch') %}
+  {{ navlink('ai', 'Prompts', url_for('dash.ai', cid=client.id)) }}
+  {{ navlink('sources', 'AI citations', url_for('dash.sources', cid=client.id)) }}
+  {{ navlink('ai_traffic', 'AI traffic', url_for('dash.ai_traffic', cid=client.id)) }}
   {{ navlink('reddit', 'Reddit', url_for('dash.reddit_view', cid=client.id)) }}
   {{ navlink('youtube', 'YouTube', url_for('dash.youtube_view', cid=client.id)) }}{% endcall %}
+  {% call group('Google search', ['search','competitors'], 'gsrch') %}
+  {{ navlink('search', 'Search performance', url_for('dash.search', cid=client.id)) }}
+  {{ navlink('competitors', 'Keywords and competitors', url_for('dash.competitors', cid=client.id)) }}{% endcall %}
   {% call group('Execution', ['blogs','publishing'], 'exe') %}
   {{ navlink('blogs', 'Blog posts', url_for('dash.blogs', cid=client.id)) }}
   {{ navlink('publishing', 'Publishing', url_for('dash.publishing', cid=client.id)) }}{% endcall %}
@@ -245,6 +249,7 @@ svg text{font-family:var(--fb)}
 {% if request.args.get('msg') %}<div class="msg" role="status">{{ request.args.get('msg') }}</div>{% endif %}
 {% if client and client.sample and viewer %}<div class="samplebar" role="status"><b>Placeholder figures</b> appear in some Semrush, Reddit and YouTube sections while your Hovers team completes the setup.</div>{% endif %}
 {% if client and client.sample and not viewer and (active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_')) %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush, Reddit and YouTube sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
+{% if client and not hide_head %}{% include "_brandhead.html" %}{% endif %}
 {% block body %}{% endblock %}
 <footer class="foot"><span>Hovers® — {{ client.name ~ ' · ' if client }}Orbit by Hovers</span><span class="dots" aria-hidden="true"></span><span>Confidential</span></footer>
 </main>
