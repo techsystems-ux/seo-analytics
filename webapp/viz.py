@@ -41,16 +41,24 @@ def gauge(value, size=64):
                   f'<text x="50%" y="{h-4:.0f}" text-anchor="middle" font-size="{size*0.2:.0f}" font-weight="700" fill="#0F0F0F">{p*100:.0f}%</text></svg>')
 
 def _smooth(pts):
-    """Catmull-Rom to cubic Bezier through the points: soft curves like the reference, still passing every point."""
-    if len(pts) < 3: return "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts)
-    d = [f"M{pts[0][0]:.1f},{pts[0][1]:.1f}"]
-    for i in range(len(pts) - 1):
-        p0, p1, p2 = pts[max(0, i - 1)], pts[i], pts[i + 1]
-        p3 = pts[min(len(pts) - 1, i + 2)]
-        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
-        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
-        d.append(f"C{c1[0]:.1f},{c1[1]:.1f} {c2[0]:.1f},{c2[1]:.1f} {p2[0]:.1f},{p2[1]:.1f}")
-    return " ".join(d)
+    """Monotone cubic (Fritsch-Carlson) through the points: soft curves that never overshoot, so a chart never shows a
+    peak or dip the data does not have."""
+    n = len(pts)
+    if n < 3: return "M" + " L".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+    d = [(ys[i + 1] - ys[i]) / ((xs[i + 1] - xs[i]) or 1) for i in range(n - 1)]
+    m = [d[0]] + [0.0 if d[i - 1] * d[i] <= 0 else (d[i - 1] + d[i]) / 2 for i in range(1, n - 1)] + [d[-1]]
+    for i in range(n - 1):
+        if d[i] == 0: m[i] = m[i + 1] = 0.0; continue
+        a, b = m[i] / d[i], m[i + 1] / d[i]
+        h = a * a + b * b
+        if h > 9:
+            t = 3 / h ** 0.5; m[i], m[i + 1] = t * a * d[i], t * b * d[i]
+    out = [f"M{xs[0]:.1f},{ys[0]:.1f}"]
+    for i in range(n - 1):
+        dx = (xs[i + 1] - xs[i]) / 3
+        out.append(f"C{xs[i] + dx:.1f},{ys[i] + m[i] * dx:.1f} {xs[i + 1] - dx:.1f},{ys[i + 1] - m[i + 1] * dx:.1f} {xs[i + 1]:.1f},{ys[i + 1]:.1f}")
+    return " ".join(out)
 
 def lines(labels, series, height=230, ymax=None, area_first=True, fmt="{:,.0f}"):
     """labels: x labels; series: [{name, colour, values}] (None = gap skipped). Smooth lines, dots, light grid, legend outside."""
@@ -78,7 +86,7 @@ def lines(labels, series, height=230, ymax=None, area_first=True, fmt="{:,.0f}")
     out.append("</svg>")
     # dots and labels in HTML so they stay round and readable at any width
     dots = []
-    for s in series:
+    for s in (series if len(labels) <= 40 else []):
         for i, v in enumerate(s["values"]):
             if v is None: continue
             dots.append(f'<i style="left:{x(i)/W*100:.2f}%;top:{y(v):.1f}px;background:{s["colour"]}" title="{escape(s["name"])} · {escape(labels[i])}: {fmt.format(v)}"></i>')

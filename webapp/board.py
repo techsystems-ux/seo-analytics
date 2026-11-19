@@ -196,3 +196,25 @@ def ai_traffic(conn, cid, days=28):
             "weeks": [w["week"] for w in weekly], "ai_weekly": [float(w["sessions"] or 0) for w in weekly],
             "org_weekly": [float(oweekly.get(w["week"]) or 0) for w in weekly],
             "share": ai["sessions"] / (ai["sessions"] + org["sessions"]) if (ai["sessions"] + org["sessions"]) else None}
+
+def citation_sov(conn, cid, days=30, limit=20):
+    """AI citations, Tesseract's Brand SOV: total and unique cited links, the share of answers per engine that cite the
+    brand's own site, weekly coverage, and every cited domain ranked by its share of all citations."""
+    tot, uniq = conn.execute("""SELECT count(*), count(DISTINCT c.url) FROM citations c JOIN answers a USING (answer_id) JOIN runs r USING (run_id)
+                                WHERE c.client_id=%s AND c.cited AND r.run_at > now() - make_interval(days => %s)""", [cid, days]).fetchone()
+    per = {e: (n, k) for e, n, k in conn.execute("""
+        SELECT r.engine::text, count(DISTINCT a.answer_id),
+               count(DISTINCT a.answer_id) FILTER (WHERE EXISTS (SELECT 1 FROM citations c WHERE c.answer_id=a.answer_id AND c.cited AND c.is_client))
+        FROM answers a JOIN runs r USING (run_id) WHERE a.client_id=%s AND r.run_at > now() - make_interval(days => %s) GROUP BY 1""", [cid, days])}
+    weekly = rows(conn.execute("""
+        SELECT date_trunc('week', r.run_at)::date, r.engine::text, count(DISTINCT a.answer_id),
+               count(DISTINCT a.answer_id) FILTER (WHERE EXISTS (SELECT 1 FROM citations c WHERE c.answer_id=a.answer_id AND c.cited AND c.is_client))
+        FROM answers a JOIN runs r USING (run_id) WHERE a.client_id=%s AND r.run_at > now() - interval '120 days' GROUP BY 1,2 ORDER BY 1""", [cid]),
+        ["week", "engine", "answers", "cited"])
+    doms = rows(conn.execute("""SELECT c.domain, bool_or(c.is_client), count(*), count(DISTINCT c.url) FROM citations c JOIN answers a USING (answer_id)
+                                JOIN runs r USING (run_id) WHERE c.client_id=%s AND c.cited AND r.run_at > now() - make_interval(days => %s)
+                                GROUP BY 1 ORDER BY 3 DESC LIMIT %s""", [cid, days, limit]), ["domain", "is_client", "citations", "urls"])
+    for i, d in enumerate(doms):
+        d["rank"], d["share"], d["logo"] = i + 1, (d["citations"] / tot if tot else 0), logo(d["domain"], 32)
+    return {"total": tot or 0, "unique": uniq or 0, "per": {k: {"answers": n, "cited": c, "rate": c / n if n else None} for k, (n, c) in per.items()},
+            "weekly": weekly, "domains": doms, "days": days}

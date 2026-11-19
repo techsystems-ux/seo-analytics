@@ -1,15 +1,31 @@
 {% extends "base.html" %}
 {% block body %}
 {% set ST = {'listed':('Listed','t-pass'),'in_progress':('In progress','t-na'),'not_listed':('Not listed','t-sev-error'),'unknown':('Not checked','t-na')} %}
-<div class="top"><div><span class="kicker">{{ t('Community · Sources AI trusts', 'GEO · Citation sources and entity presence') }}</span>
-<h1>{{ t('Where AI gets its answers', 'Citation sources for ' ~ client.name) }}</h1>
-<p class="lead">{% if pro %}The domains ChatGPT retrieves and cites when it answers {{ client.name }}'s tracked prompts, weighted by citation frequency,
-with brand co-occurrence per source. High-authority category sources (directories, review aggregators, UGC) drive entity salience and
-recommendation likelihood in LLM answers; gaps here are off-site GEO work, not on-page fixes.
-{% else %}The websites ChatGPT reads and quotes when people ask about {{ niche_label or 'your category' }}. If competitors appear on these sites and
-{{ client.name }} does not, AI answers will tend to recommend them. Each row shows how often AI uses the site and who it names alongside it.{% endif %}</p></div></div>
+
 
 {% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
+
+<section class="card" style="padding:16px 20px"><div class="ph" style="margin:0"><div><h2>Brand share of voice in AI citations</h2>
+  <p class="sub">The links AI engines put in their answers to {{ client.name }}'s prompts, last {{ cs.days }} days.</p></div></div></section>
+<div class="g21" style="grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)">
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <div class="g2" style="gap:14px"><div class="kc big"><small>Total citations</small><b>{{ cs.total|n }}</b></div><div class="kc big"><small>Unique links cited</small><b>{{ cs.unique|n }}</b></div></div>
+    <div class="g2" style="gap:14px;grid-template-columns:repeat(3,minmax(0,1fr))">{% for e in engs %}{% set p = cs.per.get(e.key) %}
+      <div class="kc" style="display:flex;gap:10px;align-items:center{{ ';opacity:.5' if not p }}"><img class="lg lgx" src="{{ e.logo }}" alt="" onerror="this.style.visibility='hidden'">
+        <div><b style="font:600 13px var(--fb)">{{ e.label }}</b><div style="font:700 13px var(--fb);color:{{ 'var(--blu)' if p else 'var(--txt3)' }}">{{ p.rate|pct if p and p.rate is not none else '–' }}</div></div></div>{% endfor %}</div>
+    <p class="note" style="margin:0">Percent = share of that engine's answers that cite {{ client.domain }}.</p>
+  </div>
+  <section class="card"><div class="ph"><h2>Brand coverage trend <span class="info" title="Weekly share of answers that cite {{ client.domain }}, per engine.">i</span></h2></div>{{ cov }}</section>
+</div>
+<section class="card"><div class="ph"><div><h2>Cited domains</h2><p class="sub">Every site AI linked to, ranked by its share of all citations.</p></div></div>
+  {% if cs.domains %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Domain</th><th class="e">Rank</th><th>Share of voice</th><th class="e">Citations</th></tr>
+  {% for d in cs.domains %}<tr><td class="t" style="white-space:nowrap"><img class="lg sm" src="{{ d.logo }}" alt="" onerror="this.style.display='none'" style="margin-right:8px">{{ d.domain }}{% if d.is_client %} <span class="pill pri">you</span>{% endif %}</td>
+    <td class="c">{{ d.rank }}</td><td style="min-width:220px"><div style="display:flex;justify-content:space-between;font:600 12.5px var(--fb)"><span>{{ d.share|pct(1) }}</span><span class="note" style="margin:0">of total</span></div>
+      <div class="hb-r" style="display:block"><span class="tr" style="display:block;height:6px"><i style="width:{{ 100 * d.share }}%;background:{{ '#B20F00' if d.is_client else '#8B5CF6' }}"></i></span></div></td>
+    <td class="c"><span class="eng" style="border-color:#DDE5FB;background:#F3F6FE;color:var(--blu)"><b>{{ d.citations }}</b> {{ 'link' if d.citations == 1 else 'links' }}</span></td></tr>{% endfor %}</table></div>
+  {% else %}<p class="empty">Appears after the first AI run of approved prompts.</p>{% endif %}</section>
+
+<div class="sep"><span>Sources that matter in {{ niche_label or 'your category' }}</span></div>
 
 <section class="card sources-summary">
   <div class="sources-category"><span class="note">{{ t('Category', 'Niche preset') }}</span>

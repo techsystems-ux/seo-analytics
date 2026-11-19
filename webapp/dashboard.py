@@ -155,29 +155,11 @@ def fmt_path(url):
     return "/" + u.split("/", 1)[1] if "/" in u else "/"
 
 def line_chart(points, series, colors=("#B20F00", "#0F0F0F"), height=170, ymax=None):
-    """points = [{date, s1, s2}] -> inline SVG, no JavaScript. The lines stretch to the card's width while the axis
-    labels are HTML at a fixed size, so text never scales with the card. Labels the first, middle and last dates."""
+    """points = [{date, s1, s2}] -> the shared smooth SVG chart (webapp/viz.py), one line per series."""
     if len(points) < 2: return Markup('<p class="mute">Not enough data yet for a chart.</p>')
-    W, H = 1000, height
-    vals = [float(p[s] or 0) for p in points for s in series]
-    top = ymax or (max(vals) or 1) * 1.1
-    x = lambda i: i * W / (len(points) - 1)
-    y = lambda v: 4 + (H - 8) * (1 - float(v or 0) / top)
-    svg = [f'<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" role="img" aria-label="Daily trend" '
-           f'style="display:block;width:100%;height:{H}px;overflow:visible">']
-    labels = []
-    for f in (0, 0.5, 1):
-        yy = y(top * f)
-        svg.append(f'<line x1="0" x2="{W}" y1="{yy:.1f}" y2="{yy:.1f}" stroke="#EFEDEA" vector-effect="non-scaling-stroke"/>')
-        labels.append(f'<span class="ya" style="top:{yy:.1f}px">{top*f:,.0f}</span>')
-    for k, s in enumerate(series):
-        d = " ".join(f'{"M" if i == 0 else "L"}{x(i):.1f},{y(p[s]):.1f}' for i, p in enumerate(points))
-        svg.append(f'<path d="{d}" fill="none" stroke="{colors[k % len(colors)]}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>')
-    svg.append("</svg>")
-    xs = "".join(f'<span>{points[i]["date"].strftime("%d %b") if points[i].get("date") else ""}</span>'
-                 for i in (0, len(points) // 2, len(points) - 1))
-    return Markup(f'<div class="lc"><div class="lc-y">{"".join(labels)}</div><div class="lc-p">{"".join(svg)}'
-                  f'<div class="lc-x">{xs}</div></div></div>')
+    labels = [p["date"].strftime("%d %b") if p.get("date") else "" for p in points]
+    return viz.lines(labels, [{"name": s, "colour": colors[k % len(colors)], "values": [float(p[s] or 0) for p in points]}
+                              for k, s in enumerate(series)], height=height + 40, ymax=ymax, area_first=len(series) == 1)
 
 # ------------------------------------------------------------------ screens
 @bp.get("/c")
@@ -263,6 +245,12 @@ def sources(cid):
             guessed = N.guess(" ".join([c["name"], c["domain"] or ""]))
         S = A.source_presence(conn, cid, niche or guessed)
         rd, yt = A.reddit_summary(conn, cid), A.youtube_summary(conn, cid)
+        cs, engs = B.citation_sov(conn, cid), B.engines(conn, cid)
+    weeks = sorted({w["week"] for w in cs["weekly"]})
+    wk = {(w["week"], w["engine"]): (100 * w["cited"] / w["answers"] if w["answers"] else None) for w in cs["weekly"]}
+    cov = viz.lines([w.strftime("%d %b") for w in weeks],
+                    [{"name": e["label"], "colour": viz.color(i), "values": [wk.get((w, e["key"])) for w in weeks]}
+                     for i, e in enumerate([e for e in engs if e["tracked"]])], ymax=100, fmt="{:.0f}%")
     def community(sm, unit):
         if not sm: return None
         you = next((b for b in sm["brands"] if b["is_client"]), None)
@@ -270,7 +258,7 @@ def sources(cid):
         return {"you": you[unit] if you else 0, "top": (top["brand"], top[unit]) if top else None, "unit": unit}
     extra = {"reddit.com": community(rd, "mentions"), "youtube.com": community(yt, "videos")}
     return view("sources.html", c, "sources", S=S, niche=niche, guessed=guessed, niche_label=N.label(niche or guessed),
-                choices=N.choices(), kinds=N.KIND_LABEL, extra=extra, msg=request.args.get("msg"))
+                choices=N.choices(), kinds=N.KIND_LABEL, extra=extra, msg=request.args.get("msg"), cs=cs, engs=engs, cov=cov)
 
 @bp.post("/c/<cid>/sources")
 def sources_save(cid):
