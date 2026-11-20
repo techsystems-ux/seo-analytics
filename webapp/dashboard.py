@@ -248,7 +248,8 @@ def overview(cid):
         c = client_or_404(conn, cid)
         ents = B.entities(conn, cid)
         focus = B.pick(ents, request.args.get("b"))
-        board, engs = B.ai_board(conn, cid, ents), B.engines(conn, cid)
+        want = request.args.get("e")
+        board, engs = B.ai_board(conn, cid, ents, want), B.engines(conn, cid)
         pm = B.prompt_matrix(conn, cid, focus["key"], ents, engs)
         aio = B.aio_keywords(conn, cid)
         seo_by = _seo_by(conn, cid, ents)
@@ -264,7 +265,7 @@ def overview(cid):
                            [{"name": "Visibility", "colour": "#2F5BEA", "values": [e["score"] for e in scored]}], ymax=100)
     sov_parts = [{"name": e["name"], "value": e["sov"] or 0, "colour": e["colour"]} for e in board["ents"]]
     sov_donut = viz.donut(sov_parts, centre=f"{board['answers']:,}", sub="answers read")
-    return view("overview.html", c, "overview", tab=tab, ents=ents, focus=focus, board=board, engs=engs, pm=pm, aio=aio,
+    return view("overview.html", c, "overview", tab=tab, ents=ents, focus=focus, board=board, engs=engs, pm=pm, aio=aio, needs=B.NEEDS,
                 search_ov=B.search_overview(kb, aio), comp_seo=seo_by.get(focus["key"]) if not focus["primary"] else None, seo_by=seo_by,
                 trend=trend, vis_cols=vis_cols, sov_donut=sov_donut,
                 ranked=sorted(board["ents"], key=lambda e: -(e["score"] if e["score"] is not None else -1)),
@@ -393,6 +394,17 @@ def competitors(cid):
     return view("competitors.html", c, "competitors", comps=comps, vis=vis, gaps=gaps, gap_day=gap_day, kws=kws, kw_day=kw_day, budget=budget,
                 tab=request.args.get("tab", "gap"), bl=bl, actions=actions)
 
+def rescore_now(conn, cid):
+    """The tracked brands changed: re-read the saved AI answers so every screen counts the new set (free, no API calls).
+    Large histories are left to the worker, which picks them up on the next page open."""
+    import ai_visibility
+    conn.execute("DELETE FROM score_versions WHERE client_id=%s", [cid])
+    try:
+        if conn.execute("SELECT count(*) FROM answers WHERE client_id=%s", [cid]).fetchone()[0] <= 300:
+            ai_visibility.rescore(conn, cid)
+    except Exception:
+        pass
+
 @bp.post("/c/<cid>/competitors")
 def competitors_save(cid):
     check_csrf()
@@ -414,6 +426,8 @@ def competitors_save(cid):
             conn.execute("UPDATE competitors SET name=%s, aliases=%s WHERE client_id=%s AND competitor_id::text=%s",
                          [request.form["name"].strip(), [a.strip() for a in request.form.get("aliases", "").split(",") if a.strip()],
                           cid, request.form["aliases_for"]])
+        if any(request.form.get(k) for k in ("add_name", "toggle", "own_brand", "aliases_for")):
+            rescore_now(conn, cid)
         if request.form.get("prospect"):
             conn.execute("UPDATE backlink_gap SET status=%s WHERE client_id=%s AND domain=%s AND status <> %s",
                          [request.form["status"], cid, request.form["prospect"], request.form["status"]])

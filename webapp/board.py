@@ -29,13 +29,17 @@ def source_engine(source):
         if any(p in s for p in pats): return k
     return "other"
 
+def display_name(name, domain):
+    from ai_visibility import display_name as dn
+    return dn(name, domain)
+
 def entities(conn, cid):
     """The brand first (key ''), then tracked competitors, each with a fixed colour and initial."""
     name, domain = conn.execute("SELECT name, domain FROM clients WHERE client_id=%s", [cid]).fetchone()
     out = [{"key": "", "name": name, "domain": domain, "primary": True}]
     for n, d in conn.execute("""SELECT name, domain FROM competitors WHERE client_id=%s AND tracked AND NOT coalesce(own_brand,false)
                                 ORDER BY common_keywords DESC NULLS LAST, name""", [cid]):
-        out.append({"key": n, "name": n, "domain": d, "primary": False})
+        out.append({"key": n, "name": display_name(n, d), "domain": d, "primary": False})
     for i, e in enumerate(out):
         e.update(colour=viz.color(i), initial=(e["name"] or "?")[:1].upper(), logo=logo(e["domain"]) if e["domain"] else None, idx=i)
     return out
@@ -45,8 +49,9 @@ def pick(ents, key):
 
 def _f(v): return float(v) if v is not None else None
 
-def ai_board(conn, cid, ents):
-    """Latest AI numbers per entity and engine, weekly visibility trend, mentions, citations and sentiment."""
+def ai_board(conn, cid, ents, want=None):
+    """Latest AI numbers per entity and engine, weekly visibility trend, mentions, citations and sentiment.
+    want: the engine chosen on screen (a key from ENGINES); default ChatGPT, or the first engine with data."""
     names = [e["key"] for e in ents]
     latest = rows(conn.execute("""SELECT DISTINCT ON (engine, brand) engine::text, brand, date, visibility_score, mention_rate, citation_rate,
                                          share_of_voice, avg_position, sentiment, samples
@@ -61,7 +66,10 @@ def ai_board(conn, cid, ents):
         JOIN (SELECT engine, brand, max(date) d FROM scores_daily WHERE client_id=%s GROUP BY 1,2) m USING (engine, brand)
         WHERE s.client_id=%s AND s.date <= m.d - 21 ORDER BY s.engine, s.brand, s.date DESC""", [cid, cid])}
     # weekly trend (ChatGPT, or the first engine with data)
-    eng = "chatgpt" if any("chatgpt" in v for v in by.values()) else next((k for v in by.values() for k in v), None)
+    if want in LABEL:
+        eng = want
+    else:
+        eng = "chatgpt" if any("chatgpt" in v for v in by.values()) else next((k for v in by.values() for k in v), None)
     trend = rows(conn.execute("""SELECT date_trunc('week', date)::date w, brand, avg(visibility_score) FROM scores_daily
                                  WHERE client_id=%s AND engine::text=%s AND date > current_date - 120 GROUP BY 1,2 ORDER BY 1""", [cid, eng]),
                  ["week", "brand", "score"]) if eng else []
@@ -92,7 +100,8 @@ def ai_board(conn, cid, ents):
         p, t = sent.get(key, {}).get(engine, (0, 0))
         sent.setdefault(key, {})[engine] = (p + pos, t + tot)
     answers = conn.execute("""SELECT count(*) FROM answers a JOIN runs r USING (run_id) WHERE a.client_id=%s
-                              AND r.run_at > now() - interval '30 days'""", [cid]).fetchone()[0]
+                              AND r.run_at > now() - interval '30 days' AND (%s::text IS NULL OR r.engine::text = %s)""",
+                           [cid, eng if want in LABEL else None, eng if want in LABEL else None]).fetchone()[0]
     out = []
     for e in ents:
         per = by.get(e["key"], {})
@@ -102,17 +111,27 @@ def ai_board(conn, cid, ents):
         out.append({**e, "engines": per, "score": sc, "change": round(sc - b4, 1) if sc is not None and b4 is not None else None,
                     "mention_rate": _f(main["mention_rate"]) if main else None, "sov": _f(main["sov"]) if main else None,
                     "avg_position": _f(main["avg_position"]) if main else None,
-                    "mentions": sum(ment.get(e["key"], {}).values()), "mentions_by": ment.get(e["key"], {}),
+                    "mentions": (ment.get(e["key"], {}).get(eng, 0) if want in LABEL else sum(ment.get(e["key"], {}).values())),
+                    "mentions_by": ment.get(e["key"], {}),
                     "citations": cites.get(e["key"], 0),
                     "sentiment_by": {k: (p / t if t else None) for k, (p, t) in sent.get(e["key"], {}).items()},
                     "trend": [tmap.get((e["key"], w)) for w in weeks]})
-    return {"engine": eng, "weeks": weeks, "ents": out, "answers": answers}
+    return {"engine": eng, "chosen": want in LABEL, "weeks": weeks, "ents": out, "answers": answers,
+            "has_data": any(eng in v for v in by.values()) if eng else False}
+
+# What each engine needs before it has data (shown to the team when that engine is chosen and empty)
+NEEDS = {"chatgpt": "OpenAI key (OPENAI_API_KEY_2) or a connected ChatGPT plan, plus approved prompts",
+         "claude": "Integrations, Check Claude answers now (button only, $10 limit)",
+         "ai_overviews": "Google results with AI Overviews: a DataForSEO key (DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD), not built yet",
+         "gemini": "a Google AI Studio key (GEMINI_API_KEY), collector not built yet",
+         "perplexity": "a Perplexity Sonar key (PERPLEXITY_API_KEY), collector not built yet",
+         "bing_copilot": "no public API; only through a data vendor such as DataForSEO"}
 
 def prompt_matrix(conn, cid, key, ents, engs):
     """Every approved prompt: for each engine, is the chosen entity named in the latest run (None = not asked), its place,
     and how many tracked brands the answer named."""
     me = pick(ents, key)
-    names = {e["name"].lower() for e in ents if not e["primary"]}
+    names = {e["key"].lower() for e in ents if not e["primary"]}
     cycles = {r[0]: r[1] for r in conn.execute("SELECT engine::text, max(cycle) FROM runs WHERE client_id=%s AND status='ok' GROUP BY 1", [cid])}
     res = {}
     for engine, cyc in cycles.items():
@@ -122,7 +141,7 @@ def prompt_matrix(conn, cid, key, ents, engs):
                 WHERE r.client_id=%s AND r.engine::text=%s AND r.cycle=%s AND r.sample_no=1""", [cid, engine, cyc]):
             cell = res.setdefault(pid, {}).setdefault(engine, {"asked": True, "named": False, "rank": None, "answer_id": str(aid), "brands": 0})
             if brand is None: continue
-            hit = (me["primary"] and is_c) or (not me["primary"] and not is_c and brand.lower() == me["name"].lower())
+            hit = (me["primary"] and is_c) or (not me["primary"] and not is_c and brand.lower() == me["key"].lower())
             if hit: cell.update(named=True, rank=rank)
             if is_c or brand.lower() in names: cell["brands"] += 1
     out = []

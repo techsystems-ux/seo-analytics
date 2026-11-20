@@ -87,11 +87,31 @@ def judge_brands(session, key, answer):
     return json.loads(text).get("brands", [])
 
 # ------------------------------------------------------------------ reading the answer
+SCORING_VERSION = 2            # bump when brand detection changes: saved answers are re-read for free (rescore)
+
+def stem(text):
+    """'zavya.co' -> 'zavya', 'www.truesilver.co.in' -> 'truesilver', 'CaratLane' -> 'caratlane' (letters and digits only)."""
+    t = (text or "").lower().replace("https://", "").replace("http://", "").replace("www.", "").split("/")[0]
+    if "." in t: t = t.split(".")[0]
+    return re.sub(r"[^a-z0-9]", "", t)
+
 def brand_patterns(name, aliases, domain):
+    """Ways an answer can name the brand: its name and aliases as written, its web address, and the brand word inside a
+    name or address written loosely: 'zavya.co' also matches 'Zavya', 'truesilver.co.in' also 'True Silver' or 'TrueSilver'."""
     terms = {name, *(aliases or [])}
     if domain: terms.add(domain.lower().replace("www.", "").split("/")[0])
     terms = sorted({t.strip() for t in terms if t and len(t.strip()) >= 3}, key=len, reverse=True)
-    return [re.compile(r"(?<![\w])" + re.escape(t).replace(r"\ ", r"[\s-]?") + r"(?![\w])", re.I) for t in terms]
+    pats = [re.compile(r"(?<![\w])" + re.escape(t).replace(r"\ ", r"[\s-]?") + r"(?![\w])", re.I) for t in terms]
+    for st in sorted({stem(t) for t in [name, domain, *(aliases or [])] if t}, key=len, reverse=True):
+        if len(st) >= 4 and not st.isdigit():
+            pats.append(re.compile(r"(?<![\w])" + r"[\s.-]?".join(re.escape(ch) for ch in st) + r"(?![\w])", re.I))
+    return pats
+
+def display_name(name, domain):
+    """A competitor saved as a web address is shown by its brand word: 'zavya.co' -> 'Zavya'."""
+    if name and "." in name and " " not in name and stem(name):
+        return stem(name).capitalize()
+    return name
 
 def find_mentions(answer, brands):
     """brands = [{name, aliases, domain, is_client}] -> [{name, is_client, rank}] in order of first appearance."""
@@ -162,18 +182,7 @@ def run_prompt(conn, session, key, client_id, prompt_id, text, region, cycle, sa
         answer_id = conn.execute("""INSERT INTO answers (client_id, run_id, full_text, engine_version, raw_json, parsed_at)
                                     VALUES (%s,%s,%s,%s,%s,now()) RETURNING answer_id""",
                                  [client_id, run_id, answer, j.get("model", eng.default_model), json.dumps(meta)]).fetchone()[0]
-        verdict = {b["name"].lower(): b for b in judged}
-        found = find_mentions(answer, brands)
-        known = {m["name"].lower() for m in found}
-        for m in found:
-            v = next((verdict[k] for k in verdict if k == m["name"].lower() or m["name"].lower() in k or k in m["name"].lower()), None)
-            conn.execute("""INSERT INTO mentions (client_id, answer_id, brand, is_client, rank_in_answer, sentiment, recommended)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s)""", [client_id, answer_id, m["name"], m["is_client"], m["rank"],
-                                                               (v or {}).get("sentiment"), (v or {}).get("recommended")])
-        for v in judged:                                          # brands we do not track yet: kept for "who else gets named"
-            if not any(k in v["name"].lower() or v["name"].lower() in k for k in known):
-                conn.execute("""INSERT INTO mentions (client_id, answer_id, brand, is_client, rank_in_answer, sentiment, recommended)
-                                VALUES (%s,%s,%s,false,NULL,%s,%s)""", [client_id, answer_id, v["name"][:200], v["sentiment"], v["recommended"]])
+        write_mentions(conn, client_id, answer_id, answer, brands, judged)
         for urls, is_cited in (([u for u, _ in cited], True), (consulted, False)):
             titles = dict(cited)
             for u in urls:
@@ -184,6 +193,52 @@ def run_prompt(conn, session, key, client_id, prompt_id, text, region, cycle, sa
                               same_site(h, client["domain"])])
         conn.execute("UPDATE runs SET status='ok', error=NULL, run_at=now() WHERE run_id=%s", [run_id])
     return "ok"
+
+def same_brand(a, b):
+    """Whether two ways of writing a brand are the same brand: 'Zavya' and 'zavya.co', 'True Silver' and 'truesilver.co.in'."""
+    x, y = (a or "").lower(), (b or "").lower()
+    if x == y or (x and y and (x in y or y in x)): return True
+    sx, sy = stem(a), stem(b)
+    return len(sx) >= 4 and len(sy) >= 4 and (sx == sy or sx in sy or sy in sx)
+
+def write_mentions(conn, client_id, answer_id, answer, brands, judged):
+    """The tracked brands an answer names (place, sentiment, recommended), then every other brand it names (no place)."""
+    found = find_mentions(answer, brands)
+    for m in found:
+        v = next((j for j in judged if same_brand(j["name"], m["name"])
+                  or any(same_brand(j["name"], b["domain"]) for b in brands if b["name"] == m["name"] and b["domain"])), None)
+        conn.execute("""INSERT INTO mentions (client_id, answer_id, brand, is_client, rank_in_answer, sentiment, recommended)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s)""", [client_id, answer_id, m["name"], m["is_client"], m["rank"],
+                                                           (v or {}).get("sentiment"), (v or {}).get("recommended")])
+    for v in judged:                                          # brands we do not track yet: kept for "who else gets named"
+        if not any(same_brand(v["name"], m["name"]) or
+                   any(same_brand(v["name"], b["domain"]) for b in brands if b["name"] == m["name"] and b["domain"]) for m in found):
+            conn.execute("""INSERT INTO mentions (client_id, answer_id, brand, is_client, rank_in_answer, sentiment, recommended)
+                            VALUES (%s,%s,%s,false,NULL,%s,%s)""", [client_id, answer_id, v["name"][:200], v["sentiment"], v["recommended"]])
+
+def rescore(conn, client_id):
+    """Re-read every saved answer with the current brands and detection rules, then recompute the scores. Free: nothing is
+    asked again. The judge's verdicts (sentiment, recommended) kept on the old mentions are reused."""
+    brands = tracked_brands(conn, client_id)
+    n = 0
+    for aid, text in conn.execute("SELECT answer_id, full_text FROM answers WHERE client_id=%s", [client_id]).fetchall():
+        judged = [{"name": b, "sentiment": s or "neutral", "recommended": bool(r)} for b, s, r in conn.execute(
+            "SELECT brand, sentiment, recommended FROM mentions WHERE answer_id=%s AND sentiment IS NOT NULL ORDER BY rank_in_answer NULLS LAST", [aid])]
+        with conn.transaction():
+            conn.execute("DELETE FROM mentions WHERE answer_id=%s", [aid])
+            write_mentions(conn, client_id, aid, text or "", brands, judged)
+        n += 1
+    for engine, region, cycle in conn.execute("""SELECT DISTINCT engine::text, region, cycle FROM runs WHERE client_id=%s AND status='ok'""",
+                                              [client_id]).fetchall():
+        compute_scores(conn, client_id, cycle, region, engine)
+    conn.execute("""INSERT INTO score_versions (client_id, version, rescored_at) VALUES (%s,%s,now())
+                    ON CONFLICT (client_id) DO UPDATE SET version=EXCLUDED.version, rescored_at=now()""", [client_id, SCORING_VERSION])
+    return n
+
+def rescore_due(conn, client_id):
+    r = conn.execute("SELECT version FROM score_versions WHERE client_id=%s", [client_id]).fetchone()
+    if r and r[0] >= SCORING_VERSION: return False
+    return conn.execute("SELECT EXISTS (SELECT 1 FROM answers WHERE client_id=%s)", [client_id]).fetchone()[0]
 
 def position_score(rank):
     return max(0.2, 1 - 0.2 * (rank - 1)) if rank else 0.0

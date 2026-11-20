@@ -57,6 +57,9 @@ main{max-width:1480px;gap:18px;padding-top:18px}
 .lg.sm{width:16px;height:16px}.lg.lgx{width:26px;height:26px}
 .eng{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 6px;border:1px solid var(--card-b);border-radius:999px;font:600 12px var(--fb);background:#fff;white-space:nowrap}
 .eng.off{opacity:.45}
+a.eng{color:var(--ink,#0F0F0F);text-decoration:none;cursor:pointer;transition:border-color .15s,background .15s}
+a.eng:hover{border-color:#B20F00;opacity:1}
+a.eng.on{border-color:#B20F00;background:#FFF1F0;color:#B20F00;opacity:1}
 .eng .v{font-weight:700}
 .engs{display:flex;flex-wrap:wrap;gap:6px}
 

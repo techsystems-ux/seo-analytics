@@ -3,7 +3,7 @@
 {% block body %}
 {% set BAND = {'top3':('Top 3','t-pass'),'page1':('Page 1','t-pass'),'page2':('Page 2','t-na'),'beyond':('Beyond page 2','t-na'),'none':('Not ranking yet','t-na')} %}
 {% set me = board.ents | selectattr('key', 'equalto', focus.key) | first %}
-{% set arg = {'b': focus.key} if focus.key else {} %}
+{% set arg = dict({'b': focus.key} if focus.key else {}, **({'e': board.engine} if board.chosen else {})) %}
 
 {% if welcome %}<div class="msg" role="status"><b>Welcome to Orbit.</b> Your Search Console and Analytics are connected. The first data pull is queued; numbers fill in here as each source finishes, Search Console first.</div>{% endif %}
 {% if trial and viewer %}<p class="note" style="margin:-4px 0 0">Free trial until {{ trial.strftime('%d %b %Y') }}. <a href="/#demo">Talk to sales</a> to choose a plan.</p>{% endif %}
@@ -13,15 +13,19 @@
     <a class="{{ 'on' if tab != 'competitors' }}" href="{{ url_for('dash.overview', cid=client.id, **arg) }}"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</a>
     <a class="{{ 'on' if tab == 'competitors' }}" href="{{ url_for('dash.overview', cid=client.id, tab='competitors', **arg) }}"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0121.5 19"/></svg>Competitors</a>
   </nav>
-  <div class="engs" aria-label="AI engines">{% for e in engs %}<span class="eng{{ '' if e.tracked else ' off' }}" title="{{ e.label }}{{ '' if e.tracked else ': not tracked yet' }}"><img class="lg sm" src="{{ e.logo }}" alt="" onerror="this.style.visibility='hidden'">{{ e.label }}</span>{% endfor %}</div>
+  <nav class="engs" aria-label="AI engines">{% for e in engs %}<a class="eng{{ '' if e.tracked else ' off' }}{{ ' on' if board.engine == e.key else '' }}" href="{{ url_for('dash.overview', cid=client.id, tab=tab if tab != 'dashboard' else None, b=focus.key or None, e=e.key) }}"
+    title="{{ e.label }}{{ '' if e.tracked else ': not connected yet' }}"{{ ' aria-current="true"' if board.engine == e.key else '' }}><img class="lg sm" src="{{ e.logo }}" alt="" onerror="this.style.visibility='hidden'">{{ e.label }}</a>{% endfor %}</nav>
 </div>
+{% if board.engine and not board.has_data %}<div class="msg" role="status" style="margin-top:12px">Showing {{ engine_label(board.engine) }}: no answers from {{ engine_label(board.engine) }} yet, so the numbers below are empty.
+  {% if board.engine == 'chatgpt' %}The first answers are being collected and appear within a few minutes.{% elif board.engine == 'claude' %}Claude is checked from Integrations.{% else %}{{ engine_label(board.engine) }} is not connected yet.{% endif %}
+  <span class="staff-only note">Team note: needs {{ needs.get(board.engine, 'a collector') }}.</span></div>{% endif %}
 
 {% if tab != 'competitors' %}
 {# ------------------------------------------------------------------ Dashboard: one entity #}
 <div class="g3">
   <section class="card"><div class="ph"><h2>Brand visibility score <span class="info" title="Hovers Visibility Score for {{ me.name }} in {{ board.engine and engine_label(board.engine) or 'AI answers' }}: how often, how high and how positively it is named across the tracked prompts, 0 to 100.">i</span></h2></div>
     <div class="vis">{{ ring(me.score, colour=me.colour, label='Visibility score') }}
-      <p class="note" style="margin:0">{% if me.change is not none %}{% if me.change > 0 %}<span class="up" style="color:var(--ok)">▲ {{ me.change }} pts</span>{% elif me.change < 0 %}<span class="down">▼ {{ -me.change }} pts</span>{% else %}No change{% endif %} in four weeks{% elif me.score is none %}Collecting the first answers{% else %}First weeks of data{% endif %}</p>
+      <p class="note" style="margin:0">{% if me.change is not none %}{% if me.change > 0 %}<span class="up" style="color:var(--ok)">▲ {{ me.change }} pts</span>{% elif me.change < 0 %}<span class="down">▼ {{ -me.change }} pts</span>{% else %}No change{% endif %} in four weeks{% elif me.score is none %}{{ 'Collecting the first answers' if board.engine == 'chatgpt' else 'No ' ~ engine_label(board.engine) ~ ' answers yet' }}{% else %}First weeks of data{% endif %}</p>
       <div class="reach">
         <div><b>{{ me.citations|n }}</b><span>Citations · 30 days</span></div>
         <div><b>{{ me.mentions|n }}</b><span>Brand mentions · 30 days</span></div>

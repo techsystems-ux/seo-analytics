@@ -19,7 +19,7 @@ import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
-ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
+ORDER = ["rescore", "gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
 NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,index,cwv,blogs,crawl,youtube,reddit"
 PAID_STEPS = ("ai", "claude", "blogs", "semrush")   # OpenAI (prompts, blog drafts), Claude and Semrush: limited per brand per day
@@ -194,6 +194,9 @@ def ensure_fresh(conn, cid, who=None):
         if not (has_data and fresh):
             only = FREE_REFRESH + ("" if has_data else ",blogs,crawl")
             pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", only] + ([] if has_data else ["--force-weekly"]), who or "auto")
+    import ai_visibility
+    if ai_visibility.rescore_due(conn, cid):                              # free: re-read saved answers with the current rules
+        pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", "rescore"], who or "auto")
     ai = ai_due(conn, cid)
     if ai:
         pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", ",".join(ai), "--force-weekly"], who or "auto")
@@ -311,6 +314,11 @@ def run_task(conn, task, deadline):
     if step == "semrush": return step_semrush(conn, task, deadline)
     if step == "gsc": return step_gsc(conn, task, deadline)
     if step == "gsc_history": return step_gsc(conn, task, deadline, history=True)
+    if step == "rescore":
+        import ai_visibility, daily
+        out = {}
+        daily.log(conn, task["client_id"], "rescore", lambda: out.update(n=ai_visibility.rescore(conn, task["client_id"])) or f"{out['n']} answers re-read")
+        return f"{out.get('n', 0)} answers re-read", []
     if step == "ai": return step_ai(conn, task, deadline)
     if step == "claude": return step_claude(conn, task, deadline)
     if step == "blogs": return step_blogs(conn, task, deadline)
