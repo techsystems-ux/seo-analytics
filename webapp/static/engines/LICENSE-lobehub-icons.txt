@@ -1,0 +1,1 @@
+MIT License - icons from @lobehub/icons-static-svg 1.104.0

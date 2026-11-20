@@ -2,521 +2,464 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Orbit by Hovers · Search intelligence for Google and AI answers</title>
-<meta name="description" content="Orbit by Hovers tracks where your brand ranks on Google and whether ChatGPT recommends you, then drafts the blog posts that close the gap.">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbit by Hovers · AI search visibility for Google and AI answers</title>
+<meta name="description" content="Orbit by Hovers shows where your brand ranks on Google and whether ChatGPT, Gemini, Perplexity and Google AI Overviews recommend you, then drafts the content that closes the gap.">
 <meta name="robots" content="noindex">
 <link rel="icon" href="{{ url_for('static', filename='hovers-logo.svg') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
-/* Orbit marketing page. Hovers brand: white canvas, grey #F5F5F5 surfaces, black type, Hovers Red #B20F00 as the one accent.
-   Typeface Mont (Heavy for display, SemiBold for labels, Regular for body); Montserrat stands in until the Mont files are in /static/fonts. */
+/* VOICE  measured, consultant-grade; Hovers brand, no hype.
+   IDEA   an orbit: your brand at the centre, every AI answer engine circling it.
+   PICTURE the orbit in the hero, engine logos riding two rings; a live answer being read.
+   COLOUR white canvas, grey #F5F5F5 surfaces, black type, Hovers Red #B20F00 as the one accent; engine logos carry their own colour.
+   TYPE   Mont (Montserrat stand-in): 900 display, 600 labels, 400 body.  LAYOUT  sticky floating nav, full-width bands, 1240px content. */
 @font-face{font-family:"Mont";font-weight:900;font-display:swap;src:local("Mont Heavy"),local("Mont-Heavy"),url("/static/fonts/Mont-Heavy.woff2") format("woff2")}
 @font-face{font-family:"Mont";font-weight:600;font-display:swap;src:local("Mont SemiBold"),local("Mont-SemiBold"),url("/static/fonts/Mont-SemiBold.woff2") format("woff2")}
 @font-face{font-family:"Mont";font-weight:400;font-display:swap;src:local("Mont Regular"),local("Mont-Regular"),url("/static/fonts/Mont-Regular.woff2") format("woff2")}
-:root{
-  --red:#B20F00;--red-hi:#C91200;--red-tint:#FBEDEB;
-  --ink:#000;--ink2:#1A1A1A;--mut:#5C5C5C;--mut2:#8A8A8A;
-  --bg:#F5F5F5;--panel:#FFFFFF;--card:#F5F5F5;--line:#E7E7E7;--line2:#D9D9D9;
-  --ok:#1F7A4D;--ok-tint:#E8F5EE;
-  --f:"Mont","Montserrat",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --r:24px;--r2:16px;--ease:cubic-bezier(.2,.7,.1,1);color-scheme:light;
-}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;background:var(--bg)}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/24px var(--f);-webkit-font-smoothing:antialiased;overflow-x:hidden}
-a{color:inherit;text-decoration:none}
-img{max-width:100%;display:block}
-button,input,textarea{font:inherit;color:inherit}
-h1,h2,h3,h4{margin:0;font-family:var(--f);text-wrap:balance}
-p{margin:0}
+:root{--red:#B20F00;--red-hi:#C91200;--red-t:#FBEDEB;--ink:#000;--ink2:#1A1A1A;--mut:#5C5C5C;--mut2:#8A8A8A;--bg:#fff;--g:#F5F5F5;--line:#E7E7E7;--line2:#D9D9D9;
+  --ok:#1F7A4D;--ok-t:#E8F5EE;--f:"Mont","Montserrat",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--ease:cubic-bezier(.2,.7,.1,1);color-scheme:light}
+*{box-sizing:border-box;min-width:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px;background:var(--bg)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--f);-webkit-font-smoothing:antialiased;overflow-x:clip}
+a{color:inherit;text-decoration:none}img{max-width:100%;display:block}button,input,textarea{font:inherit;color:inherit}
+h1,h2,h3,h4,p{margin:0}h1,h2,h3{text-wrap:balance}
 :focus-visible{outline:2px solid var(--red);outline-offset:3px;border-radius:8px}
-.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:linear-gradient(rgba(0,0,0,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.035) 1px,transparent 1px);background-size:56px 56px;
-  mask-image:linear-gradient(180deg,#000 0,#000 40%,transparent 90%);-webkit-mask-image:linear-gradient(180deg,#000 0,#000 40%,transparent 90%)}
-.wrap{position:relative;z-index:1;width:100%;max-width:1240px;margin:0 auto;padding-inline:16px}
-@media (min-width:720px){.wrap{padding-inline:24px}}
-
-/* type */
-.h1{font-weight:900;font-size:clamp(38px,6.2vw,72px);line-height:1.02;letter-spacing:-.01em}
-.h2{font-weight:900;font-size:clamp(30px,4.2vw,52px);line-height:1.06;letter-spacing:-.01em}
-.h3{font-weight:600;font-size:20px;line-height:1.3;letter-spacing:.02em}
-.lead{color:var(--mut);font-size:clamp(16px,1.6vw,19px);line-height:1.6}
+.wrap{width:100%;max-width:1240px;margin:0 auto;padding-inline:clamp(16px,3vw,28px)}
+.h1{font-weight:900;font-size:clamp(36px,5.4vw,64px);line-height:1.04;letter-spacing:-.015em}
+.h2{font-weight:900;font-size:clamp(30px,3.8vw,48px);line-height:1.06;letter-spacing:-.01em}
+.lead{color:var(--mut);font-size:clamp(16px,1.5vw,18px);line-height:1.65}
 .r{color:var(--red)}
-.pill-label{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 10px;border:1px solid var(--line2);background:#fff;border-radius:999px;
-  font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2)}
-.pill-label i{width:8px;height:8px;border-radius:2px;background:var(--red);transform:rotate(45deg)}
-
-/* buttons */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 22px;border-radius:999px;border:1px solid transparent;
-  font-weight:600;font-size:15px;letter-spacing:.02em;cursor:pointer;transition:transform .2s var(--ease),background .2s,box-shadow .2s;white-space:nowrap}
-.btn:hover{transform:translateY(-1px)}
-.btn.blk{background:var(--ink);color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.18)}
-.btn.blk:hover{background:#222}
-.btn.red{background:var(--red);color:#fff}
-.btn.red:hover{background:var(--red-hi)}
-.btn.ln{background:#fff;border-color:var(--line2);color:var(--ink)}
-.btn.sm{min-height:40px;padding:0 18px;font-size:14px}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 14px 6px 8px;border:1px solid var(--line2);background:#fff;border-radius:999px;font-weight:600;font-size:13px;color:var(--ink2)}
+.pill i{width:8px;height:8px;margin-left:4px;border-radius:2px;background:var(--red);transform:rotate(45deg)}
+.pill .lg{display:flex}.pill .lg img{width:20px;height:20px;padding:2px;border-radius:50%;background:#fff;border:1px solid var(--line);margin-left:-6px}.pill .lg img:first-child{margin-left:0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 22px;border-radius:999px;border:1px solid transparent;font-weight:600;font-size:15px;cursor:pointer;transition:transform .2s var(--ease),background .2s;white-space:nowrap}
+.btn:hover{transform:translateY(-1px)}.btn.blk{background:var(--ink);color:#fff}.btn.blk:hover{background:#222}
+.btn.red{background:var(--red);color:#fff}.btn.red:hover{background:var(--red-hi)}.btn.ln{background:#fff;border-color:var(--line2)}.btn.sm{min-height:40px;padding:0 18px;font-size:14px}
 .btn .arr{display:inline-grid;place-items:center;width:28px;height:28px;margin-right:-10px;border-radius:50%;background:#fff;color:var(--ink);transition:transform .2s var(--ease)}
-.btn.red .arr{color:var(--red)}
-.btn:hover .arr{transform:translateX(3px)}
-.btn .arr svg{width:14px;height:14px}
+.btn.red .arr{color:var(--red)}.btn:hover .arr{transform:translateX(3px)}.btn .arr svg{width:14px;height:14px}
+.tagl{display:inline-block;font-size:11px;font-weight:600;color:var(--mut2);border:1px dashed var(--line2);border-radius:999px;padding:1px 8px}
 
-/* announcement + nav */
-.bar{position:relative;z-index:3;background:var(--ink);color:#fff;font-size:13px;line-height:18px;text-align:center;padding:10px 16px}
-.bar b{font-weight:600}.bar a{text-decoration:underline;text-underline-offset:3px;margin-left:6px;white-space:nowrap}
-.nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.86);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border-bottom:1px solid var(--line)}
-.nav .wrap{display:flex;align-items:center;gap:20px;height:68px}
-.brand{display:inline-flex;align-items:center;gap:12px}
-.brand img{height:24px;width:auto}
-.brand .sep{width:1px;height:22px;background:var(--line2)}
-.brand b{font-weight:900;font-size:18px;letter-spacing:-.01em}
-.nav .links{display:flex;gap:28px;margin-left:auto;font-weight:600;font-size:14px;letter-spacing:.02em;color:var(--ink2)}
-.nav .links a:hover{color:var(--red)}
-.nav .acts{display:flex;align-items:center;gap:10px}
-.nav .signin{font-weight:600;font-size:14px;padding:0 6px}
-@media (max-width:900px){.nav .links{display:none}.nav .acts{margin-left:auto}}
-@media (max-width:420px){.brand .sep,.brand b{display:none}.nav .signin{display:none}}
+/* announcement */
+.ann{position:relative;overflow:hidden;background:var(--ink);color:#fff;font-size:13px;line-height:18px;padding:10px 16px;display:flex;justify-content:center;align-items:center;gap:12px;flex-wrap:wrap;text-align:center}
+.ann::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.16) 50%,transparent 70%);transform:translateX(-100%);animation:sheen 5s var(--ease) infinite}
+.ann .spin{width:22px;height:22px;border-radius:50%;background:#fff;display:grid;place-items:center;animation:turn 9s linear infinite}
+.ann .spin img{width:14px;height:14px}
+.ann a{text-decoration:underline;text-underline-offset:3px;font-weight:600}
+@keyframes sheen{60%,100%{transform:translateX(100%)}}
+@keyframes turn{to{transform:rotate(360deg)}}
 
-/* panels */
-.panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
-.sec{padding-block:clamp(28px,4vw,40px)}
-.sh{text-align:center;max-width:760px;margin:0 auto clamp(28px,4vw,48px);display:flex;flex-direction:column;align-items:center;gap:16px}
+/* nav */
+.nav{position:sticky;top:10px;z-index:30;padding-inline:clamp(10px,2vw,20px);margin-top:10px}
+.nav .in{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:20px;height:62px;padding:0 10px 0 18px;background:rgba(255,255,255,.88);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);border:1px solid var(--line);border-radius:18px;box-shadow:0 10px 30px -18px rgba(0,0,0,.25)}
+.brand{display:inline-flex;align-items:center;gap:12px}.brand img{height:22px;width:auto}.brand .sep{width:1px;height:20px;background:var(--line2)}.brand b{font-weight:900;font-size:18px}
+.nav .links{display:flex;gap:26px;margin-left:auto;font-weight:600;font-size:14px;color:var(--ink2)}.nav .links a:hover{color:var(--red)}
+.nav .acts{display:flex;align-items:center;gap:10px}.nav .signin{font-weight:600;font-size:14px;padding:0 8px}
+@media (max-width:960px){.nav .links{display:none}.nav .acts{margin-left:auto}}
+@media (max-width:440px){.brand .sep,.brand b,.nav .signin{display:none}}
 
 /* hero */
-.hero{padding-top:clamp(40px,7vw,88px);text-align:center}
-.hero .h1{max-width:980px;margin:22px auto 0}
-.hero .lead{max-width:680px;margin:22px auto 0}
-.hero .cta{display:flex;flex-wrap:wrap;gap:12px 18px;justify-content:center;align-items:center;margin-top:32px}
-.hero .alt{font-weight:600;font-size:14px;color:var(--mut);letter-spacing:.02em}
-.hero .alt a{color:var(--ink);text-decoration:underline;text-underline-offset:4px}
-.proof{display:flex;flex-wrap:wrap;gap:10px 26px;justify-content:center;margin-top:26px;font-size:14px;color:var(--ink2)}
-.proof span{display:inline-flex;align-items:center;gap:8px}
-.proof svg{width:18px;height:18px;flex:none;color:var(--red)}
+.hero{position:relative;padding:clamp(36px,6vw,72px) 0 clamp(24px,4vw,40px);overflow:hidden}
+.hero::before{content:"";position:absolute;right:-12%;top:-30%;width:min(900px,90vw);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(178,15,0,.10),rgba(178,15,0,.03) 45%,transparent 70%);pointer-events:none}
+.hero .grid{position:relative;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(24px,4vw,56px);align-items:center}
+.hero .copy>*{animation:up .8s var(--ease) both}.hero .copy>*:nth-child(2){animation-delay:.08s}.hero .copy>*:nth-child(3){animation-delay:.16s}.hero .copy>*:nth-child(4){animation-delay:.24s}.hero .copy>*:nth-child(5){animation-delay:.32s}
+@keyframes up{from{opacity:0;transform:translateY(16px)}}
+.hero .h1{margin-top:20px}
+.cyc{display:inline-flex;align-items:center;gap:.22em;white-space:nowrap;vertical-align:bottom}
+.cyc img{width:.82em;height:.82em;transition:opacity .35s,transform .35s}
+.cyc b{font-weight:900;background:linear-gradient(90deg,var(--red),#E2412F,var(--red));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shim 3s linear infinite;transition:opacity .35s,transform .35s}
+.cyc.out img,.cyc.out b{opacity:0;transform:translateY(10px)}
+@keyframes shim{to{background-position:-200% 0}}
+.hero .lead{margin-top:20px;max-width:560px}
+.hero .cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.checks{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:22px;font-size:14px;color:var(--ink2)}
+.checks span{display:inline-flex;align-items:center;gap:8px}.checks svg{width:18px;height:18px;color:var(--red)}
 
-/* product frame */
-.frame{margin:clamp(36px,6vw,64px) auto 0;max-width:1120px;padding:10px;border-radius:28px;background:linear-gradient(180deg,#fff,#EFEFEF);border:1px solid var(--line);box-shadow:0 30px 80px -30px rgba(0,0,0,.22)}
-.app{border-radius:20px;background:#fff;border:1px solid var(--line);overflow:hidden;text-align:left}
-.app-top{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:#FAFAFA}
-.app-top i{width:10px;height:10px;border-radius:50%;background:#E2E2E2}
-.app-top span{margin-left:10px;font-size:12px;color:var(--mut2)}
-.app-top em{margin-left:auto;font-style:normal;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
-.app-body{display:grid;grid-template-columns:200px 1fr;min-height:420px}
-.app-side{border-right:1px solid var(--line);padding:18px 14px;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mut)}
-.app-side b{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mut2);margin:12px 8px 4px}
-.app-side b:first-child{margin-top:0}
-.app-side span{padding:7px 10px;border-radius:8px}
-.app-side span.on{background:var(--bg);color:var(--ink);font-weight:600}
-.app-main{padding:22px;display:flex;flex-direction:column;gap:16px;background:#fff}
-.app-main h4{font-weight:900;font-size:22px;letter-spacing:-.01em}
-.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-.kpi{background:var(--card);border-radius:14px;padding:14px}
-.kpi small{display:block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
-.kpi strong{display:block;font-weight:900;font-size:24px;margin-top:6px}
-.kpi .up{font-size:12px;color:var(--ok);font-weight:600}
-.app-row{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
-.chart{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px}
-.chart small,.list small{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2)}
-.chart svg{width:100%;height:150px}
-.list{background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:9px;font-size:13px}
-.list div{display:flex;justify-content:space-between;gap:10px;align-items:center}
-.list div span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tag{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:#fff;border:1px solid var(--line2);white-space:nowrap}
-.tag.g{background:var(--ok-tint);border-color:transparent;color:var(--ok)}
-.tag.rd{background:var(--red-tint);border-color:transparent;color:var(--red)}
-@media (max-width:860px){.app-body{grid-template-columns:1fr}.app-side{display:none}.kpis{grid-template-columns:repeat(2,1fr)}.app-row{grid-template-columns:1fr}}
+/* orbit */
+.orb{--s:min(520px,86vw);position:relative;width:var(--s);height:var(--s);margin:0 auto}
+.orb .ring{position:absolute;left:50%;top:50%;border:1px dashed var(--line2);border-radius:50%;transform:translate(-50%,-50%)}
+.orb .r1{width:62%;height:62%}.orb .r2{width:94%;height:94%;border-style:solid;border-color:var(--line)}
+.orb .rot{position:absolute;inset:0;animation:turn 48s linear infinite}.orb .rot.b{animation-duration:70s;animation-direction:reverse}
+.orb .chip{position:absolute;left:50%;top:50%;width:0;height:0;transform:rotate(var(--a)) translateX(calc(var(--s) * var(--d))) rotate(calc(-1 * var(--a)))}
+.orb .chip span{position:absolute;left:-24px;top:-24px;width:48px;height:48px;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:0 8px 20px -10px rgba(0,0,0,.3);display:grid;place-items:center;animation:turn 48s linear infinite reverse}
+.orb .rot.b .chip span{animation-duration:70s;animation-direction:normal}
+.orb .chip img{width:26px;height:26px}
+.orb .core{position:absolute;left:50%;top:50%;width:40%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;background:#fff;border:1px solid var(--line);box-shadow:0 30px 60px -30px rgba(0,0,0,.35);display:grid;place-items:center;text-align:center}
+.orb .core svg{position:absolute;inset:8%;width:84%;height:84%;transform:rotate(-90deg)}
+.orb .core strong{display:block;font-weight:900;font-size:clamp(30px,5vw,46px);line-height:1}
+.orb .core small{display:block;font-size:11px;font-weight:600;color:var(--mut);margin-top:4px}
+.orb .note{position:absolute;max-width:200px;white-space:normal;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:12px;line-height:1.35;box-shadow:0 12px 28px -16px rgba(0,0,0,.35);animation:float 6s ease-in-out infinite}
+.orb .note b{display:block;font-size:13px}.orb .note .ok{color:var(--ok);font-weight:600}
+.orb .n1{left:-2%;top:12%}.orb .n2{right:-4%;bottom:14%;animation-delay:-3s}.orb .n3{left:4%;bottom:4%;animation-delay:-1.5s}
+@keyframes float{50%{transform:translateY(-8px)}}
 
-/* logos */
-.logos{text-align:center;padding-block:clamp(40px,6vw,64px) clamp(20px,3vw,28px)}
-.logos p{font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
-.logo-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:22px clamp(36px,7vw,88px);margin-top:26px}
-.logo-row figure{margin:0;height:44px;display:flex;align-items:center;justify-content:center}
-.logo-row img{height:30px;width:auto;max-width:190px;object-fit:contain;mix-blend-mode:multiply;filter:grayscale(1);opacity:.62;transition:filter .3s,opacity .3s}
-.logo-row img.tall{height:38px}.logo-row img.wide{height:24px}
-.logo-row figure:hover img{filter:none;opacity:1}
-.logo-row .nm{display:none;font-weight:900;font-size:22px;letter-spacing:-.01em;color:#7A7A7A}
-.logo-row figure.fail img{display:none}.logo-row figure.fail .nm{display:block}
+/* facts */
+.facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:clamp(24px,4vw,44px)}
+.fact{background:var(--g);border-radius:18px;padding:18px 20px;display:flex;gap:14px;align-items:flex-start}
+.fact .ic{flex:none;width:36px;height:36px;border-radius:10px;background:#fff;display:grid;place-items:center;color:var(--red)}.fact .ic svg{width:18px;height:18px}
+.fact strong{display:block;font-weight:900;font-size:22px;line-height:1.1}.fact .ds{display:block;font-size:13px;color:var(--mut);line-height:1.45;margin-top:2px}
 
-/* problem panel with floating cards */
-.stage{padding:clamp(40px,6vw,72px) clamp(18px,4vw,56px);background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);background-size:40px 40px;background-color:#fff}
-.stage-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(28px,5vw,64px);align-items:center}
-.stage-copy{display:flex;flex-direction:column;gap:18px;align-items:flex-start}
-.stage-copy .h2{max-width:520px}
-.float{position:relative;min-height:470px}
-.fc{position:absolute;background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 18px 40px -18px rgba(0,0,0,.22);font-size:13px;line-height:1.45}
-.fc .who{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12px;letter-spacing:.04em;color:var(--mut)}
-.fc .dot{width:22px;height:22px;border-radius:7px;display:grid;place-items:center;background:var(--ink);color:#fff;font-size:11px;font-weight:900}
-.fc q{display:block;quotes:none;margin-top:10px;color:var(--ink2)}
-.fc .rec{display:flex;flex-direction:column;gap:8px;margin-top:12px}
-.fc .rec div{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 11px;border-radius:12px;background:var(--card)}
-.fc .rec div b{font-weight:600}
-.fc .rec div.you{background:#fff;border:1px dashed var(--line2);color:var(--mut2)}
-.fc1{left:0;top:0;width:min(340px,92%)}
-.fc2{right:0;top:250px;width:min(260px,70%)}
-.fc2 .pos{display:flex;align-items:baseline;gap:8px;margin-top:8px}
-.fc2 .pos strong{font-weight:900;font-size:40px;line-height:1}
-.fc2 .bar2{height:6px;border-radius:6px;background:var(--card);margin-top:12px;overflow:hidden}
-.fc2 .bar2 i{display:block;height:100%;width:22%;background:var(--red);border-radius:6px}
-.cursor{position:absolute;display:flex;align-items:flex-start;gap:4px;pointer-events:none}
-.cursor svg{width:18px;height:18px;flex:none}
-.cursor span{margin-top:12px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;color:#fff;white-space:nowrap}
-.cur-buyer{left:20%;top:310px}.cur-buyer span{background:var(--ink)}.cur-buyer svg{color:var(--ink)}
-@media (max-width:900px){.stage-grid{grid-template-columns:1fr}.float{min-height:460px}}
-@media (max-width:520px){.float{min-height:540px}.fc2{top:290px}.cur-buyer{left:8%;top:480px}}
+/* logo marquee */
+.mq{padding:clamp(28px,4vw,44px) 0;border-block:1px solid var(--line);margin-top:clamp(32px,5vw,56px)}
+.mq p{text-align:center;font-weight:600;font-size:13px;color:var(--mut2);margin-bottom:18px}
+.track{display:flex;overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.belt{display:flex;flex:none;gap:56px;padding-right:56px;align-items:center;animation:belt 36s linear infinite}
+.track:hover .belt{animation-play-state:paused}
+@keyframes belt{to{transform:translateX(-100%)}}
+.belt figure{margin:0;display:flex;align-items:center;gap:10px;height:40px;font-weight:600;font-size:15px;color:var(--ink2);white-space:nowrap}
+.belt figure img{height:30px;width:auto;max-width:150px;filter:grayscale(1);opacity:.8}.belt figure img.eng{height:26px;filter:none;opacity:1}
+.belt figure .nm{display:none}.belt figure.fail img{display:none}.belt figure.fail .nm{display:inline}
 
-/* solution: source tags around a headline */
-.orbit{position:relative;padding:clamp(70px,10vw,130px) 16px;text-align:center;background:#fff}
-.orbit .core{position:relative;z-index:2;max-width:720px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:18px}
-.src{position:absolute;z-index:1;display:inline-flex;align-items:center;gap:8px;padding:8px 14px 8px 8px;background:#fff;border:1px solid var(--line);border-radius:999px;box-shadow:0 10px 26px -14px rgba(0,0,0,.25);font-weight:600;font-size:13px;letter-spacing:.02em;animation:bob 6s ease-in-out infinite}
-.src i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--card);font-style:normal;font-size:12px;font-weight:900}
-.src.red i{background:var(--red);color:#fff}
-.s1{left:6%;top:16%}.s2{right:7%;top:12%;animation-delay:-1s}.s3{left:3%;bottom:22%;animation-delay:-2s}
-.s4{right:4%;bottom:26%;animation-delay:-3s}.s5{left:22%;bottom:6%;animation-delay:-4s}.s6{right:22%;bottom:5%;animation-delay:-5s}
-@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-@media (max-width:860px){.orbit{padding-block:40px}.src{position:static;animation:none}.orbit .srcs{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:28px}}
-@media (min-width:861px){.orbit .srcs{display:contents}}
+/* sections */
+.sec{padding:clamp(56px,8vw,104px) 0}.sec.g{background:var(--g)}
+.sh{text-align:center;max-width:760px;margin:0 auto clamp(28px,4vw,48px);display:flex;flex-direction:column;align-items:center;gap:14px}
 
-/* statement reveal */
-.statement{padding:clamp(56px,9vw,120px) 0;text-align:center}
-.statement p{max-width:1000px;margin:0 auto;font-weight:900;font-size:clamp(26px,3.8vw,48px);line-height:1.18;letter-spacing:-.01em}
-.statement p span{color:#C8C8C8;transition:color .35s}
-.statement p span.on{color:var(--ink)}
-.statement p span.on.r{color:var(--red)}
-.statement small{display:block;margin-top:22px;font-weight:600;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+/* try it + widgets */
+.try{display:flex;gap:8px;max-width:520px;margin:6px auto 0;width:100%}
+.try input{flex:1;min-height:48px;border:1px solid var(--line2);border-radius:999px;padding:0 20px;background:#fff;font-size:16px}
+.wg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;text-align:left}
+.card{background:#fff;border:1px solid var(--line);border-radius:20px;padding:20px}
+.card h4{font-size:12px;font-weight:600;color:var(--mut);display:flex;justify-content:space-between;gap:8px;margin-bottom:14px}
+.col{display:flex;flex-direction:column;gap:14px}
+.bars .row{display:grid;grid-template-columns:96px minmax(0,1fr) 36px;gap:10px;align-items:center;font-size:13px;margin-bottom:10px}
+.bars .row b{font-weight:600}.bars .row em{font-style:normal;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.meter{height:8px;border-radius:99px;background:var(--g);overflow:hidden}.meter i{display:block;height:100%;width:0;border-radius:inherit;background:#1A1A1A;transition:width 1.4s var(--ease)}
+.meter i.rd{background:var(--red)}
+.gauge{display:grid;place-items:center;text-align:center}.gauge svg{width:100%;max-width:240px}
+.gauge strong{font-weight:900;font-size:40px;line-height:1;margin-top:-34px}.gauge span{font-size:12px;color:var(--mut)}
+.eng .row{display:grid;grid-template-columns:22px 86px minmax(0,1fr) 30px;gap:10px;align-items:center;font-size:13px;margin-bottom:11px}
+.eng img{width:20px;height:20px}.eng em{font-style:normal;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.split{display:flex;justify-content:space-between;align-items:flex-end;font-size:12px;color:var(--mut)}.split strong{display:block;font-size:28px;font-weight:900;color:var(--ink)}
+.split .rt{text-align:right}.split .rt strong{color:var(--mut2)}
 
-/* bento */
-.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
-.b{background:#fff;border:1px solid var(--line);border-radius:20px;padding:24px;display:flex;flex-direction:column;gap:10px;min-height:340px;overflow:hidden;position:relative}
-.b.w3{grid-column:span 3}.b.w2{grid-column:span 2}.b.w4{grid-column:span 4}
-.b .ic{position:absolute;right:20px;top:20px;width:40px;height:40px;border-radius:12px;background:var(--red-tint);display:grid;place-items:center;color:var(--red)}
-.b .ic svg{width:20px;height:20px}
-.b .k{font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--red)}
-.b h3{font-weight:900;font-size:22px;line-height:1.2;letter-spacing:-.01em;max-width:80%}
-.b p{color:var(--mut);font-size:15px;line-height:1.55;max-width:460px}
-.ill{margin-top:auto;background:var(--card);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;font-size:13px}
-.ill .ln{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.ill .ln span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ill .meter{height:6px;border-radius:6px;background:#E2E2E2;overflow:hidden;flex:0 0 90px}
-.ill .meter i{display:block;height:100%;background:var(--ink);border-radius:6px}
-.ill .meter i.r{background:var(--red)}
-.ill .chk{display:flex;align-items:center;gap:8px}
-.ill .chk svg{width:16px;height:16px;flex:none}
-.ill .post{display:flex;flex-direction:column;gap:4px}
-.ill .post b{font-weight:600}
-.ill .post em{font-style:normal;color:var(--ok);font-size:12px}
-.ill .acts{display:flex;gap:8px;margin-top:4px}
-.ill .acts span{padding:6px 12px;border-radius:999px;font-weight:600;font-size:12px;border:1px solid var(--line2);background:#fff}
-.ill .acts span.go{background:var(--red);color:#fff;border-color:var(--red)}
-@media (max-width:980px){.b.w2,.b.w3,.b.w4{grid-column:span 3}}
-@media (max-width:640px){.bento{grid-template-columns:1fr}.b.w2,.b.w3,.b.w4{grid-column:auto}.b{min-height:0}}
+/* answer demo */
+.demo2{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.9fr);gap:16px;align-items:stretch}
+.chat{background:#fff;border:1px solid var(--line);border-radius:22px;overflow:hidden;display:flex;flex-direction:column}
+.etabs{display:flex;gap:6px;padding:12px;border-bottom:1px solid var(--line);background:#FAFAFA;overflow-x:auto}
+.etabs button{display:inline-flex;align-items:center;gap:8px;border:1px solid transparent;background:none;border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--mut);cursor:pointer;white-space:nowrap}
+.etabs button img{width:16px;height:16px}.etabs button.on{background:#fff;border-color:var(--line2);color:var(--ink);box-shadow:0 4px 10px -6px rgba(0,0,0,.25)}
+.chat .q{margin:16px 16px 0;padding:12px 16px;border-radius:14px;background:var(--g);font-size:15px;min-height:48px}
+.chat .q .caret{display:inline-block;width:2px;height:1em;background:var(--ink);vertical-align:-2px;margin-left:2px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.chat .a{padding:16px;display:flex;flex-direction:column;gap:10px;flex:1;min-height:270px}
+.chat .a .ln{height:10px;border-radius:99px;background:var(--g)}
+.chat .rk{display:flex;flex-direction:column;gap:8px}
+.chat .rk div{display:flex;align-items:center;gap:10px;font-size:14px;padding:8px 12px;border:1px solid var(--line);border-radius:12px}
+.chat .rk div i{font-style:normal;font-weight:900;width:20px}.chat .rk .me{border-color:var(--red);background:var(--red-t)}.chat .rk .me b{color:var(--red)}
+.chat .src{display:flex;flex-wrap:wrap;gap:6px}.chat .src span{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--mut)}.chat .src .own{border-color:var(--red);color:var(--red);font-weight:600}
+.fade{opacity:0;transform:translateY(8px);transition:opacity .45s var(--ease),transform .45s var(--ease)}.fade.on{opacity:1;transform:none}
+.dots{display:inline-flex;gap:4px}.dots i{width:6px;height:6px;border-radius:50%;background:var(--mut2);animation:dot 1s infinite}.dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+@keyframes dot{50%{opacity:.2}}
+.read{background:var(--ink);color:#fff;border-radius:22px;padding:24px;display:flex;flex-direction:column;gap:14px}
+.read h3{font-size:20px;font-weight:900}.read p{color:#BDBDBD;font-size:14px}
+.read ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.read li{display:flex;justify-content:space-between;gap:10px;padding:12px 14px;border-radius:12px;background:#151515;border:1px solid #262626;font-size:14px}
+.read li em{font-style:normal;font-weight:600;color:#fff;transition:color .3s}.read li em.y{color:#7BD8A4}.read li em.n{color:#FF8A7A}
 
-/* how it works */
-.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:clamp(18px,3vw,28px)}
-.step{border-radius:20px;background:var(--card);padding:26px;display:flex;flex-direction:column;gap:12px}
-.step i{font-style:normal;font-weight:900;font-size:14px;color:#fff;background:var(--ink);width:36px;height:36px;border-radius:50%;display:grid;place-items:center}
-.step h3{font-weight:900;font-size:21px;letter-spacing:-.01em}
-.step p{color:var(--mut);font-size:15px;line-height:1.55}
-@media (max-width:820px){.steps{grid-template-columns:1fr}}
+/* engines */
+.egrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.et{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;transition:transform .25s var(--ease),box-shadow .25s}
+.et:hover{transform:translateY(-4px);box-shadow:0 18px 36px -22px rgba(0,0,0,.35)}
+.et .lo{width:52px;height:52px;border-radius:14px;background:var(--g);display:grid;place-items:center}.et .lo img{width:28px;height:28px}
+.et b{font-size:15px;font-weight:600}
+.st{font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px}.st.live{background:var(--ok-t);color:var(--ok)}.st.soon{background:var(--red-t);color:var(--red)}.st.plan{background:var(--g);color:var(--mut)}
+.gsrc{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:18px;font-size:14px;color:var(--mut)}
+.gsrc span{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--ink2);font-weight:600}.gsrc img{width:16px;height:16px}
 
-/* dark trust card */
-.dark{background:var(--ink);color:#fff;border-radius:var(--r);padding:clamp(28px,5vw,56px);display:grid;grid-template-columns:1fr 1.5fr;gap:clamp(24px,4vw,48px);align-items:start}
-.dark .h2{color:#fff}
-.dark p.lead{color:#B4B4B4;margin-top:16px}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.tile{background:#151515;border:1px solid #262626;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px}
-.tile svg{width:22px;height:22px;color:#FF5A45}
-.tile b{font-weight:600;font-size:16px;letter-spacing:.02em}
-.tile span{color:#A8A8A8;font-size:14px;line-height:1.5}
-@media (max-width:900px){.dark{grid-template-columns:1fr}}
-@media (max-width:520px){.tiles{grid-template-columns:1fr}}
+/* platform tabs */
+.ptabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+.ptabs button{position:relative;overflow:hidden;border:1px solid var(--line);background:#fff;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:600;color:var(--mut);cursor:pointer}
+.ptabs button.on{color:var(--ink);border-color:var(--ink)}
+.ptabs button .pg{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--red)}
+.ptabs button.on .pg{animation:fill var(--t,7s) linear forwards}
+@keyframes fill{to{width:100%}}
+.pane{display:none;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(20px,4vw,48px);align-items:center;background:#fff;border:1px solid var(--line);border-radius:24px;padding:clamp(20px,4vw,40px)}
+.pane.on{display:grid;animation:up .5s var(--ease)}
+.pane h3{font-size:clamp(22px,2.4vw,28px);font-weight:900;line-height:1.15}.pane p{color:var(--mut);margin-top:12px}
+.pane ul{margin:18px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px;font-size:15px}
+.pane li{display:flex;gap:10px}.pane li svg{flex:none;width:20px;height:20px;color:var(--red);margin-top:2px}
+.mock{background:var(--g);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.mock .row{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border-radius:12px;padding:12px 14px;font-size:14px}
+.mock .row span:first-child{display:flex;align-items:center;gap:10px}.mock .row img{width:18px;height:18px}
+.chipg{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--g);white-space:nowrap}.chipg.y{background:var(--ok-t);color:var(--ok)}.chipg.n{background:var(--red-t);color:var(--red)}
 
-/* pricing + form */
-.demo{display:grid;grid-template-columns:1fr 1.15fr;gap:clamp(24px,4vw,56px);padding:clamp(24px,5vw,56px)}
-.demo .left{display:flex;flex-direction:column;gap:18px;align-items:flex-start}
-.demo ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:10px;font-size:15px;color:var(--ink2)}
-.demo li{display:flex;gap:10px;align-items:flex-start}
-.demo li svg{width:18px;height:18px;flex:none;margin-top:3px;color:var(--red)}
-form.f{display:grid;grid-template-columns:1fr 1fr;gap:14px;background:var(--card);border-radius:20px;padding:clamp(18px,3vw,28px)}
-form.f .full{grid-column:1/-1}
-form.f label{display:block;font-weight:600;font-size:13px;letter-spacing:.02em;margin-bottom:6px}
-form.f input,form.f textarea{width:100%;min-height:48px;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);background:#fff;font-size:16px}
-form.f textarea{min-height:96px;resize:vertical}
-form.f input:focus,form.f textarea:focus{outline:2px solid var(--ink);outline-offset:0;border-color:transparent}
-form.f .btn{width:100%}
-.ok{background:var(--ok-tint);border-radius:20px;padding:28px;color:var(--ink2);align-self:start}
-.ok b{font-weight:900;font-size:20px;display:block;margin-bottom:6px;color:var(--ink)}
-@media (max-width:900px){.demo{grid-template-columns:1fr}}
-@media (max-width:520px){form.f{grid-template-columns:1fr}}
+/* statement */
+.stmt{padding:clamp(56px,8vw,104px) 0;text-align:center}
+.stmt p{max-width:980px;margin:0 auto;font-weight:900;font-size:clamp(26px,3.6vw,44px);line-height:1.18;letter-spacing:-.01em}
+.stmt p span{color:#D4D4D4;transition:color .25s}.stmt p span.on{color:var(--ink)}.stmt p span.r.on{color:var(--red)}
 
-/* faq */
-.faq{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
-.faq details{background:#fff;border:1px solid var(--line);border-radius:18px;padding:0 22px}
-.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;font-weight:600;font-size:17px;letter-spacing:.01em}
-.faq summary::-webkit-details-marker{display:none}
-.faq summary i{flex:none;width:30px;height:30px;border-radius:50%;background:var(--card);display:grid;place-items:center;transition:transform .25s var(--ease)}
-.faq summary i svg{width:14px;height:14px}
-.faq details[open] summary i{transform:rotate(45deg);background:var(--ink);color:#fff}
-.faq details p{padding:0 0 20px;color:var(--mut);line-height:1.6;max-width:720px}
+/* compare */
+.dark{background:var(--ink);color:#fff;border-radius:28px;padding:clamp(28px,5vw,56px)}
+.dark .sh .lead{color:#BDBDBD}
+.dark .pill{background:#151515;border-color:#2A2A2A;color:#fff}
+table.cmp{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
+.cmp th,.cmp td{padding:16px;text-align:left;vertical-align:top;border-bottom:1px solid #262626}
+.cmp thead th{font-size:13px;color:#BDBDBD;font-weight:600}.cmp thead th b{display:block;color:#fff;font-size:16px;font-weight:900}
+.cmp tbody th{color:#8A8A8A;font-weight:600;font-size:13px;width:16%}
+.cmp td.us{background:#1A1A1A}.cmp thead th.us{background:#1A1A1A;border-radius:16px 16px 0 0}
+.cmp td svg{width:16px;height:16px;vertical-align:-3px;margin-right:6px}.cmp .yes{color:#7BD8A4}.cmp .no{color:#FF8A7A}
+@media(max-width:760px){.cmp thead{display:none}.cmp tr{display:grid;padding-block:10px;border-bottom:1px solid #262626}.cmp th,.cmp td{border:0;padding:4px 0}.cmp td.us{background:none}.cmp td::before{content:attr(data-l);display:block;font-size:12px;color:#8A8A8A;font-weight:600}.cmp tbody th{width:auto;color:#fff;font-size:15px}}
 
-/* final CTA band */
-.cta-band{position:relative;overflow:hidden;background:var(--ink);color:#fff;border-radius:var(--r);padding:clamp(36px,6vw,72px) clamp(22px,5vw,64px);display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center}
-.cta-band .h2{color:#fff}
-.cta-band p{color:#B4B4B4;margin-top:14px;max-width:520px}
-.cta-band .acts{display:flex;flex-wrap:wrap;gap:12px;justify-content:flex-end}
-.cta-band>div{position:relative;z-index:1}
-.cta-band .btn.ln{background:transparent;color:#fff;border-color:#3A3A3A}
-.cta-band .rings{position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;border:1px solid #222;pointer-events:none}
-.cta-band .rings::before,.cta-band .rings::after{content:"";position:absolute;inset:60px;border-radius:50%;border:1px solid #222}
-.cta-band .rings::after{inset:130px;border-color:rgba(178,15,0,.55)}
-@media (max-width:860px){.cta-band{grid-template-columns:1fr}.cta-band .acts{justify-content:flex-start}}
+/* trust, pricing, faq, cta, footer */
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tile{background:var(--g);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:8px}.tile svg{width:22px;height:22px;color:var(--red)}.tile b{font-weight:600}.tile span{font-size:14px;color:var(--mut)}
+.price{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:clamp(20px,4vw,48px);background:var(--g);border-radius:28px;padding:clamp(24px,4vw,48px)}
+.price ul{list-style:none;padding:0;margin:20px 0 24px;display:flex;flex-direction:column;gap:10px}.price li{display:flex;gap:10px}.price li svg{width:20px;height:20px;color:var(--red);flex:none}
+.f{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;background:#fff;border-radius:20px;padding:clamp(18px,3vw,28px)}
+.f .full{grid-column:1/-1}.f label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.f input,.f textarea{width:100%;min-height:46px;border:1px solid var(--line2);border-radius:12px;padding:10px 14px;font-size:16px;background:#fff}.f textarea{min-height:96px;resize:vertical}
+.ok{background:#fff;border-radius:20px;padding:28px;display:flex;flex-direction:column;gap:8px}.ok b{font-size:18px}
+.faq{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.faq details{background:#fff;border:1px solid var(--line);border-radius:16px;padding:0 20px}
+.faq summary{list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;min-height:60px;font-weight:600}
+.faq summary::-webkit-details-marker{display:none}.faq summary i{flex:none;width:28px;height:28px;border-radius:50%;background:var(--g);display:grid;place-items:center;transition:transform .25s}
+.faq summary i svg{width:14px;height:14px}.faq details[open] summary i{transform:rotate(45deg);background:var(--red-t);color:var(--red)}
+.faq p{padding:0 0 18px;color:var(--mut)}
+.band{position:relative;overflow:hidden;background:var(--red);color:#fff;border-radius:28px;padding:clamp(28px,5vw,56px);display:flex;flex-direction:column;gap:24px;align-items:flex-start}
+.band h2{max-width:620px}.band p{color:#FFD9D4;margin-top:10px;max-width:560px}.band .acts{position:relative;display:flex;gap:10px;flex-wrap:wrap}
+.band .btn.blk{background:#fff;color:var(--ink)}.band .btn.ln{background:transparent;color:#fff;border-color:rgba(255,255,255,.5)}
+.band .mini{position:absolute;right:-60px;top:50%;width:360px;height:360px;transform:translateY(-50%);border:1px dashed rgba(255,255,255,.35);border-radius:50%;animation:turn 40s linear infinite;pointer-events:none}
+.band .mini span{position:absolute;width:40px;height:40px;border-radius:12px;background:#fff;display:grid;place-items:center}.band .mini img{width:22px;height:22px}
+footer{padding:56px 0 24px;border-top:1px solid var(--line);margin-top:clamp(56px,8vw,104px);position:relative;overflow:hidden}
+footer .cols{display:grid;grid-template-columns:2fr repeat(3,1fr);gap:24px}
+footer h5{margin:0 0 10px;font-size:13px;font-weight:600;color:var(--mut2)}footer ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:14px}footer ul a:hover{color:var(--red)}
+footer .about b{font-weight:900;font-size:20px}footer .about p{color:var(--mut);font-size:14px;margin-top:8px;max-width:320px}
+footer .base{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:40px;font-size:13px;color:var(--mut2)}
+footer .wm{font-weight:900;font-size:clamp(80px,20vw,260px);line-height:.8;color:var(--g);text-align:center;margin-top:24px;letter-spacing:-.04em;user-select:none}
+.sticky{position:fixed;left:12px;right:12px;bottom:12px;z-index:40;display:none;gap:8px;align-items:center;justify-content:space-between;background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 6px 6px 18px;box-shadow:0 12px 30px -14px rgba(0,0,0,.35);transform:translateY(140%);transition:transform .3s var(--ease)}
+.sticky .t{font-weight:600;font-size:14px}.sticky.show{transform:none}
+.rv{opacity:0;transform:translateY(20px);transition:opacity .7s var(--ease),transform .7s var(--ease)}.rv.in{opacity:1;transform:none}
 
-/* footer */
-footer{position:relative;z-index:1;margin-top:clamp(28px,4vw,40px);background:var(--ink);color:#fff;overflow:hidden}
-footer .cols{display:grid;grid-template-columns:1.4fr repeat(3,1fr);gap:28px;padding-block:clamp(40px,6vw,64px) 24px}
-footer h5{margin:0 0 12px;font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8A8A8A}
-footer ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:14px;color:#D6D6D6}
-footer ul a:hover{color:#fff;text-decoration:underline}
-footer .about b{font-weight:900;font-size:22px}
-footer .about p{color:#A8A8A8;font-size:14px;line-height:1.6;margin-top:10px;max-width:340px}
-footer .base{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;border-top:1px solid #222;padding-block:18px;font-size:13px;color:#8A8A8A}
-footer .wm{font-weight:900;font-size:clamp(90px,22vw,300px);line-height:.78;letter-spacing:-.03em;color:#111;text-align:center;user-select:none;margin-bottom:-.06em;white-space:nowrap}
-@media (max-width:760px){footer .cols{grid-template-columns:1fr 1fr}footer .about{grid-column:1/-1}}
-
-/* sticky CTA */
-.sticky{position:fixed;left:50%;bottom:18px;z-index:30;transform:translate(-50%,140%);transition:transform .35s var(--ease);display:flex;align-items:center;gap:6px;padding:6px;border-radius:999px;background:rgba(255,255,255,.92);border:1px solid var(--line);box-shadow:0 16px 40px -14px rgba(0,0,0,.35);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.sticky.show{transform:translate(-50%,0)}
-.sticky a.t{font-weight:600;font-size:14px;padding:0 14px;color:var(--ink2);white-space:nowrap}
-@media (max-width:420px){.sticky a.t{display:none}}
-
-/* reveal on scroll */
-.rv{opacity:0;transform:translateY(18px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
-.rv.in{opacity:1;transform:none}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important}.rv{opacity:1;transform:none}.statement p span{color:var(--ink)}}
+@media(max-width:1000px){.wg{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.wg .col:last-child{grid-column:1/-1}.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:860px){.hero .grid,.demo2,.pane,.price{grid-template-columns:minmax(0,1fr)}.hero .copy{text-align:center}.hero .copy .cta,.hero .copy .checks{justify-content:center}.hero .lead{margin-inline:auto}footer .cols{grid-template-columns:1fr 1fr}.sticky{display:flex}}
+@media(max-width:760px){.band .mini{display:none}}
+@media(max-width:600px){.wg,.tiles,.facts,.f{grid-template-columns:minmax(0,1fr)}.wg .col:last-child{grid-column:auto}.try{flex-direction:column}.orb .note{display:none}.orb .chip span{width:40px;height:40px;left:-20px;top:-20px;border-radius:12px}.orb .chip img{width:22px;height:22px}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rv,.fade{opacity:1;transform:none}}
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="i-check" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor" opacity=".12"/><path d="M6 10.3l2.6 2.6L14.2 7.3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-x" viewBox="0 0 20 20"><circle cx="10" cy="10" r="9" fill="currentColor" opacity=".14"/><path d="M7 7l6 6M13 7l-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   <symbol id="i-arrow" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
-  <symbol id="i-cursor" viewBox="0 0 18 18"><path d="M2 1.5l13 6.2-5.6 1.7-2.2 5.6z" fill="currentColor" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></symbol>
 </svg>
-<div class="grid-bg" aria-hidden="true"></div>
-
-<div class="bar"><b>New in Orbit:</b> blog posts drafted from your own search data, reviewed by you, published to Shopify.<a href="#execute">See how</a></div>
-
-<header class="nav"><div class="wrap">
-  <a class="brand" href="/" aria-label="Orbit by Hovers, home"><img src="{{ url_for('static', filename='hovers-logo.svg') }}" alt="Hovers" width="94" height="24"><span class="sep" aria-hidden="true"></span><b>Orbit</b></a>
-  <nav class="links" aria-label="Main"><a href="#product">Product</a><a href="#features">Features</a><a href="#how">How it works</a><a href="#demo">Pricing</a><a href="#faq">FAQ</a></nav>
+{% set E = {
+  'chatgpt': ('ChatGPT', url_for('static', filename='engines/openai.svg')),
+  'aio': ('AI Overviews', url_for('static', filename='engines/google-color.svg')),
+  'aimode': ('AI Mode', url_for('static', filename='engines/google-color.svg')),
+  'gemini': ('Gemini', url_for('static', filename='engines/gemini-color.svg')),
+  'perplexity': ('Perplexity', url_for('static', filename='engines/perplexity-color.svg')),
+  'deepseek': ('DeepSeek', url_for('static', filename='engines/deepseek-color.svg')),
+  'copilot': ('Copilot', url_for('static', filename='engines/copilot-color.svg')),
+  'claude': ('Claude', url_for('static', filename='engines/claude-color.svg')),
+  'grok': ('Grok', url_for('static', filename='engines/grok.svg'))
+} %}
+<div class="ann">
+  <span class="spin"><img src="{{ E['gemini'][1] }}" alt=""></span>
+  <span><b>Coming to Orbit:</b> Google AI Overviews, Gemini, Perplexity and DeepSeek, next to ChatGPT.</span>
+  <a href="#engines">See every engine</a>
+</div>
+<header class="nav"><div class="in">
+  <a class="brand" href="/" aria-label="Orbit by Hovers, home"><img src="{{ url_for('static', filename='hovers-logo.svg') }}" alt="Hovers" width="86" height="22"><span class="sep" aria-hidden="true"></span><b>Orbit</b></a>
+  <nav class="links" aria-label="Main"><a href="#product">Product</a><a href="#engines">AI engines</a><a href="#platform">Platform</a><a href="#compare">Why Orbit</a><a href="#demo">Pricing</a><a href="#faq">FAQ</a></nav>
   <div class="acts"><a class="signin" href="{{ url_for('login') }}">Sign in</a><a class="btn red sm" href="{{ url_for('signup') }}">Start free trial</a></div>
 </div></header>
 
 <main>
-<!-- hero -->
 <section class="hero"><div class="wrap">
-  <span class="pill-label"><i></i>Search intelligence · Google + ChatGPT</span>
-  <h1 class="h1">Know where you rank. In Google <span class="r">and</span> in AI.</h1>
-  <p class="lead">Orbit reads your Search Console and Google Analytics, asks ChatGPT the questions your buyers ask, and shows where competitors win. Then it drafts the posts that close the gap.</p>
-  <div class="cta">
-    <a class="btn blk" href="{{ url_for('signup') }}">Start 14-day free trial<span class="arr"><svg><use href="#i-arrow"/></svg></span></a>
-    <span class="alt">Not sure yet? <a href="#demo">Talk to sales</a></span>
+  <div class="grid">
+    <div class="copy">
+      <span class="pill"><span class="lg"><img src="{{ E['chatgpt'][1] }}" alt=""><img src="{{ E['gemini'][1] }}" alt=""><img src="{{ E['perplexity'][1] }}" alt=""><img src="{{ E['aio'][1] }}" alt=""></span>AI search visibility, by Hovers</span>
+      <h1 class="h1">Know where you rank in Google and in <span class="cyc" id="cyc"><img src="{{ E['chatgpt'][1] }}" alt=""><b>ChatGPT</b></span></h1>
+      <p class="lead">Orbit reads your Search Console and Analytics, asks AI assistants the questions your buyers ask, and shows which brands they recommend instead of you. Then it drafts the content that closes the gap.</p>
+      <div class="cta">
+        <a class="btn blk" href="{{ url_for('signup') }}">Check my AI visibility<span class="arr"><svg><use href="#i-arrow"/></svg></span></a>
+        <a class="btn ln" href="#demo">Talk to the Hovers team</a>
+      </div>
+      <div class="checks"><span><svg><use href="#i-check"/></svg>Read-only Google access</span><span><svg><use href="#i-check"/></svg>Refreshed every day</span><span><svg><use href="#i-check"/></svg>14-day trial, no card</span></div>
+    </div>
+    <div class="orb" id="product" aria-label="Illustration: your brand at the centre, AI answer engines around it">
+      <div class="ring r1"></div><div class="ring r2"></div>
+      <div class="rot a">
+        {% for k, a in [('chatgpt', 0), ('aio', 90), ('perplexity', 180), ('gemini', 270)] %}<div class="chip" style="--a:{{ a }}deg;--d:.31"><span><img src="{{ E[k][1] }}" alt="{{ E[k][0] }}"></span></div>{% endfor %}
+      </div>
+      <div class="rot b">
+        {% for k, a in [('deepseek', 30), ('copilot', 102), ('aimode', 174), ('claude', 246), ('grok', 318)] %}<div class="chip" style="--a:{{ a }}deg;--d:.47"><span><img src="{{ E[k][1] }}" alt="{{ E[k][0] }}"></span></div>{% endfor %}
+      </div>
+      <div class="core">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" fill="none" stroke="#F5F5F5" stroke-width="7"/><circle id="ring" cx="50" cy="50" r="44" fill="none" stroke="#B20F00" stroke-width="7" stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5" style="transition:stroke-dashoffset 1.8s cubic-bezier(.2,.7,.1,1)"/></svg>
+        <div><strong id="score">0</strong><small>Visibility score</small><span class="tagl" style="margin-top:6px">Illustration</span></div>
+      </div>
+      <div class="note n1"><b>Named 2nd in ChatGPT</b>for "best silver jewellery"</div>
+      <div class="note n2"><b>Your page cited</b><span class="ok">AI Overview · 3 keywords</span></div>
+      <div class="note n3"><b>Competitor A</b>recommended in Perplexity</div>
+    </div>
   </div>
-  <div class="proof">
-    <span><svg><use href="#i-check"/></svg>Read-only Google access</span>
-    <span><svg><use href="#i-check"/></svg>Data refreshed every day</span>
-    <span><svg><use href="#i-check"/></svg>No card for the trial</span>
+  <div class="facts">
+    <div class="fact"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg></span><div><strong>Every day</strong><span class="ds">Data refreshes overnight. Nobody presses a pull button.</span></div></div>
+    <div class="fact"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg></span><div><strong>Read-only</strong><span class="ds">Google access that cannot change your accounts.</span></div></div>
+    <div class="fact"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h14v10H3z"/><path d="M3 9h14M8 9v6"/></svg></span><div><strong>One view</strong><span class="ds">Google, AI answers, Reddit and YouTube together.</span></div></div>
+    <div class="fact"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10l4 4 8-8"/></svg></span><div><strong><span data-count="14">14</span> days</strong><span class="ds">Free trial with your own data, no card.</span></div></div>
   </div>
+</div>
+<div class="mq" aria-label="Brands the Hovers team has worked with, and the engines Orbit reads">
+  <p>Brands the Hovers team has worked with · the answer engines Orbit reads</p>
+  <div class="track">
+    {% for _ in range(2) %}<div class="belt"{% if loop.index == 2 %} aria-hidden="true"{% endif %}>
+      <figure><img src="{{ url_for('brand_logo', key='tupperware', v=3) }}" alt="Tupperware" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Tupperware</span></figure>
+      {% for k in ['chatgpt', 'gemini', 'perplexity'] %}<figure><img class="eng" src="{{ E[k][1] }}" alt="">{{ E[k][0] }}</figure>{% endfor %}
+      <figure><img src="{{ url_for('brand_logo', key='cradlewise', v=3) }}" alt="Cradlewise" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Cradlewise</span></figure>
+      {% for k in ['aio', 'deepseek', 'copilot'] %}<figure><img class="eng" src="{{ E[k][1] }}" alt="">{{ E[k][0] }}</figure>{% endfor %}
+      <figure><img src="{{ url_for('brand_logo', key='pack8', v=3) }}" alt="Pack8" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Pack8</span></figure>
+    </div>{% endfor %}
+  </div>
+</div>
+</section>
 
-  <div class="frame rv" id="product" aria-label="Illustration of the Orbit overview screen">
-    <div class="app">
-      <div class="app-top" aria-hidden="true"><i></i><i></i><i></i><span>orbit · yourbrand.com</span><em>Illustration</em></div>
-      <div class="app-body">
-        <div class="app-side" aria-hidden="true">
-          <b>Analyse</b><span class="on">Overview</span><span>Keywords</span><span>AI visibility</span><span>Sources AI trusts</span><span>Competitors</span><span>Technical</span>
-          <b>Execute</b><span>Blog posts</span><span>Publishing</span>
-        </div>
-        <div class="app-main">
-          <h4>Overview</h4>
-          <div class="kpis">
-            <div class="kpi"><small>Keywords on page 1</small><strong>Rising</strong><span class="up">↑ vs last month</span></div>
-            <div class="kpi"><small>Named by ChatGPT</small><strong>Rising</strong><span class="up">↑ share of answers</span></div>
-            <div class="kpi"><small>Organic clicks</small><strong>Rising</strong><span class="up">↑ from Search Console</span></div>
-            <div class="kpi"><small>Drafts to review</small><strong>3</strong><span class="up" style="color:var(--red)">Ready today</span></div>
-          </div>
-          <div class="app-row">
-            <div class="chart"><small>Clicks and AI mentions, last 90 days</small>
-              <svg viewBox="0 0 400 150" preserveAspectRatio="none" aria-hidden="true">
-                <g stroke="#E3E3E3" stroke-width="1"><line x1="0" y1="30" x2="400" y2="30"/><line x1="0" y1="75" x2="400" y2="75"/><line x1="0" y1="120" x2="400" y2="120"/></g>
-                <path d="M0 118 C40 112 60 116 90 104 S150 96 180 90 S240 70 270 72 S330 48 360 40 S390 34 400 30" fill="none" stroke="#000" stroke-width="2.5"/>
-                <path d="M0 136 C50 134 80 132 120 128 S190 118 220 112 S290 96 320 90 S380 74 400 70" fill="none" stroke="#B20F00" stroke-width="2.5" stroke-dasharray="1 0"/>
-              </svg>
-              <div style="display:flex;gap:16px;font-size:12px;color:var(--mut)"><span>━ Clicks</span><span style="color:var(--red)">━ AI mentions</span></div>
-            </div>
-            <div class="list"><small>Who ChatGPT names</small>
-              <div><span>Competitor A</span><span class="tag">1st</span></div>
-              <div><span><b>Your brand</b></span><span class="tag g">2nd · up</span></div>
-              <div><span>Competitor B</span><span class="tag">3rd</span></div>
-              <div><span>Competitor C</span><span class="tag rd">dropped</span></div>
-            </div>
-          </div>
-        </div>
+<section class="sec g"><div class="wrap">
+  <div class="sh rv">
+    <span class="pill"><i></i>AI visibility, in one screen</span>
+    <h2 class="h2">Be visible where buyers now ask first.</h2>
+    <p class="lead">Your share of AI answers, the score behind it, the prompts where you are cited, and how each engine treats you.</p>
+    <form class="try" action="{{ url_for('signup') }}" method="get"><input name="site" placeholder="yourbrand.com" aria-label="Your website"><button class="btn red">See my brand<span class="arr"><svg><use href="#i-arrow"/></svg></span></button></form>
+  </div>
+  <div class="wg rv" id="wg">
+    <div class="col">
+      <div class="card bars"><h4>Share of voice in AI answers<span class="tagl">Illustration</span></h4>
+        <div class="row"><b>Your brand</b><span class="meter"><i class="rd" data-w="38"></i></span><em>38%</em></div>
+        <div class="row"><span>Competitor A</span><span class="meter"><i data-w="29"></i></span><em>29%</em></div>
+        <div class="row"><span>Competitor B</span><span class="meter"><i data-w="19"></i></span><em>19%</em></div>
+        <div class="row"><span>Others</span><span class="meter"><i data-w="14" style="background:#BDBDBD"></i></span><em>14%</em></div>
+      </div>
+      <div class="card"><h4>Prompts where you are cited</h4>
+        <div class="split"><div><strong>31</strong>cited</div><div class="rt"><strong>19</strong>not cited</div></div>
+        <div class="meter" style="margin-top:12px"><i class="rd" data-w="62"></i></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card gauge"><h4 style="width:100%">Hovers Visibility Score</h4>
+        <svg viewBox="0 0 200 110" aria-hidden="true"><path d="M20 100a80 80 0 01160 0" fill="none" stroke="#F5F5F5" stroke-width="16" stroke-linecap="round"/><path id="gArc" d="M20 100a80 80 0 01160 0" fill="none" stroke="#B20F00" stroke-width="16" stroke-linecap="round" stroke-dasharray="251.3" stroke-dashoffset="251.3" style="transition:stroke-dashoffset 1.6s cubic-bezier(.2,.7,.1,1)"/></svg>
+        <strong id="gNum">0</strong><span>Competitive · mention, position, citation and sentiment</span>
+      </div>
+      <div class="card"><h4>What AI says about you</h4>
+        <div class="bars"><div class="row"><span>Positive</span><span class="meter"><i style="background:var(--ok)" data-w="64"></i></span><em>64%</em></div><div class="row"><span>Neutral</span><span class="meter"><i style="background:#BDBDBD" data-w="30"></i></span><em>30%</em></div><div class="row"><span>Negative</span><span class="meter"><i class="rd" data-w="6"></i></span><em>6%</em></div></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="card eng"><h4>By answer engine</h4>
+        {% for k, v in [('chatgpt', 74), ('aio', 68), ('gemini', 61), ('perplexity', 57), ('deepseek', 49), ('aimode', 44)] %}<div class="row"><img src="{{ E[k][1] }}" alt=""><span>{{ E[k][0] }}</span><span class="meter"><i class="{{ 'rd' if loop.first else '' }}" data-w="{{ v }}"></i></span><em>{{ v }}</em></div>{% endfor %}
       </div>
     </div>
   </div>
 </div></section>
 
-<!-- client logos -->
-<section class="logos"><div class="wrap">
-  <p>Brands the Hovers team has worked with</p>
-  <div class="logo-row">
-    <figure><img src="{{ url_for('brand_logo', key='tupperware', v=3) }}" alt="Tupperware" class="tall" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Tupperware</span></figure>
-    <figure><img src="{{ url_for('brand_logo', key='cradlewise', v=3) }}" alt="Cradlewise" class="wide" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Cradlewise</span></figure>
-    <figure><img src="{{ url_for('brand_logo', key='pack8', v=3) }}" alt="Pack8" class="tall" loading="lazy" onerror="this.parentNode.classList.add('fail')"><span class="nm">Pack8</span></figure>
-  </div>
-</div></section>
-
-<!-- the problem -->
 <section class="sec"><div class="wrap">
-  <div class="panel stage rv">
-    <div class="stage-grid">
-      <div class="stage-copy">
-        <span class="pill-label"><i></i>The problem</span>
-        <h2 class="h2">Your buyers now ask ChatGPT first. It may be naming someone else.</h2>
-        <p class="lead">Search Console tells you about Google. Nothing tells you what AI assistants say about your category, which brands they recommend, or which sites they trust to decide. That is where the next customer is won or lost.</p>
+  <div class="sh rv"><span class="pill"><i></i>How Orbit reads an answer</span><h2 class="h2">Every answer, read like an analyst would.</h2>
+    <p class="lead">Orbit asks each engine your buyers' questions on a schedule, then records who was named, in what order, how they were described and which sites were cited.</p></div>
+  <div class="demo2 rv">
+    <div class="chat">
+      <div class="etabs" id="etabs" role="tablist" aria-label="Answer engine">
+        {% for k in ['chatgpt', 'gemini', 'perplexity', 'aio'] %}<button role="tab" data-k="{{ k }}"{% if loop.first %} class="on"{% endif %}><img src="{{ E[k][1] }}" alt="">{{ E[k][0] }}</button>{% endfor %}
       </div>
-      <div class="float" aria-hidden="true">
-        <div class="fc fc1">
-          <div class="who"><span class="dot">AI</span>ChatGPT answer</div>
-          <q>"What are the best options for a first-time buyer?"</q>
-          <div class="rec">
-            <div><b>Competitor A</b><span class="tag">Recommended</span></div>
-            <div><b>Competitor B</b><span class="tag">Recommended</span></div>
-            <div class="you"><span>Your brand</span><span>not mentioned</span></div>
-          </div>
-        </div>
-        <div class="fc fc2">
-          <div class="who"><span class="dot" style="background:var(--red)">G</span>Google · your best page</div>
-          <div class="pos"><strong>#14</strong><span style="color:var(--mut)">page 2</span></div>
-          <div class="bar2"><i></i></div>
-          <div style="margin-top:8px;color:var(--mut);font-size:12px">Close to page 1. One focused post can move it.</div>
-        </div>
-        <div class="cursor cur-buyer"><svg><use href="#i-cursor"/></svg><span>Your buyer</span></div>
+      <div class="q" id="q" aria-live="polite"></div>
+      <div class="a" id="ans">
+        <div class="fade" id="think"><span class="dots"><i></i><i></i><i></i></span></div>
+        <div class="fade ln" style="width:92%"></div><div class="fade ln" style="width:78%"></div>
+        <div class="fade rk" id="rk"></div>
+        <div class="fade src" id="srcs"></div>
       </div>
     </div>
-  </div>
-</div></section>
-
-<!-- the solution -->
-<section class="sec" style="padding-top:0"><div class="wrap">
-  <div class="panel orbit rv">
-    <div class="core">
-      <span class="pill-label"><i></i>The solution</span>
-      <h2 class="h2">Every place your buyers search, in one view.</h2>
-      <p class="lead">Orbit brings Google and AI answers together, with the community and competitor signals that shape both. It reads; it never changes your accounts.</p>
-      <a class="btn blk" href="{{ url_for('signup') }}">See it on your site<span class="arr"><svg><use href="#i-arrow"/></svg></span></a>
-    </div>
-    <div class="srcs">
-      <span class="src s1"><i>G</i>Search Console</span>
-      <span class="src s2 red"><i>AI</i>ChatGPT answers</span>
-      <span class="src s3"><i>A</i>Google Analytics 4</span>
-      <span class="src s4"><i>S</i>Semrush</span>
-      <span class="src s5"><i>R</i>Reddit</span>
-      <span class="src s6"><i>▶</i>YouTube</span>
-    </div>
-  </div>
-</div></section>
-
-<!-- statement -->
-<section class="statement"><div class="wrap">
-  <p id="stmt">Rankings show where you stand on Google. Orbit adds what AI says about you, the sources it trusts, and the posts that would change its answer.</p>
-  <small>Built by Hovers for brands and their search teams</small>
-</div></section>
-
-<!-- features bento -->
-<section class="sec" id="features"><div class="wrap">
-  <div class="sh"><span class="pill-label"><i></i>What Orbit tracks</span><h2 class="h2">Classic SEO and AI visibility, side by side.</h2>
-    <p class="lead">Plain language at the top for owners. Full technical depth underneath for SEO teams.</p></div>
-  <div class="bento">
-    <article class="b w3 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 16l4-5 3 3 6-8"/></svg></span>
-      <span class="k">Google</span><h3>Keywords on page 1</h3><p>Positions, clicks and the pages that rank, straight from Search Console, with organic revenue from GA4.</p>
-      <div class="ill" aria-hidden="true">
-        <div class="ln"><span>best wireless earbuds under 5000</span><span class="meter"><i style="width:82%"></i></span><span class="tag g">#3</span></div>
-        <div class="ln"><span>how to clean white sneakers</span><span class="meter"><i style="width:64%"></i></span><span class="tag g">#6</span></div>
-        <div class="ln"><span>monsoon skincare routine</span><span class="meter"><i class="r" style="width:30%"></i></span><span class="tag">#14</span></div>
-      </div></article>
-    <article class="b w3 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="7"/><path d="M7 10h6M10 7v6"/></svg></span>
-      <span class="k">AI answers</span><h3>Does ChatGPT name you?</h3><p>The questions buyers ask, asked on a schedule. Mention rate, rank in the answer, and the brands named instead.</p>
-      <div class="ill" aria-hidden="true">
-        <div class="ln"><span>Named in answers</span><span class="meter"><i class="r" style="width:58%"></i></span><span class="tag rd">You</span></div>
-        <div class="ln"><span>Competitor A</span><span class="meter"><i style="width:71%"></i></span><span class="tag">A</span></div>
-        <div class="ln"><span>Competitor B</span><span class="meter"><i style="width:40%"></i></span><span class="tag">B</span></div>
-      </div></article>
-    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h12v12H4z"/><path d="M4 8h12M8 8v8"/></svg></span>
-      <span class="k">Sources</span><h3>Sites AI trusts</h3><p>The category sites and threads answers cite, and whether you or competitors appear there.</p>
-      <div class="ill" aria-hidden="true"><div class="ln"><span>Reddit threads</span><span class="tag">cited</span></div><div class="ln"><span>Category directories</span><span class="tag">cited</span></div><div class="ln"><span>YouTube reviews</span><span class="tag rd">gap</span></div></div></article>
-    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="8" r="3"/><circle cx="14" cy="12" r="3"/><path d="M2 17c1-3 3-4 5-4M19 18c-1-2-3-3-5-3"/></svg></span>
-      <span class="k">Competitors</span><h3>Gaps they win</h3><p>Keywords, answers and links competitors have and you don't, ranked by what is worth chasing.</p>
-      <div class="ill" aria-hidden="true"><div class="ln"><span>Keyword gap</span><span class="tag rd">open</span></div><div class="ln"><span>Backlink gap</span><span class="tag">tracked</span></div><div class="ln"><span>AI answer gap</span><span class="tag rd">open</span></div></div></article>
-    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 2l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V5z"/></svg></span>
-      <span class="k">Technical</span><h3>An audit like an analyst's</h3><p>Issues, not page dumps: broken pages, redirects, sitemap and robots problems, each with the URLs to fix.</p>
-      <div class="ill" aria-hidden="true">
-        <div class="chk"><svg style="color:var(--ok)"><use href="#i-check"/></svg>Sitemap listed in robots.txt</div>
-        <div class="chk"><svg style="color:var(--red)"><use href="#i-check"/></svg>Pages returning 404</div>
-        <div class="chk"><svg style="color:var(--ok)"><use href="#i-check"/></svg>One version of the site live</div>
-      </div></article>
-    <article class="b w4 rv" id="execute"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 16l2-6 8-8 4 4-8 8z"/><path d="M12 4l4 4"/></svg></span>
-      <span class="k">Execute</span><h3>From the gap to a published post</h3><p>Topics come from searches you already show for and questions AI does not answer with your name yet. Orbit drafts each post in your brand's rules, links it to real pages, and checks it. Nothing goes live until someone on your side clicks Publish.</p>
-      <div class="ill" aria-hidden="true">
-        <div class="post"><b>How to clean white sneakers at home without damage</b><em>Draft · checks passed · 1,140 words</em></div>
-        <div class="acts"><span>Review</span><span>Preview link</span><span class="go">Publish to Shopify</span></div>
-      </div></article>
-    <article class="b w2 rv"><span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 2h7l3 3v13H5z"/><path d="M8 9h5M8 12h5M8 15h3"/></svg></span>
-      <span class="k">Report</span><h3>Monthly report, ready</h3><p>A shareable deck for the month: rankings, traffic, AI visibility, work done and next month's plan.</p>
-      <div class="ill" aria-hidden="true"><div class="ln"><span>Report for last month</span><span class="tag g">ready</span></div></div></article>
-  </div>
-</div></section>
-
-<!-- how it works -->
-<section class="sec" id="how"><div class="wrap">
-  <div class="panel rv">
-    <div class="sh" style="margin:clamp(28px,4vw,48px) auto 0;padding-inline:16px"><span class="pill-label"><i></i>How it works</span><h2 class="h2">Connect once. Orbit does the reading.</h2>
-      <p class="lead">No tags to install and no spreadsheets to maintain.</p></div>
-    <div class="steps">
-      <div class="step"><i>1</i><h3>Connect Google</h3><p>Sign in with the Google account that sees your Search Console and Analytics. One consent screen, read-only.</p></div>
-      <div class="step"><i>2</i><h3>Pick your site</h3><p>Orbit matches the site to its Analytics property and finds your category, competitors and the questions buyers ask.</p></div>
-      <div class="step"><i>3</i><h3>Open it each morning</h3><p>Data refreshes overnight on its own. Drafts wait for review. The monthly report is ready when the month ends.</p></div>
-    </div>
-  </div>
-</div></section>
-
-<!-- trust -->
-<section class="sec"><div class="wrap">
-  <div class="dark rv">
-    <div><span class="pill-label" style="background:#151515;border-color:#2A2A2A;color:#fff"><i></i>Built to be trusted</span>
-      <h2 class="h2" style="margin-top:18px">Your accounts stay yours.</h2>
-      <p class="lead">Orbit is made by Hovers, the team that runs search for the brands above. It is built the way we would want a tool to touch our own clients' data.</p></div>
-    <div class="tiles">
-      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg><b>Read-only Google access</b><span>Orbit cannot change Search Console or Analytics settings, users or data.</span></div>
-      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg><b>Refreshed every day</b><span>Data is ready when you open the dashboard. Nobody has to press pull.</span></div>
-      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10l4 4 8-8"/></svg><b>You approve every post</b><span>Store access covers blog content only, and only after you click Publish.</span></div>
-      <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h14v10H3z"/><path d="M3 9h14"/></svg><b>Each brand kept apart</b><span>Data is separated per brand at the database level, hosted in Singapore.</span></div>
-    </div>
-  </div>
-</div></section>
-
-<!-- pricing + sales form -->
-<section class="sec" id="demo"><div class="wrap">
-  <div class="panel demo rv">
-    <div class="left">
-      <span class="pill-label"><i></i>Pricing</span>
-      <h2 class="h2">Plans for brands and agencies.</h2>
-      <p class="lead">Pricing depends on the number of brands, AI questions and markets you track. Tell us about your site and we will show you Orbit on your own data.</p>
+    <div class="read">
+      <span class="tagl" style="align-self:flex-start;color:#8A8A8A;border-color:#333">Illustration</span>
+      <h3>What Orbit records</h3>
+      <p>Saved with the full answer, so every number can be traced back to what the engine actually said.</p>
       <ul>
-        <li><svg><use href="#i-check"/></svg>14-day free trial, no card</li>
-        <li><svg><use href="#i-check"/></svg>Client view for each brand you manage</li>
-        <li><svg><use href="#i-check"/></svg>Blog drafts and Shopify publishing included</li>
+        <li><span>Your brand named</span><em id="o1">—</em></li>
+        <li><span>Position among brands</span><em id="o2">—</em></li>
+        <li><span>How you were described</span><em id="o3">—</em></li>
+        <li><span>Your site cited</span><em id="o4">—</em></li>
+        <li><span>Brands named instead</span><em id="o5">—</em></li>
       </ul>
+    </div>
+  </div>
+</div></section>
+
+<section class="sec g" id="engines"><div class="wrap">
+  <div class="sh rv"><span class="pill"><i></i>Answer engines</span><h2 class="h2">Track visibility across every AI answer engine.</h2>
+    <p class="lead">One score per engine, side by side with your Google rankings. ChatGPT is live today; the rest are rolling out.</p></div>
+  <div class="egrid rv">
+    {% for k, s in [('chatgpt', 'live'), ('aio', 'soon'), ('aimode', 'soon'), ('gemini', 'soon'), ('perplexity', 'soon'), ('deepseek', 'soon'), ('copilot', 'plan'), ('claude', 'plan'), ('grok', 'plan')] %}
+    <div class="et"><span class="lo"><img src="{{ E[k][1] }}" alt=""></span><b>{{ E[k][0] }}</b><span class="st {{ s }}">{{ {'live': 'Live', 'soon': 'Rolling out', 'plan': 'Planned'}[s] }}</span></div>
+    {% endfor %}
+  </div>
+  <div class="gsrc rv"><span><img src="{{ E['aio'][1] }}" alt="">Search Console · live</span><span><img src="{{ E['aio'][1] }}" alt="">Google Analytics 4 · live</span><span>Reddit · live</span><span>YouTube · live</span></div>
+</div></section>
+
+<section class="sec" id="platform"><div class="wrap">
+  <div class="sh rv"><span class="pill"><i></i>The platform</span><h2 class="h2">From first connection to published fix.</h2>
+    <p class="lead">Plain language at the top for owners, full technical depth underneath for search teams.</p></div>
+  <div class="ptabs rv" id="ptabs" role="tablist">
+    <button class="on" data-p="0">Overview<span class="pg"></span></button><button data-p="1">AI answers<span class="pg"></span></button><button data-p="2">Citations<span class="pg"></span></button><button data-p="3">Competitors<span class="pg"></span></button><button data-p="4">AI traffic<span class="pg"></span></button><button data-p="5">Execute<span class="pg"></span></button>
+  </div>
+  <div id="panes">
+    <div class="pane on"><div><h3>Your brand's standing, in one screen.</h3><p>The visibility score, citations and mentions, how each engine treats you and how Google ranks you, refreshed overnight.</p>
+      <ul><li><svg><use href="#i-check"/></svg>Score with a band from "Not shortlisted" to "Leader"</li><li><svg><use href="#i-check"/></svg>Brand and competitors switchable on every screen</li><li><svg><use href="#i-check"/></svg>What changed this month, in plain words</li></ul></div>
+      <div class="mock"><div class="row"><span><b>Visibility score</b></span><span class="chipg y">Competitive</span></div><div class="row"><span>Keywords on page 1</span><span class="chipg">from Search Console</span></div><div class="row"><span>AI citations · 30 days</span><span class="chipg">all engines</span></div></div></div>
+    <div class="pane"><div><h3>The questions your buyers ask, asked for you.</h3><p>Prompts grouped by buying stage, asked on a schedule in your market, with the full answer kept for every run.</p>
+      <ul><li><svg><use href="#i-check"/></svg>Named or not, and in which position</li><li><svg><use href="#i-check"/></svg>Sentiment and whether you were recommended</li><li><svg><use href="#i-check"/></svg>Other brands AI names that you don't track yet</li></ul></div>
+      <div class="mock">{% for k, y in [('chatgpt', 'Named 2nd'), ('gemini', 'Not named'), ('perplexity', 'Named 1st')] %}<div class="row"><span><img src="{{ E[k][1] }}" alt="">{{ E[k][0] }}</span><span class="chipg {{ 'n' if y == 'Not named' else 'y' }}">{{ y }}</span></div>{% endfor %}</div></div>
+    <div class="pane"><div><h3>The sites AI trusts in your category.</h3><p>Every link an answer cites, grouped by domain and type, with your own pages separated from competitors' and third-party sources.</p>
+      <ul><li><svg><use href="#i-check"/></svg>Share of citations per domain</li><li><svg><use href="#i-check"/></svg>Cited versus only read while searching</li><li><svg><use href="#i-check"/></svg>Reddit, YouTube and review sites called out</li></ul></div>
+      <div class="mock"><div class="row"><span>yourbrand.com</span><span class="chipg y">your site</span></div><div class="row"><span>reddit.com</span><span class="chipg">community</span></div><div class="row"><span>competitor.com</span><span class="chipg n">competitor</span></div></div></div>
+    <div class="pane"><div><h3>Where competitors win, ranked by worth.</h3><p>Keywords, answers and links your competitors have and you don't, with AI Overview presence per keyword.</p>
+      <ul><li><svg><use href="#i-check"/></svg>Keyword gap and backlink gap</li><li><svg><use href="#i-check"/></svg>Side-by-side visibility trend per engine</li><li><svg><use href="#i-check"/></svg>Who is named in each answer, and who isn't</li></ul></div>
+      <div class="mock"><div class="row"><span>Your brand</span><span class="chipg y">2 of 3 keywords</span></div><div class="row"><span>Competitor A</span><span class="chipg">2 of 3 keywords</span></div><div class="row"><span>Competitor B</span><span class="chipg">1 of 3 keywords</span></div></div></div>
+    <div class="pane"><div><h3>Visits AI sends you, next to organic search.</h3><p>Sessions, engagement and revenue from AI assistants in Google Analytics 4, compared with organic search over the same days.</p>
+      <ul><li><svg><use href="#i-check"/></svg>Sessions by AI source</li><li><svg><use href="#i-check"/></svg>Quality: engagement and conversions</li><li><svg><use href="#i-check"/></svg>Treated as a floor: some AI visits arrive without a referrer</li></ul></div>
+      <div class="mock">{% for k in ['chatgpt', 'perplexity', 'gemini'] %}<div class="row"><span><img src="{{ E[k][1] }}" alt="">{{ E[k][0] }}</span><span class="chipg">sessions · engaged · revenue</span></div>{% endfor %}</div></div>
+    <div class="pane" id="execute"><div><h3>From the gap to a published post.</h3><p>Topics come from searches you already show for and questions AI doesn't answer with your name yet. Orbit drafts each post in your brand's rules and checks it.</p>
+      <ul><li><svg><use href="#i-check"/></svg>Nothing goes live until you click Publish</li><li><svg><use href="#i-check"/></svg>Publishing to Shopify built in</li><li><svg><use href="#i-check"/></svg>A monthly report deck, ready at month end</li></ul></div>
+      <div class="mock"><div class="row"><span><b>How to choose a silver mangalsutra</b></span><span class="chipg y">checks passed</span></div><div class="row"><span>Review · preview link</span><span class="chipg n">Publish to Shopify</span></div></div></div>
+  </div>
+</div></section>
+
+<section class="stmt"><div class="wrap"><p id="stmt">Rankings show where you stand on Google. Orbit adds what AI says about you, the sources it trusts, and the content that would change its answer.</p></div></section>
+
+<section class="sec" id="compare" style="padding-top:0"><div class="wrap">
+  <div class="dark rv">
+    <div class="sh"><span class="pill"><i></i>Why Orbit</span><h2 class="h2">The tool and the team that acts on it.</h2>
+      <p class="lead">Use Orbit on your own, or with the Hovers search team running strategy, content and tracking end to end.</p></div>
+    <table class="cmp">
+      <thead><tr><th></th><th class="us"><b>Orbit + Hovers team</b>Done for you</th><th><b>Orbit on its own</b>Your team runs it</th><th><b>Typical SEO retainer</b>Google rankings only</th></tr></thead>
+      <tbody>
+        <tr><th>AI answers</th><td class="us" data-l="Orbit + Hovers team"><svg class="yes"><use href="#i-check"/></svg>Tracked across engines, read and acted on</td><td data-l="Orbit on its own"><svg class="yes"><use href="#i-check"/></svg>Tracked across engines, daily</td><td data-l="Typical SEO retainer"><svg class="no"><use href="#i-x"/></svg>Rarely measured</td></tr>
+        <tr><th>What you see</th><td class="us" data-l="Orbit + Hovers team"><svg class="yes"><use href="#i-check"/></svg>The dashboard plus a monthly read of what changed and why</td><td data-l="Orbit on its own"><svg class="yes"><use href="#i-check"/></svg>Scores, citations, sentiment, rankings</td><td data-l="Typical SEO retainer"><svg class="no"><use href="#i-x"/></svg>Monthly ranking sheet</td></tr>
+        <tr><th>Strategy</th><td class="us" data-l="Orbit + Hovers team"><svg class="yes"><use href="#i-check"/></svg>Roadmap built from visibility gaps and competitor citations</td><td data-l="Orbit on its own"><svg class="yes"><use href="#i-check"/></svg>You set priorities from the data</td><td data-l="Typical SEO retainer"><svg class="no"><use href="#i-x"/></svg>Keyword volume drives the plan</td></tr>
+        <tr><th>Execution</th><td class="us" data-l="Orbit + Hovers team"><svg class="yes"><use href="#i-check"/></svg>We write, publish and re-check against the data</td><td data-l="Orbit on its own"><svg class="yes"><use href="#i-check"/></svg>Drafts you review and publish</td><td data-l="Typical SEO retainer"><svg class="no"><use href="#i-x"/></svg>Content shipped without checking AI answers</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div></section>
+
+<section class="sec" style="padding-top:0"><div class="wrap">
+  <div class="sh rv"><span class="pill"><i></i>Built to be trusted</span><h2 class="h2">Your accounts stay yours.</h2></div>
+  <div class="tiles rv">
+    <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="9" width="12" height="8" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg><b>Read-only Google access</b><span>Orbit cannot change Search Console or Analytics settings, users or data.</span></div>
+    <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l3 2"/></svg><b>Refreshed every day</b><span>Data is ready when you open the dashboard.</span></div>
+    <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 10l4 4 8-8"/></svg><b>You approve every post</b><span>Store access covers blog content only, and only after you click Publish.</span></div>
+    <div class="tile"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h14v10H3z"/><path d="M3 9h14"/></svg><b>Each brand kept apart</b><span>Data separated per brand at the database level, hosted in Singapore.</span></div>
+  </div>
+</div></section>
+
+<section class="sec" id="demo" style="padding-top:0"><div class="wrap">
+  <div class="price rv">
+    <div>
+      <span class="pill"><i></i>Pricing</span>
+      <h2 class="h2" style="margin-top:16px">Plans for brands and agencies.</h2>
+      <p class="lead" style="margin-top:14px">Pricing depends on the number of brands, AI questions and markets you track. Tell us about your site and we will show you Orbit on your own data.</p>
+      <ul><li><svg><use href="#i-check"/></svg>14-day free trial, no card</li><li><svg><use href="#i-check"/></svg>Client view for each brand you manage</li><li><svg><use href="#i-check"/></svg>Blog drafts and Shopify publishing included</li></ul>
       <a class="btn ln" href="{{ url_for('signup') }}">Or start the free trial</a>
     </div>
     {% if sent %}<div class="ok" role="status"><b>Thanks, we have your request.</b>The Hovers team will get in touch at the email you gave.</div>
@@ -533,63 +476,108 @@ footer .wm{font-weight:900;font-size:clamp(90px,22vw,300px);line-height:.78;lett
   </div>
 </div></section>
 
-<!-- faq -->
-<section class="sec" id="faq"><div class="wrap">
-  <div class="sh"><span class="pill-label"><i></i>Questions</span><h2 class="h2">Before you connect</h2></div>
+<section class="sec" id="faq" style="padding-top:0"><div class="wrap">
+  <div class="sh rv"><span class="pill"><i></i>Questions</span><h2 class="h2">Before you connect</h2></div>
   <div class="faq">
+    <details open><summary>Which AI assistants does Orbit track?<i><svg><use href="#i-plus"/></svg></i></summary><p>ChatGPT today, asked from your market with web search on, through the official API. Google AI Overviews, Google AI Mode, Gemini, Perplexity and DeepSeek are rolling out. Every answer, the brands it names and the sources it cites are stored.</p></details>
+    <details><summary>How is the visibility score worked out?<i><svg><use href="#i-plus"/></svg></i></summary><p>The Hovers Visibility Score combines four things per engine: how often answers name you, where you appear among the brands named, how often your own site is cited, and how you are described. Each part is shown on its own too.</p></details>
     <details><summary>What does Orbit access in my Google account?<i><svg><use href="#i-plus"/></svg></i></summary><p>Read-only access to Search Console and Google Analytics for the properties you choose. Orbit cannot change settings, users or data in either, and you can remove access at any time from your Google account.</p></details>
-    <details><summary>Which AI assistants does Orbit track?<i><svg><use href="#i-plus"/></svg></i></summary><p>ChatGPT today, asked from India with web search on, through the official API. Each tracked question is asked on a schedule and the answer, the brands it names and the sources it cites are stored.</p></details>
-    <details><summary>Do I need an SEO team to use it?<i><svg><use href="#i-plus"/></svg></i></summary><p>No. The overview leads with the keywords and AI questions that matter and whether they are improving; the technical detail sits below it for SEO teams. Blog posts arrive as drafts you can read, edit and publish yourself.</p></details>
-    <details><summary>Does Orbit publish anything without me?<i><svg><use href="#i-plus"/></svg></i></summary><p>No. Orbit writes drafts and checks them, but a post goes live only when someone on your side clicks Publish. Orbit's access to your store covers blog content only.</p></details>
-    <details><summary>What happens after the trial?<i><svg><use href="#i-plus"/></svg></i></summary><p>Your data stays in place. Talk to us to choose a plan; nothing is charged automatically.</p></details>
+    <details><summary>Can I track competitors?<i><svg><use href="#i-plus"/></svg></i></summary><p>Yes. Add the competitors you care about and every screen lets you switch between your brand and theirs: AI answers, citations, keywords and backlinks.</p></details>
+    <details><summary>Does Orbit publish anything without me?<i><svg><use href="#i-plus"/></svg></i></summary><p>No. Orbit writes drafts and checks them, but a post goes live only when someone on your side clicks Publish. Its access to your store covers blog content only.</p></details>
     <details><summary>Where is my data stored?<i><svg><use href="#i-plus"/></svg></i></summary><p>In a managed Postgres database in Singapore. Each brand's data is separated at the database level, so one brand can never see another's.</p></details>
   </div>
 </div></section>
 
-<!-- final CTA -->
-<section class="sec"><div class="wrap">
-  <div class="cta-band rv">
-    <span class="rings" aria-hidden="true"></span>
-    <div><h2 class="h2">See where you stand in Google and in AI.</h2><p>Connect your site and the first view is ready within minutes. The full picture builds overnight.</p></div>
-    <div class="acts"><a class="btn red" href="{{ url_for('signup') }}">Start free trial<span class="arr"><svg><use href="#i-arrow"/></svg></span></a><a class="btn ln" href="#demo">Talk to sales</a></div>
+<section class="sec" style="padding-top:0"><div class="wrap">
+  <div class="band rv">
+    <div class="mini" aria-hidden="true">{% for k, xy in [('chatgpt', 'left:160px;top:-20px'), ('gemini', 'left:-20px;top:160px'), ('perplexity', 'left:160px;bottom:-20px'), ('aio', 'right:-20px;top:160px')] %}<span style="{{ xy }}"><img src="{{ E[k][1] }}" alt=""></span>{% endfor %}</div>
+    <div style="position:relative"><h2 class="h2">See where you stand in Google and in AI.</h2><p>Connect your site and the first view is ready within minutes. The full picture builds overnight.</p></div>
+    <div class="acts"><a class="btn blk" href="{{ url_for('signup') }}">Start free trial<span class="arr"><svg><use href="#i-arrow"/></svg></span></a><a class="btn ln" href="#demo">Talk to sales</a></div>
   </div>
 </div></section>
 </main>
 
-<footer>
-  <div class="wrap">
-    <div class="cols">
-      <div class="about"><b>Orbit</b><p>Search intelligence for Google and AI answers, by Hovers.</p></div>
-      <div><h5>Product</h5><ul><li><a href="#features">Features</a></li><li><a href="#execute">Blog posts</a></li><li><a href="#how">How it works</a></li></ul></div>
-      <div><h5>Company</h5><ul><li><a href="#demo">Pricing</a></li><li><a href="#demo">Talk to sales</a></li><li><a href="#faq">FAQ</a></li></ul></div>
-      <div><h5>Account</h5><ul><li><a href="{{ url_for('signup') }}">Start free trial</a></li><li><a href="{{ url_for('login') }}">Sign in</a></li><li><a href="{{ url_for('login') }}?as=client">Client sign in</a></li></ul></div>
-    </div>
-    <div class="base"><span>© 2026 Hovers®. All rights reserved.</span><span>Pune · London · Kochi</span></div>
+<footer><div class="wrap">
+  <div class="cols">
+    <div class="about"><b>Orbit</b><p>AI search visibility for Google and AI answers, by Hovers.</p></div>
+    <div><h5>Product</h5><ul><li><a href="#engines">AI engines</a></li><li><a href="#platform">Platform</a></li><li><a href="#execute">Blog posts</a></li></ul></div>
+    <div><h5>Company</h5><ul><li><a href="#compare">Why Orbit</a></li><li><a href="#demo">Pricing</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+    <div><h5>Account</h5><ul><li><a href="{{ url_for('signup') }}">Start free trial</a></li><li><a href="{{ url_for('login') }}">Sign in</a></li><li><a href="{{ url_for('login') }}?as=client">Client sign in</a></li></ul></div>
   </div>
+  <div class="base"><span>© 2026 Hovers®. All rights reserved. Product names and logos belong to their owners.</span><span>Pune · London · Kochi</span></div>
   <div class="wm" aria-hidden="true">ORBIT</div>
-</footer>
-
+</div></footer>
 <div class="sticky" id="sticky" aria-hidden="true"><a class="t" href="#demo" tabindex="-1">Talk to sales</a><a class="btn red sm" href="{{ url_for('signup') }}" tabindex="-1">Start free trial</a></div>
 
 <script>
-try{var q=new URLSearchParams(location.search);var s=[q.get('utm_source'),q.get('utm_campaign')].filter(Boolean).join(' / ');var el=document.getElementById('src');if(s&&el)el.value=s;}catch(e){}
-(function(){
-  /* fade sections in */
-  var rv=document.querySelectorAll('.rv');
-  if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{rootMargin:'0px 0px -8% 0px'});rv.forEach(function(n){io.observe(n)});}
-  else rv.forEach(function(n){n.classList.add('in')});
-  /* statement: words darken as it scrolls through */
-  var p=document.getElementById('stmt'),red={"AI":1,"Orbit":1};
-  if(p){p.innerHTML=p.textContent.split(' ').map(function(w){return '<span'+(red[w.replace(/[^A-Za-z]/g,'')]?' class="r"':'')+'>'+w+'</span>'}).join(' ');}
-  var ws=p?p.querySelectorAll('span'):[],st=document.getElementById('sticky'),hero=document.querySelector('.hero .cta'),demo=document.getElementById('demo');
-  function tick(){
-    if(ws.length){var r=p.getBoundingClientRect(),vh=innerHeight,prog=Math.min(1,Math.max(0,(vh*.85-r.top)/(r.height+vh*.35)));var n=Math.round(prog*ws.length);
-      for(var i=0;i<ws.length;i++)ws[i].classList.toggle('on',i<n);}
-    if(st&&hero){var past=hero.getBoundingClientRect().bottom<0,dr=demo.getBoundingClientRect(),inDemo=dr.top<innerHeight&&dr.bottom>0;
-      var show=past&&!inDemo;st.classList.toggle('show',show);st.setAttribute('aria-hidden',show?'false':'true');st.querySelectorAll('a').forEach(function(a){a.tabIndex=show?0:-1});}
-  }
-  addEventListener('scroll',tick,{passive:true});addEventListener('resize',tick);tick();
-})();
+{
+const LOGO = {
+{%- for k, v in E.items() %}"{{ k }}": {{ v[1]|tojson }}, {% endfor -%}
+};
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+try{const q=new URLSearchParams(location.search);const s=[q.get('utm_source'),q.get('utm_campaign')].filter(Boolean).join(' / ');const el=document.getElementById('src');if(s&&el)el.value=s;}catch(e){}
+
+/* hero word cycle */
+const cyc=document.getElementById('cyc'), words=[['chatgpt','ChatGPT'],['gemini','Gemini'],['perplexity','Perplexity'],['aio','AI Overviews'],['deepseek','DeepSeek']];
+let wi=0;
+if(cyc&&!reduce) setInterval(()=>{cyc.classList.add('out');setTimeout(()=>{wi=(wi+1)%words.length;cyc.querySelector('img').src=LOGO[words[wi][0]];cyc.querySelector('b').textContent=words[wi][1];cyc.classList.remove('out')},350)},2600);
+
+/* count-ups */
+function countTo(el,to,ms){if(!el)return;if(reduce){el.textContent=to;return}const t0=performance.now();const step=t=>{const p=Math.min(1,(t-t0)/ms);el.textContent=Math.round(to*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(step)};requestAnimationFrame(step)}
+setTimeout(()=>{const r=document.getElementById('ring');if(r)r.style.strokeDashoffset=276.5*(1-.72);countTo(document.getElementById('score'),72,1800)},400);
+
+/* reveal + widget fill */
+const seen=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;const t=e.target;t.classList.add('in');
+  if(t.id==='wg'){t.querySelectorAll('[data-w]').forEach(i=>i.style.width=i.dataset.w+'%');document.getElementById('gArc').style.strokeDashoffset=251.3*(1-.66);countTo(document.getElementById('gNum'),66,1600)}
+  seen.unobserve(t)}),{rootMargin:'0px 0px -10% 0px'});
+document.querySelectorAll('.rv').forEach(n=>seen.observe(n));
+
+/* answer demo */
+const SC={
+  chatgpt:{q:'best silver jewellery brands in India',rk:['Competitor A','Your brand','Competitor B'],src:['yourbrand.com','reddit.com','competitor-a.com'],o:['Yes','2nd of 3','Positive','Yes','Competitor A, B']},
+  gemini:{q:'best silver jewellery brands in India',rk:['Competitor A','Competitor B','Competitor C'],src:['competitor-a.com','youtube.com','vogue.in'],o:['No','—','—','No','Competitor A, B, C']},
+  perplexity:{q:'best silver jewellery brands in India',rk:['Your brand','Competitor A','Competitor C'],src:['yourbrand.com','category-guide.in','reddit.com'],o:['Yes','1st of 3','Positive','Yes','Competitor A, C']},
+  aio:{q:'silver jewellery',rk:['Competitor A','Your brand','Competitor B'],src:['yourbrand.com','competitor-a.com','shopping result'],o:['Yes','2nd of 3','Neutral','Yes','Competitor A, B']}
+};
+const tabs=[...document.querySelectorAll('#etabs button')],qEl=document.getElementById('q'),think=document.getElementById('think'),rk=document.getElementById('rk'),srcs=document.getElementById('srcs'),fades=[...document.querySelectorAll('#ans .fade')];
+const outs=[1,2,3,4,5].map(i=>document.getElementById('o'+i));
+let cur=0,timers=[];const later=(f,ms)=>timers.push(setTimeout(f,ms));
+function play(i){timers.forEach(clearTimeout);timers=[];cur=i;const k=tabs[i].dataset.k,s=SC[k];
+  tabs.forEach((b,j)=>{b.classList.toggle('on',j===i);b.setAttribute('aria-selected',j===i)});
+  fades.forEach(f=>f.classList.remove('on'));outs.forEach(o=>{o.textContent='—';o.className=''});
+  rk.innerHTML=s.rk.map((n,j)=>`<div class="${n==='Your brand'?'me':''}"><i>${j+1}</i>${n==='Your brand'?'<b>Your brand</b>':n}</div>`).join('');
+  srcs.innerHTML=s.src.map(d=>`<span class="${d==='yourbrand.com'?'own':''}">${d}</span>`).join('');
+  if(reduce){qEl.textContent=s.q;fades.slice(1).forEach(f=>f.classList.add('on'));fill(s);return}
+  qEl.innerHTML='<span class="caret"></span>';let n=0;
+  const type=()=>{n++;qEl.innerHTML=s.q.slice(0,n)+'<span class="caret"></span>';if(n<s.q.length)later(type,38);else after()};
+  later(type,300);
+  function after(){later(()=>think.classList.add('on'),200);later(()=>{think.classList.remove('on');fades.slice(1).forEach((f,j)=>later(()=>f.classList.add('on'),j*260))},1300);later(()=>fill(s),2600);later(()=>play((cur+1)%tabs.length),6800)}
+}
+function fill(s){outs.forEach((o,j)=>{o.textContent=s.o[j];o.className=s.o[j]==='Yes'||s.o[j]==='Positive'?'y':(s.o[j]==='No'?'n':'')})}
+tabs.forEach((b,i)=>b.addEventListener('click',()=>play(i)));
+const demoObs=new IntersectionObserver(es=>{if(es[0].isIntersecting){play(0);demoObs.disconnect()}},{threshold:.3});
+if(qEl)demoObs.observe(qEl);
+
+/* platform tabs */
+const pt=[...document.querySelectorAll('#ptabs button')],panes=[...document.querySelectorAll('#panes .pane')];let pi=0,ptimer=null;
+function showP(i,auto){pi=i;pt.forEach((b,j)=>{b.classList.toggle('on',j===i);b.setAttribute('aria-selected',j===i)});panes.forEach((p,j)=>p.classList.toggle('on',j===i));
+  pt[i].querySelector('.pg').style.animation='none';void pt[i].offsetWidth;pt[i].querySelector('.pg').style.animation='';
+  clearTimeout(ptimer);if(!reduce&&auto!==false)ptimer=setTimeout(()=>showP((pi+1)%pt.length),7000)}
+pt.forEach((b,i)=>b.addEventListener('click',()=>{showP(i,false);pt.forEach(x=>x.style.setProperty('--t','0s'))}));
+const pObs=new IntersectionObserver(es=>{if(es[0].isIntersecting){showP(0);pObs.disconnect()}},{threshold:.3});
+if(pt.length)pObs.observe(document.getElementById('ptabs'));
+
+/* statement words + sticky bar */
+const p=document.getElementById('stmt'),redw={AI:1,Orbit:1};
+if(p)p.innerHTML=p.textContent.split(' ').map(w=>'<span'+(redw[w.replace(/[^A-Za-z]/g,'')]?' class="r"':'')+'>'+w+'</span>').join(' ');
+const ws=p?p.querySelectorAll('span'):[],st=document.getElementById('sticky'),heroCta=document.querySelector('.hero .cta'),demo=document.getElementById('demo');
+function tick(){
+  if(ws.length){const r=p.getBoundingClientRect(),vh=innerHeight,prog=Math.min(1,Math.max(0,(vh*.85-r.top)/(r.height+vh*.35)));const n=Math.round(prog*ws.length);ws.forEach((w,i)=>w.classList.toggle('on',i<n))}
+  if(st&&heroCta){const past=heroCta.getBoundingClientRect().bottom<0,dr=demo.getBoundingClientRect(),inDemo=dr.top<innerHeight&&dr.bottom>0,show=past&&!inDemo;
+    st.classList.toggle('show',show);st.setAttribute('aria-hidden',show?'false':'true');st.querySelectorAll('a').forEach(a=>a.tabIndex=show?0:-1)}
+}
+addEventListener('scroll',tick,{passive:true});addEventListener('resize',tick);tick();
+}
 </script>
 </body>
 </html>
