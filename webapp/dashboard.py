@@ -14,6 +14,8 @@ VIEWER_SCREENS = {"dash.overview", "dash.search", "dash.competitors", "dash.ai",
                   "dash.youtube_view", "dash.monthly_report", "dash.monthly_report_download", "dash.blogs", "dash.blog", "dash.activity_status"}
 # What a brand's owner (the person who signed up for it) may also do: review, edit and publish its blog posts, connect its store.
 OWNER_ACTIONS = {"dash.blogs_post", "dash.blog_post", "dash.publishing", "dash.publishing_post"}
+# What any client user of a brand may do: connect their own ChatGPT plan to it (Integrations).
+CLIENT_ACTIONS = {"dash.integrations", "dash.integrations_post"}
 
 def is_owner(cid):
     """The signed-in client is listed as this brand's owner (self-serve sign-up), not just a viewer."""
@@ -95,7 +97,8 @@ def _gate():
     if session.get("viewer_email"):
         cid = (request.view_args or {}).get("cid")
         mine = cid in (session.get("viewer_clients") or [])
-        if mine and ((request.method == "GET" and request.endpoint in VIEWER_SCREENS) or (request.endpoint in OWNER_ACTIONS and is_owner(cid))):
+        if mine and ((request.method == "GET" and request.endpoint in VIEWER_SCREENS) or request.endpoint in CLIENT_ACTIONS
+                     or (request.endpoint in OWNER_ACTIONS and is_owner(cid))):
             with _staff_connect() as conn:
                 ends = conn.execute("SELECT trial_ends FROM clients WHERE client_id=%s", [cid]).fetchone()
             if ends and ends[0] and ends[0] < __import__("datetime").date.today():
@@ -980,3 +983,4 @@ def monthly_report_download(cid, month):
                      mimetype="application/vnd.openxmlformats-officedocument.presentationml.presentation")
 
 import execution  # noqa: E402,F401  Execution screens (blog posts, publishing) on this blueprint
+import integrations  # noqa: E402,F401  Integrations: Continue with ChatGPT

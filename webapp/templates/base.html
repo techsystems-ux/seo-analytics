@@ -175,6 +175,7 @@ svg text{font-family:var(--fb)}
  'ideas':'<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.4.3.5.7.5 1.1v1h6v-1c0-.4.2-.8.5-1.1A6 6 0 0012 3z"/>',
  'settings':'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>',
  'ai_traffic':'<path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+ 'integrations':'<path d="M9 7V3M15 7V3"/><path d="M6 7h12v4a6 6 0 01-12 0z"/><path d="M12 17v4"/>',
  'brands':'<path d="M3 9l9-6 9 6v11a1 1 0 01-1 1H4a1 1 0 01-1-1z"/><path d="M9 21v-7h6v7"/>'} %}
 {% macro group(label, keys, gid) %}<details class="grp" data-g="{{ gid }}"{{ ' open' if active in keys }}><summary><span>{{ label }}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary><div class="gi">{{ caller() }}</div></details>{% endmacro %}
 {% macro navlink(key, label, href) %}<a class="tab{{ ' on' if active==key }}" href="{{ href }}"{{ ' aria-current="page"' if active==key }}><svg viewBox="0 0 24 24" aria-hidden="true">{{ I[key]|safe }}</svg>{{ label }}</a>{% endmacro %}
@@ -199,6 +200,8 @@ svg text{font-family:var(--fb)}
   {% if owner %}{{ navlink('publishing', 'Publishing', url_for('dash.publishing', cid=client.id)) }}{% endif %}{% endcall %}
   {% call group('Reports', ['report'], 'rep') %}
   {{ navlink('report', 'Monthly report', url_for('dash.monthly_report', cid=client.id)) }}{% endcall %}
+  {% call group('Setup', ['integrations'], 'set') %}
+  {{ navlink('integrations', 'Integrations', url_for('dash.integrations', cid=client.id)) }}{% endcall %}
   <div class="acct"><form method="post" action="{{ url_for('portal.logout') }}">{{ viewer }} · <button class="linkbtn">Sign out</button></form></div>
   {% else %}{% if client %}
   <a class="client" href="{{ url_for('dash.clients') }}" title="Switch brand">
@@ -228,7 +231,8 @@ svg text{font-family:var(--fb)}
   {{ navlink('r_paid', 'Paid and shopping', url_for('dash.research', cid=client.id, tool='paid')) }}{% endcall %}{% endif %}
   {% call group('Reports', ['report'], 'rep') %}
   {{ navlink('report', 'Monthly report', url_for('dash.monthly_report', cid=client.id)) }}{% endcall %}
-  {% call group('Setup', ['settings'], 'set') %}
+  {% call group('Setup', ['settings','integrations'], 'set') %}
+  {{ navlink('integrations', 'Integrations', url_for('dash.integrations', cid=client.id)) }}
   {{ navlink('settings', 'Settings', url_for('dash.settings', cid=client.id)) }}{% endcall %}
   {% else %}
   <a class="client" href="{{ url_for('dash.clients') }}"><span class="bm orb"><svg viewBox="186 200 322 272" aria-hidden="true"><g fill="none" stroke-width="24"><path d="M193 343 L250 313 L372 313 L487 224" stroke="#A80000"/><path d="M193 398 L250 368 L366 368 L490 276" stroke="#F50000"/><path d="M193 452 L250 423 L380 423 L490 335" stroke="#F50000"/></g><g fill="#fff"><circle cx="252" cy="313" r="15"/><circle cx="366" cy="368" r="15"/><circle cx="253" cy="423" r="15"/><circle cx="487" cy="224" r="16"/></g></svg></span><span><b>Orbit</b><span class="s">by Hovers · search intelligence</span></span></a>

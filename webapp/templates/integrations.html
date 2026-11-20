@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block body %}
+{% set ok = '<span class="tag t-pass">Connected</span>' %}{% set no = '<span class="tag t-na">Not connected</span>' %}
+<div class="top"><div><span class="kicker">Setup · Integrations</span><h1>Integrations for {{ client.name }}</h1>
+<p class="lead">Connect the accounts Orbit works with. Each connection can be removed here at any time.</p></div></div>
+
+{% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
+{% if err %}<div class="msg" role="alert" style="border-left-color:var(--red)">{{ err }}</div>{% endif %}
+
+<div class="grid2">
+<section class="card" style="display:flex;flex-direction:column;gap:14px">
+  <div class="top"><h2 style="margin:0"><img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64" alt="" width="18" height="18" style="vertical-align:-3px;margin-right:6px">ChatGPT plan</h2>
+    {% if gpt and gpt.status == 'active' and gpt.plan_usage %}{{ ok|safe }}{% elif gpt and gpt.status == 'reconnect' %}<span class="tag t-sev-error">Connect again</span>
+    {% elif gpt and (gpt.status == 'not_eligible' or not gpt.plan_usage) %}<span class="tag t-sev-warning">Plan not available</span>{% else %}{{ no|safe }}{% endif %}</div>
+  <p style="margin:0">Use your own ChatGPT plan for {{ client.name }}'s AI answer checks and blog drafts. These requests then count toward your plan's usage
+    instead of a separate API bill. You choose in ChatGPT how much of your plan Orbit may use.</p>
+
+  {% if signing %}
+    <ol style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px">
+      <li><a class="btn red" href="{{ signing.url }}" target="_blank" rel="noopener">Open ChatGPT sign-in</a>
+        <span class="note">Sign in with your ChatGPT account and allow plan usage.</span></li>
+      <li>After you approve, that tab shows <b>"This site can't be reached"</b>. That is expected. Copy the whole address from its address bar
+        (it starts with <code>http://127.0.0.1</code>).</li>
+      <li><form method="post" style="display:flex;flex-direction:column;gap:8px"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="paste">
+        <label for="addr">Paste the address here</label>
+        <textarea id="addr" name="address" rows="3" required placeholder="http://127.0.0.1:1455/auth/callback?code=..." style="font:13px/1.4 ui-monospace,Menlo,monospace"></textarea>
+        <button class="btn blk" style="align-self:flex-start">Finish connecting</button></form></li>
+    </ol>
+    <p class="note" style="margin:0">The address only works with this sign-in and expires after 30 minutes.</p>
+  {% elif gpt and gpt.status == 'active' and gpt.plan_usage %}
+    <p style="margin:0"><b>{{ gpt.email or 'ChatGPT account' }}</b></p>
+    <p class="note" style="margin:0">Connected {{ gpt.connected_at.strftime('%d %b %Y') if gpt.connected_at }}{{ ' by ' ~ gpt.connected_by if gpt.connected_by }}.
+      {% if gpt.plan_calls or gpt.api_fallbacks %}Answered by your plan: <b>{{ gpt.plan_calls }}</b>{% if gpt.api_fallbacks %} · covered by Orbit when the plan could not answer: <b>{{ gpt.api_fallbacks }}</b>{% endif %}.{% endif %}
+      {% if gpt.last_used_at %}Last used {{ gpt.last_used_at.strftime('%d %b, %H:%M') }}.{% endif %}</p>
+    {% if gpt.limit_hit_at %}<p class="note" style="margin:0;color:var(--amber,#B45309)">Your plan's limit for Orbit was reached on {{ gpt.limit_hit_at.strftime('%d %b, %H:%M') }}. Orbit covered the rest of that run.
+      <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noopener">Check usage in ChatGPT</a>.</p>{% endif %}
+    {% if gpt.last_error and not gpt.limit_hit_at %}<p class="note staff-only" style="margin:0">Last note: {{ gpt.last_error }}</p>{% endif %}
+    <form method="post" style="display:flex;flex-direction:column;gap:10px"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <div><label for="md">Model</label><select id="md" name="model">{% for m in gpt.models %}<option value="{{ m.slug }}" {{ 'selected' if m.slug == gpt.model }}>{{ m.display_name }}</option>{% endfor %}
+        {% if not gpt.models %}<option value="">Click Test connection to load the models</option>{% endif %}</select></div>
+      <label><input type="checkbox" name="use_for_ai" {{ 'checked' if gpt.use_for_ai }}> Use for AI answer checks</label>
+      <label><input type="checkbox" name="use_for_blogs" {{ 'checked' if gpt.use_for_blogs }}> Use for blog drafts</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blk" name="what" value="settings">Save</button>
+        <button class="btn ln" name="what" value="test" formnovalidate>Test connection</button></div></form>
+    <form method="post" onsubmit="return confirm('Disconnect ChatGPT for {{ client.name }}?')"><input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn ln" name="what" value="disconnect">Disconnect</button></form>
+  {% else %}
+    {% if gpt and gpt.status == 'reconnect' %}<p class="note" style="margin:0;color:var(--red)">{{ gpt.last_error or 'ChatGPT access has expired.' }}</p>
+    {% elif gpt and gpt.status == 'not_eligible' %}<p class="note" style="margin:0;color:var(--red)">{{ gpt.last_error }}</p>
+    {% elif gpt and not gpt.plan_usage %}<p class="note" style="margin:0">Signed in as {{ gpt.email }}, but plan usage was not allowed. Connect again and allow it.</p>{% endif %}
+    <form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="connect">
+      <button class="btn red"><img src="https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64" alt="" width="16" height="16" style="vertical-align:-3px;margin-right:6px">Continue with ChatGPT</button></form>
+    <p class="note" style="margin:0">Needs a paid ChatGPT plan (Plus or Pro). If your plan cannot answer, for example when its limit is reached,
+      Orbit uses its own access for that run so the reports never go blank.</p>
+    {% if gpt %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ln" name="what" value="disconnect">Remove this sign-in</button></form>{% endif %}
+  {% endif %}
+  <p class="note staff-only" style="margin:0;border-top:1px solid var(--line,#eee);padding-top:10px">Team note: {% if mode == 'paste' %}test mode. OpenAI's self-serve sign-in only returns to
+    127.0.0.1, so the address is pasted back by hand. Once OpenAI approves Orbit, set CHATGPT_OAUTH_CLIENT_ID in Vercel and the browser returns by itself.{% else %}direct return to Orbit is on.{% endif %}
+    {% if not has_key %} No backup API key is set, so a failed plan request leaves that run empty.{% endif %}</p>
+</section>
+
+<section class="card" style="display:flex;flex-direction:column;gap:10px">
+  <h2 style="margin:0">Other connections</h2>
+  <table><tr><th>Account</th><th>Status</th></tr>
+    <tr><td><img src="https://www.google.com/s2/favicons?domain=search.google.com&sz=64" alt="" width="14" height="14" style="vertical-align:-2px;margin-right:6px">Google Search Console</td><td>{{ (ok if gsc and gsc[0] else no)|safe }}</td></tr>
+    <tr><td><img src="https://www.google.com/s2/favicons?domain=analytics.google.com&sz=64" alt="" width="14" height="14" style="vertical-align:-2px;margin-right:6px">Google Analytics 4</td><td>{{ (ok if gsc and gsc[1] else no)|safe }}</td></tr>
+    <tr><td><img src="https://www.google.com/s2/favicons?domain=shopify.com&sz=64" alt="" width="14" height="14" style="vertical-align:-2px;margin-right:6px">Shopify{% if staff or owner %} · <a href="{{ url_for('dash.publishing', cid=client.id) }}">Publishing</a>{% endif %}</td>
+      <td>{% if shop and shop[0] == 'active' %}{{ ok|safe }} <span class="note">{{ shop[1] }}</span>{% else %}{{ no|safe }}{% endif %}</td></tr>
+  </table>
+  <p class="note" style="margin:0">Google accounts are linked by the Hovers team.</p>
+</section>
+</div>
+{% endblock %}

@@ -15,12 +15,14 @@ Bands: 0-39 Not shortlisted, 40-59 Emerging, 60-79 Competitive, 80+ Leader.
 
 The API answer approximates what ChatGPT shows users; it is not a scrape of chatgpt.com.
 Usage: python ai_visibility.py --client-id UUID [--samples 1] [--date 2026-11-12]
+When the brand has connected its own ChatGPT plan (chatgpt_plan.py), the plan answers and the API key is the backup.
 Env: OPENAI_API_KEY_2, OPENAI_MODEL (default below), AI_SENTIMENT=0 to skip the sentiment call
 """
 import argparse, datetime as dt, json, os, re, sys
 from urllib.parse import urlparse
 import requests
 from common import connect
+import chatgpt_plan
 
 API = "https://api.openai.com/v1/responses"
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
@@ -43,9 +45,7 @@ def same_site(h, domain):
 def ask(session, key, prompt, country="IN"):
     body = {"model": MODEL, "input": prompt, "include": ["web_search_call.action.sources"],
             "tools": [{"type": "web_search", "user_location": {"type": "approximate", "country": country}}]}
-    r = session.post(API, headers={"Authorization": f"Bearer {key}"}, json=body, timeout=180)
-    if r.status_code != 200: raise RuntimeError(f"OpenAI {r.status_code}: {r.text[:300]}")
-    return r.json()
+    return chatgpt_plan.post(session, key, body, 180)          # key: the API key, or the brand's ChatGPT plan (falls back to the key)
 
 def parse_response(j):
     """-> answer text, cited [(url, title)], consulted [url]"""
@@ -78,9 +78,7 @@ def judge_brands(session, key, answer):
                                       "Sentiment is how the answer presents that brand. Do not add brands that are not named."},
         {"role": "user", "content": answer}],
         "text": {"format": {"type": "json_schema", "name": "brands", "schema": SENTIMENT_SCHEMA, "strict": True}}}
-    r = session.post(API, headers={"Authorization": f"Bearer {key}"}, json=body, timeout=120)
-    if r.status_code != 200: raise RuntimeError(f"OpenAI {r.status_code}: {r.text[:300]}")
-    text, _, _ = parse_response(r.json())
+    text, _, _ = parse_response(chatgpt_plan.post(session, key, body, 120))
     return json.loads(text).get("brands", [])
 
 # ------------------------------------------------------------------ reading the answer
@@ -134,6 +132,7 @@ def run_prompt(conn, session, key, client_id, prompt_id, text, region, cycle, sa
     run_id = row[0]
     try:
         j = ask(session, key, text, region)
+        via = getattr(key, "via", None) or "api"
         answer, cited, consulted = parse_response(j)
         judged = judge_brands(session, key, answer) if sentiment and answer else []
     except Exception as e:
@@ -142,7 +141,8 @@ def run_prompt(conn, session, key, client_id, prompt_id, text, region, cycle, sa
     with conn.transaction():
         answer_id = conn.execute("""INSERT INTO answers (client_id, run_id, full_text, engine_version, raw_json, parsed_at)
                                     VALUES (%s,%s,%s,%s,%s,now()) RETURNING answer_id""",
-                                 [client_id, run_id, answer, j.get("model", MODEL), json.dumps({"usage": j.get("usage"), "id": j.get("id")})]).fetchone()[0]
+                                 [client_id, run_id, answer, j.get("model", MODEL), json.dumps({"usage": j.get("usage"), "id": j.get("id"),
+                                                                                       "via": via})]).fetchone()[0]
         verdict = {b["name"].lower(): b for b in judged}
         found = find_mentions(answer, brands)
         known = {m["name"].lower() for m in found}

@@ -217,9 +217,8 @@ def ask(session, key, system, user):
     body = {"model": MODEL, "input": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "tools": [{"type": "web_search"}],
             "text": {"format": {"type": "json_schema", "name": "blog_post", "schema": DRAFT_SCHEMA, "strict": True}}}
-    r = session.post(API, headers={"Authorization": f"Bearer {key}"}, json=body, timeout=300)
-    if r.status_code != 200: raise RuntimeError(f"OpenAI {r.status_code}: {r.text[:300]}")
-    j = r.json()
+    import chatgpt_plan
+    j = chatgpt_plan.post(session, key, body, 300)            # key: the API key, or the brand's ChatGPT plan (falls back to the key)
     for item in j.get("output", []):
         if item.get("type") == "message":
             for part in item.get("content", []):
@@ -255,7 +254,7 @@ def write_one(conn, cid, draft_id, key, session=None):
                     preview_token=coalesce(preview_token, %s), written_at=now(), updated_at=now() WHERE draft_id=%s""",
                  [post["title"], post["meta_title"], post["meta_description"], post["slug"], post["excerpt"], post["tags"],
                   post["body_html"], json.dumps(post["faqs"]), json.dumps(sources), internal, blogs.words(body), json.dumps(results), sc,
-                  MODEL, blogs.new_token(), draft_id])
+                  key.label(MODEL) if hasattr(key, "label") else MODEL, blogs.new_token(), draft_id])
     return post["title"]
 
 def write(conn, cid, key, n=None, session=None):

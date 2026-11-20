@@ -483,6 +483,11 @@ def shopify_callback():
             return go("err", f"Could not finish connecting: {e}"[:300])
     return go("msg", f"Connected {st['shop']}. {n} blog{'s' if n != 1 else ''} found; posts go to the one selected below.")
 
+@app.get("/integrations/chatgpt/callback")
+def chatgpt_callback():
+    import integrations
+    return integrations.chatgpt_callback()
+
 from dashboard import bp as dashboard_bp                   # Overview, Search, Competitors, AI visibility, Pages, Settings
 app.register_blueprint(dashboard_bp)
 from portal import bp as portal_bp                         # client sign-in: read-only view of their own brand

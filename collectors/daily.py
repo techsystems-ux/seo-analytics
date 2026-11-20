@@ -14,6 +14,7 @@ import argparse, datetime as dt, os, sys, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 from common import connect
+import chatgpt_plan
 
 def log(conn, client_id, name, fn):
     rid = conn.execute("INSERT INTO collector_runs (client_id, collector, status) VALUES (%s,%s,'running') RETURNING run_id",
@@ -87,9 +88,9 @@ def main(argv=None):
                 import semrush
                 ok &= log(conn, cid, "semrush", lambda: semrush.sync_client(conn, cid, os.environ["SEMRUSH_API_KEY"],
                           max_units=a.max_units or int(os.environ.get("SEMRUSH_MAX_UNITS", "500"))))
-            if "ai" in only and os.environ.get("OPENAI_API_KEY_2"):
+            if "ai" in only and chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "ai"):
                 import ai_visibility
-                ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, os.environ["OPENAI_API_KEY_2"],
+                ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "ai"),
                           int(os.environ.get("AI_SAMPLES", "1")))[0])
             if "pages" in only and weekly_due(conn, cid, "pages", a.force_weekly):
                 import run_checks, sitemap
@@ -133,7 +134,7 @@ def main(argv=None):
             # Execution: blog ideas from the data pulled above, and drafts for review (OpenAI). Never publishes.
             if "blogs" in only:
                 import blog_writer
-                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, os.environ.get("OPENAI_API_KEY_2"), n=a.blog_count))
+                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "blogs"), n=a.blog_count))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(

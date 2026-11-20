@@ -188,10 +188,10 @@ def step_gsc(conn, task, deadline, history=False):
     return f"{s} to {e}", []
 
 def step_ai(conn, task, deadline):
-    import ai_visibility, daily
-    key = os.environ.get("OPENAI_API_KEY_2")
-    if not key: return "no OpenAI key on the server", []
+    import ai_visibility, daily, chatgpt_plan
     cid, out = task["client_id"], {}
+    key = chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "ai")   # the brand's ChatGPT plan first, if connected
+    if not key: return "no OpenAI key on the server", []
     def go():
         tally, _ = ai_visibility.sync_client(conn, cid, key, int(os.environ.get("AI_SAMPLES", "1")), deadline=deadline - 60,
                                              sentiment=os.environ.get("AI_SENTIMENT", "1") != "0")
@@ -201,9 +201,9 @@ def step_ai(conn, task, deadline):
 
 def step_blogs(conn, task, deadline):
     """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
-    import blog_writer, daily
+    import blog_writer, daily, chatgpt_plan
     cid, a = task["client_id"], task["args"]
-    key = os.environ.get("OPENAI_API_KEY_2")
+    key = chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "blogs")
     left = a.get("left", blog_writer.PER_RUN)
     note = {}
     def go():
