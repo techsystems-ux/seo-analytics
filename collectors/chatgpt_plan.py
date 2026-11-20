@@ -332,23 +332,43 @@ def events(r):
             try: yield json.loads(data)
             except ValueError: pass
 
+def shape(j):
+    """A short note on what came back, for the team when an answer is missing: output item types and stream event counts."""
+    kinds = [i.get("type") for i in (j or {}).get("output") or []]
+    ev = (j or {}).get("_events") or {}
+    return f"(output: {', '.join(kinds) or 'none'}; status: {(j or {}).get('status') or '?'}" + \
+           (f"; events: {', '.join(f'{k}×{v}' for k, v in list(ev.items())[:8])}" if ev else "") + ")"
+
 def stream(session, token, body, timeout):
-    """Send one streamed Responses request; return the final response object (as the API returns without streaming)."""
+    """Send one streamed Responses request; return the final response object (as the API returns without streaming).
+    The final event does not always repeat the whole output, so the output items and text sent along the way are kept
+    and used when it is missing."""
     try:
         r = session.post(RESPONSES, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "text/event-stream"},
                          json=body, timeout=timeout, stream=True)
     except requests.RequestException as e:
         return None, ("interrupted", f"Could not reach ChatGPT ({type(e).__name__}).", None)
     if r.status_code != 200: return r, None
-    final, err = None, None
+    final, err, items, texts, notes, seen = None, None, {}, {}, {}, {}
     try:
         for ev in events(r):
-            t = ev.get("type")
-            if t == "response.completed": final = ev.get("response"); break
-            if t in ("response.failed", "error"):
+            t = ev.get("type") or "?"
+            seen[t] = seen.get(t, 0) + 1
+            if t == "response.output_item.done" and isinstance(ev.get("item"), dict):
+                items[ev.get("output_index", len(items))] = ev["item"]
+            elif t == "response.output_item.added" and isinstance(ev.get("item"), dict):
+                items.setdefault(ev.get("output_index", len(items)), ev["item"])
+            elif t == "response.output_text.delta":
+                k = (ev.get("output_index", 0), ev.get("content_index", 0)); texts[k] = texts.get(k, "") + (ev.get("delta") or "")
+            elif t == "response.output_text.done":
+                texts[(ev.get("output_index", 0), ev.get("content_index", 0))] = ev.get("text") or ""
+            elif t == "response.output_text.annotation.added" and isinstance(ev.get("annotation"), dict):
+                notes.setdefault((ev.get("output_index", 0), ev.get("content_index", 0)), []).append(ev["annotation"])
+            elif t == "response.completed": final = ev.get("response") or {}; break
+            elif t in ("response.failed", "error"):
                 e = (ev.get("response") or {}).get("error") or ev.get("error") or {}
                 err = (e.get("code") or "unknown_error", e.get("message") or "", e.get("param")); break
-            if t == "response.incomplete":
+            elif t == "response.incomplete":
                 reason = ((ev.get("response") or {}).get("incomplete_details") or {}).get("reason") or "incomplete"
                 err = ("incomplete", f"The answer stopped early ({reason}).", None); break
     except requests.RequestException as e:
@@ -357,6 +377,18 @@ def stream(session, token, body, timeout):
         r.close()
     if err: return None, err
     if final is None: return None, ("interrupted", "The answer stream ended before it finished.", None)
+    if not final.get("output"):
+        out = [items[k] for k in sorted(items)]
+        for (oi, ci), text in sorted(texts.items()):               # text that arrived only as deltas
+            msg = next((i for i in out if i.get("type") == "message" and items.get(oi) is i), None)
+            if msg is None:
+                msg = {"type": "message", "role": "assistant", "content": []}; out.append(msg)
+            parts = msg.setdefault("content", [])
+            while len(parts) <= ci: parts.append({"type": "output_text", "text": "", "annotations": []})
+            if not (parts[ci].get("text") or "").strip(): parts[ci].update(type="output_text", text=text)
+            parts[ci].setdefault("annotations", []).extend(a for a in notes.get((oi, ci), []) if a not in parts[ci].get("annotations", []))
+        final["output"] = out
+    final["_events"] = seen
     return None, final
 
 class PlanRoute:

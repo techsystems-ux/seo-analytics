@@ -219,11 +219,22 @@ def ask(session, key, system, user):
             "text": {"format": {"type": "json_schema", "name": "blog_post", "schema": DRAFT_SCHEMA, "strict": True}}}
     import chatgpt_plan
     j = chatgpt_plan.post(session, key, body, 300)            # key: the API key, or the brand's ChatGPT plan (falls back to the key)
-    for item in j.get("output", []):
+    out = draft_from(j)
+    if out is None and isinstance(key, chatgpt_plan.PlanRoute) and key.via == "plan" and key.api_key:
+        chatgpt_plan.mark(key.conn, key.client_id, None, "The ChatGPT plan answered without a draft " + chatgpt_plan.shape(j) + "; the API key wrote it.")
+        key.via = "api"
+        out = draft_from(chatgpt_plan.api_post(session, key.api_key, body, 300))
+    if out is None: raise RuntimeError("No draft came back " + chatgpt_plan.shape(j))
+    return out
+
+def draft_from(j):
+    for item in j.get("output") or []:
         if item.get("type") == "message":
-            for part in item.get("content", []):
-                if part.get("type") in ("output_text", "text"): return json.loads(part["text"])
-    raise RuntimeError("OpenAI returned no draft")
+            for part in item.get("content") or []:
+                if part.get("type") in ("output_text", "text") and (part.get("text") or "").strip():
+                    try: return json.loads(part["text"])
+                    except ValueError: return None
+    return None
 
 def write_one(conn, cid, draft_id, key, session=None):
     import run_checks
@@ -262,7 +273,7 @@ def write(conn, cid, key, n=None, session=None):
     waiting = conn.execute("SELECT count(*) FROM content_drafts WHERE client_id=%s AND status IN ('draft','writing')", [cid]).fetchone()[0]
     n = max(0, min(PER_RUN if n is None else n, QUEUE - waiting))
     ids = [r[0] for r in conn.execute("""SELECT draft_id FROM content_drafts WHERE client_id=%s AND status IN ('idea','failed')
-                                         ORDER BY (status='failed'), priority DESC NULLS LAST LIMIT %s""", [cid, n])]
+                                         ORDER BY (status='failed' AND coalesce(priority,0) < 1000), priority DESC NULLS LAST LIMIT %s""", [cid, n])]
     done = []
     for i in ids:
         try: done.append(write_one(conn, cid, i, key, session))

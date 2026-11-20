@@ -45,7 +45,12 @@ def same_site(h, domain):
 def ask(session, key, prompt, country="IN"):
     body = {"model": MODEL, "input": prompt, "include": ["web_search_call.action.sources"],
             "tools": [{"type": "web_search", "user_location": {"type": "approximate", "country": country}}]}
-    return chatgpt_plan.post(session, key, body, 180)          # key: the API key, or the brand's ChatGPT plan (falls back to the key)
+    j = chatgpt_plan.post(session, key, body, 180)             # key: the API key, or the brand's ChatGPT plan (falls back to the key)
+    if not parse_response(j)[0] and isinstance(key, chatgpt_plan.PlanRoute) and key.via == "plan" and key.api_key:
+        chatgpt_plan.mark(key.conn, key.client_id, None, "The ChatGPT plan answered with no text " + chatgpt_plan.shape(j) + "; the API key answered.")
+        key.via = "api"
+        j = chatgpt_plan.api_post(session, key.api_key, body, 180)
+    return j
 
 def parse_response(j):
     """-> answer text, cited [(url, title)], consulted [url]"""

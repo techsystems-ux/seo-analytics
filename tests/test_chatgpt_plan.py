@@ -286,6 +286,32 @@ with connect() as conn:
     assert j["model"] == "gpt-api" and [c[0] for c in od.calls] == ["api"] and "Unexpected problem" in cp.connection(conn, A)["last_error"]
 print("unexpected plan error: the key writes it instead, and the reason is kept for the team")
 
+# the final event without the output: rebuilt from the items and text sent along the way
+class Sparse(Responses):
+    def __init__(s, how): super().__init__(); s.how = how
+    def post(s, url, headers=None, json=None, timeout=None, stream=False):
+        tok = headers["Authorization"].split(" ", 1)[1]; s.calls.append(("plan" if tok.startswith("at-") else "api", json))
+        if not tok.startswith("at-"): return R(200, {"model": "gpt-api", "output": [{"type": "message", "content": [{"type": "output_text", "text": __import__("json").dumps(DRAFT)}]}]})
+        msg = {"type": "message", "content": [{"type": "output_text", "text": __import__("json").dumps(DRAFT), "annotations": []}]}
+        if s.how == "items": evs = [{"type": "response.output_item.done", "output_index": 0, "item": msg}]
+        elif s.how == "deltas":
+            t = __import__("json").dumps(DRAFT); evs = [{"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "delta": t[:20]},
+                                                         {"type": "response.output_text.delta", "output_index": 0, "content_index": 0, "delta": t[20:]}]
+        else: evs = []
+        return R(200, lines=sse(*evs, {"type": "response.completed", "response": {"model": "gpt-plan-mini", "status": "completed", "output": []}}))
+with connect() as conn:
+    conn.execute("UPDATE chatgpt_connections SET status='active', expires_at=now()+interval '1 hour', last_error=NULL WHERE client_id=%s", [A])
+    for how in ("items", "deltas"):
+        sp = Sparse(how); route = cp.route_for(conn, A, "sk-api", "blogs")
+        assert W.ask(sp, route, "Write well.", "Brief")["title"] == "How to clean silver" and [c[0] for c in sp.calls] == ["plan"] and route.via == "plan", how
+    sp = Sparse("empty"); route = cp.route_for(conn, A, "sk-api", "blogs")
+    assert W.ask(sp, route, "Write well.", "Brief")["title"] == "How to clean silver" and [c[0] for c in sp.calls] == ["plan", "api"]
+    assert route.label(W.MODEL) == W.MODEL and "answered without a draft" in cp.connection(conn, A)["last_error"]
+    sp = Sparse("empty")
+    try: W.ask(sp, cp.route_for(conn, A, None, "blogs"), "Write well.", "Brief"); raise AssertionError("no draft accepted")
+    except RuntimeError as e: assert "No draft came back" in str(e) and "events:" in str(e)
+print("sparse stream: output rebuilt from items or text deltas; an empty plan answer is written by the key instead")
+
 # no backup key: a plan failure is an error, not a silent empty answer
 with connect() as conn:
     conn.execute("UPDATE chatgpt_connections SET status='active', expires_at=now()+interval '1 hour', last_error=NULL WHERE client_id=%s", [A])
