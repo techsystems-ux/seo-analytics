@@ -54,9 +54,11 @@ with connect() as conn:
     conn.execute("INSERT INTO mentions (client_id, answer_id, brand, is_client, rank_in_answer, sentiment, recommended) VALUES (%s,%s,'Gargi',true,1,'positive',true)", [A, aid])
     assert AV.rescore_due(conn, A)
     t0 = conn.execute("SELECT now()").fetchone()[0]
-    assert worker.ensure_fresh(conn, A)                                   # opening the brand queues the re-read
-    steps = [r[0] for r in conn.execute("SELECT DISTINCT t.step FROM pull_tasks t JOIN pull_queue q USING (pull_id) WHERE t.client_id=%s AND q.requested_at >= %s", [A, t0])]
-    assert "rescore" in steps, steps
+    worker.ensure_fresh(conn, A)                                          # opening the brand re-reads small histories at once
+    assert not AV.rescore_due(conn, A)
+    # an AI refresh queued in the last 2 hours does not stop other steps from starting
+    conn.execute("DELETE FROM score_versions WHERE client_id=%s", [A])
+    conn.execute("UPDATE answers SET full_text=full_text WHERE client_id=%s", [A])
     note, _ = worker.run_task(conn, {"task_id": None, "pull_id": None, "client_id": A, "step": "rescore", "args": {}, "seq": 0, "attempts": 1}, 9e9)
     assert note == "1 answers re-read", note
     got = conn.execute("SELECT brand, is_client, rank_in_answer, sentiment FROM mentions WHERE answer_id=%s ORDER BY rank_in_answer NULLS LAST", [aid]).fetchall()
@@ -132,6 +134,14 @@ with connect() as conn:
     conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM pull_queue")
     due = worker.ai_due(conn, A)
     assert "gemma" not in due and "phi" in due and "deepseek" in due and "claude" not in due, due   # gemma answered today
+    # a ChatGPT refresh queued a moment ago does not stop the open models from starting when the brand is opened
+    worker.enqueue(conn, A, "auto", ["--client-id", A, "--only", "ai"], "t")
+    t2 = conn.execute("SELECT now()").fetchone()[0]
+    worker.ensure_fresh(conn, A)
+    new = {r[0] for r in conn.execute("""SELECT t.step FROM pull_tasks t JOIN pull_queue q USING (pull_id)
+                                        WHERE t.client_id=%s AND q.requested_at >= %s""", [A, t2])}
+    assert {"phi", "deepseek"} <= new and "ai" not in new, new
+    assert worker.ensure_fresh(conn, A) is None                            # and nothing is queued twice
 print("open models: newest instruction model per family picked from NVIDIA's list, the shopper's country given, a reasoning "
       "block dropped, brands read like ChatGPT (no citations: no web search), and they run by themselves once a day")
 

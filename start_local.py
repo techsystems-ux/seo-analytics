@@ -21,8 +21,10 @@ def migrate(conn):
         for m in MIGRATIONS[:4]: conn.execute("INSERT INTO schema_migrations (name) VALUES (%s)", [m]); done.add(m)
     for m in MIGRATIONS:
         if m not in done:
-            print("Applying", m)
-            with conn.transaction():
+            with conn.transaction():                       # two servers starting together: one applies, the other waits and skips
+                conn.execute("SELECT pg_advisory_xact_lock(726352)")
+                if conn.execute("SELECT 1 FROM schema_migrations WHERE name=%s", [m]).fetchone(): continue
+                print("Applying", m)
                 conn.execute(open(os.path.join(HERE, m)).read())
                 conn.execute("INSERT INTO schema_migrations (name) VALUES (%s)", [m])
     # Let the connecting owner switch to the app role (SET ROLE aeo_app). Harmless if it already can.

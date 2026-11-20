@@ -181,29 +181,33 @@ def ai_due(conn, cid):
 
 def ensure_fresh(conn, cid, who=None):
     """Called when someone opens a brand, so data is there without anyone clicking:
+    - saved AI answers re-read with the current brand rules when those changed (free, done right away for small histories);
     - free sources (Search Console, GA4, rankings, page checks) when Search Console is linked and its data is missing or more
       than 30 hours old;
-    - the AI sources (ai_due): ChatGPT answers once a day, Semrush keyword data and Reddit/YouTube weekly, all within the
-      paid daily limits. Claude is never started here.
-    Nothing starts if something is already waiting or an automatic refresh was queued in the last 2 hours.
-    Returns the pull id (the last one queued) or None."""
-    busy = conn.execute("""SELECT EXISTS (SELECT 1 FROM pull_tasks WHERE client_id=%s AND status IN ('queued','running'))
-                           OR EXISTS (SELECT 1 FROM pull_queue WHERE client_id=%s AND label='auto' AND requested_at > now() - interval '2 hours')""",
-                        [cid, cid]).fetchone()[0]
-    if busy: return None
+    - the AI sources (ai_due): ChatGPT answers once a day, the free open models once a day, Semrush keyword data and
+      Reddit/YouTube weekly, all within the paid daily limits. Claude is never started here.
+    A step is not queued again while it is waiting or running, or if it was queued automatically in the last 2 hours; other
+    steps still start. Returns the pull id (the last one queued) or None."""
+    import ai_visibility
+    if ai_visibility.rescore_due(conn, cid):                              # free: re-read saved answers with the current rules
+        if conn.execute("SELECT count(*) FROM answers WHERE client_id=%s", [cid]).fetchone()[0] <= 300:
+            try: ai_visibility.rescore(conn, cid)
+            except Exception: pass
+    recent = {r[0] for r in conn.execute("""
+        SELECT t.step FROM pull_tasks t JOIN pull_queue q USING (pull_id) WHERE t.client_id=%s
+          AND (t.status IN ('queued','running') OR (q.label='auto' AND q.requested_at > now() - interval '2 hours'))""", [cid])}
     pid = None
     linked = conn.execute("SELECT gsc_site_url IS NOT NULL FROM client_integrations WHERE client_id=%s", [cid]).fetchone()
-    if linked and linked[0]:
+    if linked and linked[0] and not recent & set(FREE_REFRESH.split(",")):
         has_data = conn.execute("SELECT EXISTS (SELECT 1 FROM gsc_search_daily WHERE client_id=%s)", [cid]).fetchone()[0]
         fresh = conn.execute("""SELECT EXISTS (SELECT 1 FROM collector_runs WHERE client_id=%s AND collector='gsc' AND status='ok'
                                 AND started_at > now() - interval '30 hours')""", [cid]).fetchone()[0]
         if not (has_data and fresh):
             only = FREE_REFRESH + ("" if has_data else ",blogs,crawl")
             pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", only] + ([] if has_data else ["--force-weekly"]), who or "auto")
-    import ai_visibility
-    if ai_visibility.rescore_due(conn, cid):                              # free: re-read saved answers with the current rules
+    if ai_visibility.rescore_due(conn, cid) and "rescore" not in recent:  # large histories: the worker re-reads them
         pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", "rescore"], who or "auto")
-    ai = ai_due(conn, cid)
+    ai = [s for s in ai_due(conn, cid) if s not in recent]
     if ai:
         pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", ",".join(ai), "--force-weekly"], who or "auto")
     return pid
