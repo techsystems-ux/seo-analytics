@@ -292,19 +292,23 @@ def step_open(conn, task, deadline):
     return str(out), ([(engine, {"cont": True})] if out.get("more") else [])
 
 def step_blogs(conn, task, deadline):
-    """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
-    import blog_writer, daily, chatgpt_plan
+    """Topic research once, then one draft per task. Drafts are written only from the Generate button (task arg 'manual'),
+    by Claude within its blog limit (claude_blogs.py); the nightly run prepares topic ideas only."""
+    import blog_writer, daily, claude_blogs
     cid, a = task["client_id"], task["args"]
-    key = chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "blogs")
-    left = a.get("left", blog_writer.PER_RUN)
+    key = claude_blogs.ClaudeWriter(conn, cid) if a.get("manual") and claude_blogs.available() else None
+    left = a.get("left", 1) if a.get("manual") else 0
     note = {}
     def go():
         if not a.get("researched"):
             conn.execute("""UPDATE content_drafts SET status='idea' WHERE client_id=%s AND status='writing'
-                            AND updated_at < now() - interval '1 hour'""", [cid])
+                            AND updated_at < now() - interval '15 minutes'""", [cid])
             note["added"] = blog_writer.research(conn, cid)
-        note["written"] = blog_writer.write(conn, cid, key, n=1) if key and left > 0 else []
-        return f"{note.get('added', 0)} new ideas, {len(note['written'])} draft written" + ("" if key else " (no OpenAI key: ideas only)")
+        why = claude_blogs.room(conn) if key and left > 0 else None
+        if why: note["stopped"] = why
+        note["written"] = blog_writer.write(conn, cid, key, n=1) if key and left > 0 and not why else []
+        tail = "" if not a.get("manual") else (f" ({why})" if why else "" if key else " (no Claude key on the server)")
+        return f"{note.get('added', 0)} new ideas, {len(note['written'])} draft written" + tail
     daily.log(conn, cid, "blogs", go)
     more = [("blogs", {"left": left - 1, "researched": True, "cont": True})] if note.get("written") and left - 1 > 0 else []
     return f"{len(note.get('written') or [])} draft", more
@@ -328,7 +332,8 @@ def step_semrush(conn, task, deadline):
 def run_task(conn, task, deadline):
     """-> (note, [(step, args)] to queue next)."""
     step = task["step"]
-    if step in PAID_STEPS and not task["args"].get("cont"):                 # the paid guardrail, once per paid run
+    if step == "blogs" and task["args"].get("manual"): pass                 # the Generate button: Claude's spend caps apply instead
+    elif step in PAID_STEPS and not task["args"].get("cont"):               # the paid guardrail, once per paid run
         manual = step in MANUAL_STEPS and task["args"].get("manual")
         ok, why = (manual_ok if manual else paid_ok)(conn, task["client_id"], step, task["pull_id"])
         if not ok: return f"skipped: {why}", []

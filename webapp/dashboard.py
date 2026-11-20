@@ -707,16 +707,39 @@ def queue_pull(cid, label, args):
 def activity_status(cid, pull_id):
     with connect() as conn:
         client_or_404(conn, cid)
-        row = conn.execute("SELECT finished_at, exit_code FROM pull_queue WHERE pull_id=%s AND client_id::text=%s", [pull_id, cid]).fetchone()
+        row = conn.execute("SELECT finished_at, exit_code, requested_at, now() FROM pull_queue WHERE pull_id=%s AND client_id::text=%s", [pull_id, cid]).fetchone()
         if not row: abort(404)
-        tasks = conn.execute("SELECT step, status, note FROM pull_tasks WHERE pull_id=%s AND client_id::text=%s ORDER BY seq, task_id", [pull_id, cid]).fetchall()
+        tasks = conn.execute("SELECT step, status, note, args, started_at FROM pull_tasks WHERE pull_id=%s AND client_id::text=%s ORDER BY seq, task_id", [pull_id, cid]).fetchall()
+        blog = _blog_activity(conn, cid, row, tasks) if any(t[0] == "blogs" for t in tasks) else None
+        tasks = [t[:3] for t in tasks]
     labels = {"blogs": "Drafting blog", "ai": "Checking AI answers", "claude": "Checking Claude answers", "gsc": "Fetching Google Search data", "gsc_history": "Fetching search history", "ga4": "Fetching Analytics", "rank": "Updating rankings", "crawl": "Scanning pages", "index": "Checking indexing", "cwv": "Measuring page speed", "reddit": "Fetching Reddit", "youtube": "Fetching YouTube"}
     items = [{"label": labels.get(step, "Fetching research data"), "state": "skipped" if status == "done" and (note or "").startswith("skipped:") else status} for step, status, note in tasks]
     state = "error" if row[0] and row[1] else "finished" if row[0] else "running" if any(t["state"] == "running" for t in items) else "queued"
-    response = make_response({"state": state, "tasks": items})
+    response = make_response({"state": state, "tasks": items, **({"blog": blog} if blog else {})})
     response.headers["Cache-Control"] = "no-store"
     return response
 
+
+def _blog_activity(conn, cid, row, tasks):
+    """For the writing screen: the drafts this run is writing or wrote, with the real brief behind each (keyword, related
+    searches, why the topic was picked), and how long the run has been going."""
+    import execution
+    requested, now = row[2], row[3]
+    first = next((t for t in tasks if t[0] == "blogs"), None)
+    started = min((t[4] for t in tasks if t[0] == "blogs" and t[4]), default=None)
+    asked = int((first[3] or {}).get("left", 1)) if first else 1
+    drafts = []
+    for did, status, kw, sec, ev, title, score, words, err, token in conn.execute("""
+            SELECT draft_id::text, status, target_keyword, secondary_keywords, evidence, title, score, word_count, error, preview_token
+            FROM content_drafts WHERE client_id=%s AND (status='writing' OR (updated_at >= %s AND status IN ('draft','failed')))
+            ORDER BY CASE status WHEN 'writing' THEN 0 ELSE 1 END, updated_at DESC LIMIT 8""", [cid, requested]):
+        drafts.append({"id": did, "status": status, "keyword": kw, "related": (sec or [])[:6],
+                       "why": [{"source": s, "text": t} for s, t in execution.why(ev, 4)], "title": title, "score": score, "words": words,
+                       "error": (err or "")[:240] if status == "failed" else None,
+                       "url": url_for("dash.blog", cid=cid, did=did), "preview": execution.preview_url(token) if token else None})
+    notes = [t[2] for t in tasks if t[0] == "blogs" and t[2]]
+    return {"asked": asked, "drafts": drafts, "elapsed": int((now - (started or requested)).total_seconds()),
+            "running_for": int((now - started).total_seconds()) if started else 0, "note": notes[-1][:240] if notes else None}
 
 def start_job(cid, only, max_units=None, seeds="", research="", blog_count=None, manual=False):
     """Runs the daily job for one client in the background. Results go to the run log on screen; full output,

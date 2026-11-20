@@ -192,4 +192,40 @@ os.environ.pop("ANTHROPIC_API_KEY")
 page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)
 assert "Not connected yet" in page and "ANTHROPIC_API_KEY" in page                              # staff see where to add it
 print("Integrations: staff see the Claude card, spend and the run button (once a day); clients see the status only")
+
+# ---------------------------------------------------------------- blog drafts written by Claude (the Generate button)
+import claude_blogs as CB, blog_writer as BW
+POST = {"title": "How to care for silver anklets", "meta_title": "Silver anklet care", "meta_description": "x" * 150, "slug": "silver-anklet-care",
+        "excerpt": "Keep them bright.", "tags": ["silver"], "body_html": "<h2>Why does silver tarnish?</h2><p>Air.</p>", "faqs": [], "sources": []}
+class BlogFake:
+    def __init__(s, script): s.calls, s.script = [], list(script)
+    def post(s, url, headers=None, json=None, timeout=None):
+        s.calls.append(json); return R(200, s.script.pop(0))
+search_then_text = {"model": "claude-sonnet-5-5", "stop_reason": "end_turn", "content": [{"type": "text", "text": "Here is the post..."}],
+                    "usage": {"input_tokens": 20000, "output_tokens": 3000, "server_tool_use": {"web_search_requests": 4}}}
+tool = {"model": "claude-sonnet-5-5", "stop_reason": "tool_use", "content": [{"type": "tool_use", "id": "t1", "name": "submit_post", "input": POST}],
+        "usage": {"input_tokens": 23000, "output_tokens": 2500}}
+os.environ["ANTHROPIC_API_KEY"] = "sk-ant-test"
+with connect() as conn:
+    before = CA.total_spend(conn)
+    f = BlogFake([search_then_text, tool])
+    out = BW.ask(f, CB.ClaudeWriter(conn, A), "system rules", "Primary keyword: silver anklet care")
+    assert out == POST and len(f.calls) == 2
+    b0, b1 = f.calls
+    assert b0["model"] == "claude-sonnet-5-5" and b0["system"] == "system rules" and {t["name"] for t in b0["tools"]} == {"web_search", "submit_post"}
+    assert b0["tools"][1]["input_schema"] == BW.DRAFT_SCHEMA and "tool_choice" not in b0
+    assert b1["tool_choice"] == {"type": "tool", "name": "submit_post"} and b1["messages"][-1]["content"].startswith("Now call submit_post")
+    spent = CB.blog_spend(conn)
+    assert abs(spent - (CA.cost("claude-sonnet-5-5", search_then_text["usage"]) + CA.cost("claude-sonnet-5-5", tool["usage"]))) < 1e-6
+    assert abs(CA.total_spend(conn) - before - spent) < 1e-6                                           # counts toward the $10 too
+    assert conn.execute("SELECT count(*) FROM api_spend WHERE purpose='blogs'").fetchone()[0] == 2
+    assert CB.blog_cap() == 2.5
+    os.environ["CLAUDE_BLOG_MAX_USD"] = "50"; assert CB.blog_cap() == 2.5                              # env can only lower it
+    os.environ["CLAUDE_BLOG_MAX_USD"] = str(round(spent + 0.2, 4))
+    f2 = BlogFake([tool])
+    try: BW.ask(f2, CB.ClaudeWriter(conn, A), "s", "u"); raise AssertionError("should stop")
+    except CA.ClaudeError as e: assert "blog limit is reached" in str(e) and f2.calls == []             # stops before any request
+    os.environ.pop("CLAUDE_BLOG_MAX_USD")
+print("blogs on Claude: web search + submit_post tool, a text reply is asked again for the tool only, every reply in the ledger as 'blogs',"
+      " counted in the $10 too, a $2.50 blog cap the env can only lower, checked before any request")
 print("ALL CLAUDE TESTS PASSED")

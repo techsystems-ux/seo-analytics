@@ -83,8 +83,9 @@ def record(model, usage):
     usd = cost(model, usage)
     _ctx["spent"] = _ctx.get("spent", 0.0) + usd
     if _ctx.get("conn"):
-        _ctx["conn"].execute("INSERT INTO api_spend (provider, client_id, model, usd, searches) VALUES ('anthropic',%s,%s,%s,%s)",
-                             [_ctx["client_id"], model, usd, ((usage or {}).get("server_tool_use") or {}).get("web_search_requests") or 0])
+        _ctx["conn"].execute("INSERT INTO api_spend (provider, client_id, model, usd, searches, purpose) VALUES ('anthropic',%s,%s,%s,%s,%s)",
+                             [_ctx["client_id"], model, usd, ((usage or {}).get("server_tool_use") or {}).get("web_search_requests") or 0,
+                              _ctx.get("purpose", "answers")])
     return usd
 
 def room(conn, need=PROMPT_WORST_USD):

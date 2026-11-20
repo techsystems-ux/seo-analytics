@@ -1,0 +1,311 @@
+{# Full-screen writing view for blog drafts. Opens when a draft is requested (Generate, Write this next, Try again, Add and
+   write now) and while ?activity=<pull> is a blog run. Follows the real job through /c/<cid>/activity/<pull>: the brief shown
+   (keyword, related searches, why the topic was picked) is the draft's own; "Draft ready" only appears when the server has
+   the draft. The stage animation between those points runs on the clock, because one model call does the research and
+   writing together. Respects reduced motion. #}
+<script>document.body.dataset.blogStudio = "1";</script>
+<style>
+.bs{position:fixed;inset:0;z-index:1000;display:grid;grid-template-rows:auto 1fr auto;background:var(--bg,#fbfbfa);color:var(--ink);font-family:var(--fb);overflow:hidden}
+.bs[hidden]{display:none}
+.bs::before{content:"";position:absolute;inset:0;background-image:radial-gradient(circle at 1px 1px,#0f0f0f14 1px,transparent 0);background-size:22px 22px;mask-image:radial-gradient(ellipse at 50% 45%,#000 30%,transparent 80%);pointer-events:none}
+.bs::after{content:"";position:absolute;width:900px;height:900px;left:50%;top:48%;transform:translate(-50%,-50%);background:radial-gradient(circle,#b20f0016,transparent 62%);pointer-events:none;animation:bs-glow 6s ease-in-out infinite}
+.bs-top{position:relative;z-index:2;display:flex;align-items:center;gap:14px;padding:14px 24px;border-bottom:1px solid var(--row);background:#ffffffcc;backdrop-filter:blur(8px)}
+.bs-mark{width:34px;height:34px;color:var(--red);flex:none}.bs-mark .r1{transform-origin:20px 20px;animation:ai-spin 7s linear infinite}.bs-mark .r2{transform-origin:20px 20px;animation:ai-spin 11s linear infinite reverse}
+.bs-top h2{margin:0;font:700 16px/1.2 var(--fh);letter-spacing:-.2px}.bs-top small{display:block;font:500 11.5px/1.4 var(--fb);color:var(--grey)}
+.bs-live{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font:600 12px var(--fb);padding:6px 11px;border:1px solid var(--hair);border-radius:99px;background:#fff}
+.bs-live i{width:7px;height:7px;border-radius:50%;background:var(--red);animation:ai-breathe 1.2s ease-in-out infinite}
+.bs[data-state=finished] .bs-live i{background:#15803d;animation:none}.bs[data-state=error] .bs-live i{animation:none}
+.bs-btn{font:600 12.5px var(--fb);padding:8px 13px;border-radius:9px;border:1px solid var(--hair);background:#fff;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+.bs-btn:hover{border-color:var(--ink)}.bs-btn.red{background:var(--red);border-color:var(--red);color:#fff}.bs-btn.red:hover{filter:brightness(.92)}
+.bs-x{width:36px;height:36px;justify-content:center;padding:0;font-size:18px}
+.bs-main{position:relative;z-index:1;display:grid;grid-template-columns:280px minmax(0,1fr) 320px;gap:22px;padding:22px 24px;min-height:0}
+.bs-col{min-height:0;overflow:auto;scrollbar-width:thin}
+.bs-k{font:600 10px/1.4 var(--fb);letter-spacing:.14em;text-transform:uppercase;color:var(--grey);margin:0 0 10px}
+/* pipeline */
+.bs-steps{list-style:none;margin:0;padding:0;position:relative}
+.bs-steps::before{content:"";position:absolute;left:13px;top:14px;bottom:14px;width:2px;background:var(--row)}
+.bs-steps .fill{position:absolute;left:13px;top:14px;width:2px;background:var(--red);transition:height .8s cubic-bezier(.4,0,.2,1);height:0}
+.bs-steps li{position:relative;display:grid;grid-template-columns:28px 1fr;gap:12px;padding:9px 0;align-items:start;color:var(--grey);transition:color .3s}
+.bs-steps li b{display:block;font:600 13px/1.35 var(--fb)}.bs-steps li span{display:block;font:12px/1.45 var(--fb);margin-top:2px}
+.bs-dot{width:28px;height:28px;border-radius:50%;background:#fff;border:2px solid var(--row);display:grid;place-items:center;position:relative;z-index:1;transition:all .3s}
+.bs-dot svg{width:13px;height:13px;opacity:0}
+.bs-steps li[data-s=run]{color:var(--ink)}.bs-steps li[data-s=run] .bs-dot{border-color:var(--red);box-shadow:0 0 0 5px #b20f0018}
+.bs-steps li[data-s=run] .bs-dot::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid transparent;border-top-color:var(--red);animation:ai-spin 1s linear infinite}
+.bs-steps li[data-s=done]{color:var(--ink)}.bs-steps li[data-s=done] .bs-dot{background:var(--ink);border-color:var(--ink);color:#fff}.bs-steps li[data-s=done] .bs-dot svg{opacity:1}
+.bs-steps li[data-s=done] span{color:var(--grey)}
+/* stage */
+.bs-stage{position:relative;display:grid;place-items:center;min-height:0}
+.bs-orbit{position:absolute;width:min(760px,96%);aspect-ratio:1.45;border:1px dashed #b20f0030;border-radius:50%;animation:ai-spin 40s linear infinite;pointer-events:none}
+.bs-orbit i{position:absolute;width:9px;height:9px;border-radius:50%;background:var(--red);top:-5px;left:50%;box-shadow:0 0 12px #b20f0080}
+.bs-orbit.o2{width:min(600px,80%);animation-duration:26s;animation-direction:reverse;border-color:#0f0f0f14}.bs-orbit.o2 i{background:var(--ink);width:6px;height:6px;top:auto;bottom:-3px}
+.bs-doc{position:relative;width:min(620px,100%);max-height:100%;background:#fff;border:1px solid var(--hair);border-radius:14px;box-shadow:0 24px 60px -20px #0f0f0f30,0 2px 6px #0f0f0f10;overflow:hidden;animation:ai-in .5s ease-out}
+.bs-chrome{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-bottom:1px solid var(--row);background:#fafafa}
+.bs-chrome i{width:8px;height:8px;border-radius:50%;background:var(--hair)}.bs-chrome i:first-child{background:var(--red)}
+.bs-url{flex:1;margin-left:8px;font:11.5px var(--fb);color:var(--grey);background:#fff;border:1px solid var(--row);border-radius:6px;padding:4px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bs-page{position:relative;padding:26px 30px 30px;min-height:360px}
+.bs-eyebrow{font:600 10px var(--fb);letter-spacing:.14em;color:var(--red)}
+.bs-title{font:700 25px/1.2 var(--fh);letter-spacing:-.4px;margin:10px 0 14px;min-height:30px}
+.bs-title .cur{display:inline-block;width:2px;height:1em;background:var(--red);vertical-align:-3px;margin-left:2px;animation:bs-blink .9s steps(1) infinite}
+.bs-rule{height:3px;width:36px;background:var(--red);border-radius:2px;margin-bottom:18px}
+.bs-blocks{display:flex;flex-direction:column;gap:9px}
+.bs-blocks>*{display:none}.bs-blocks>.on{display:block;animation:ai-in .45s both}.bs-blocks>.bs-tbl.on{display:grid}.bs-blocks>.bs-faq.on{display:flex}
+.bs-h{height:11px;width:46%;border-radius:4px;background:var(--ink);opacity:.85;margin-top:8px}
+.bs-l{height:7px;border-radius:4px;background:var(--row);position:relative;overflow:hidden}
+.bs-l.on::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,#b20f0024,transparent);animation:ai-shimmer 1.8s linear infinite;background-size:200% 100%}
+.bs-l.lk{background:linear-gradient(90deg,var(--row) 30%,#b20f0055 30%,#b20f0055 48%,var(--row) 48%)}
+.bs-tbl{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:4px 0}.bs-tbl i{height:16px;border-radius:3px;background:#f3f3f2}.bs-tbl i:nth-child(-n+3){background:#e9e9e7}
+.bs-faq{border:1px solid var(--row);border-radius:8px;padding:9px 10px;display:flex;flex-direction:column;gap:6px}.bs-faq i{height:7px;border-radius:4px;background:var(--row)}.bs-faq i:first-child{width:62%;background:#d9d9d6}
+.bs-sweep{position:absolute;left:0;right:0;top:12%;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 14px #b20f0070;animation:bs-sweep 3.2s ease-in-out infinite;pointer-events:none}
+.bs-sweep::after{content:"";position:absolute;left:0;right:0;top:2px;height:80px;background:linear-gradient(#b20f0014,transparent)}
+.bs-pill{position:absolute;left:50%;top:-13px;transform:translateX(-50%);display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #b20f0060;border-radius:99px;padding:5px 11px;font:600 11px var(--fb);white-space:nowrap;box-shadow:0 4px 12px #0f0f0f14}
+.bs-pill i{width:6px;height:6px;border-radius:2px;background:var(--red);animation:ai-spin 1.4s linear infinite}
+.bs[data-state=finished] .bs-sweep,.bs[data-state=error] .bs-sweep{display:none}
+.bs-float{position:absolute;z-index:3;max-width:250px;background:#fff;border:1px solid var(--hair);border-radius:10px;padding:9px 11px;box-shadow:0 10px 24px -8px #0f0f0f30;font:12px/1.4 var(--fb);animation:bs-pop .5s cubic-bezier(.2,.9,.3,1.3) both,bs-drift 6s ease-in-out .5s infinite alternate}
+.bs-float small{display:block;font:600 9.5px var(--fb);letter-spacing:.12em;text-transform:uppercase;color:var(--red);margin-bottom:3px}
+.bs-float.out{animation:bs-out .4s ease-in forwards}
+/* side */
+.bs-card{background:#fff;border:1px solid var(--hair);border-radius:12px;padding:14px 15px;margin-bottom:14px}
+.bs-kw{font:700 16px/1.3 var(--fh);margin:0 0 10px}
+.bs-chips{display:flex;flex-wrap:wrap;gap:6px}.bs-chips span{font:500 11.5px var(--fb);padding:4px 9px;border-radius:99px;background:#f4f4f3;border:1px solid var(--row);animation:bs-pop .4s both}
+.bs-why{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:7px}.bs-why li{font:12px/1.45 var(--fb);color:var(--grey);animation:ai-in .4s both}.bs-why b{color:var(--ink);font-weight:600;margin-right:4px}
+.bs-gate{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.bs-gate li{display:flex;align-items:center;gap:9px;font:12.5px var(--fb);color:var(--grey)}
+.bs-gate li i{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--hair);flex:none;display:grid;place-items:center;font-style:normal;font-size:10px;color:#fff;transition:all .3s}
+.bs-gate li[data-s=run] i{border-color:var(--red);border-top-color:transparent;animation:ai-spin .8s linear infinite}
+.bs-gate li[data-s=done]{color:var(--ink)}.bs-gate li[data-s=done] i{background:#15803d;border-color:#15803d}
+.bs-meter{height:6px;border-radius:9px;background:var(--row);overflow:hidden;margin-top:12px}.bs-meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--red),#e2544a);border-radius:9px;transition:width 1s cubic-bezier(.4,0,.2,1)}
+.bs-meta{display:flex;justify-content:space-between;font:11.5px var(--fb);color:var(--grey);margin-top:7px}
+/* ticker */
+.bs-foot{position:relative;z-index:2;border-top:1px solid var(--row);background:#ffffffd9;backdrop-filter:blur(8px);padding:10px 24px;display:flex;gap:16px;align-items:center;overflow:hidden}
+.bs-foot .bs-k{margin:0;flex:none}
+.bs-log{display:flex;gap:22px;white-space:nowrap;font:12px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--grey);overflow:hidden;mask-image:linear-gradient(90deg,transparent,#000 4%,#000 90%,transparent)}
+.bs-log span{animation:ai-in .4s both}.bs-log span::before{content:"→ ";color:var(--red)}
+/* result */
+.bs-done{position:absolute;inset:0;z-index:4;display:grid;place-items:center;background:#ffffffb3;backdrop-filter:blur(3px);animation:ai-in .4s both}
+.bs-done[hidden]{display:none}
+.bs-done-card{width:min(520px,92%);background:#fff;border:1px solid var(--hair);border-radius:16px;padding:26px;box-shadow:0 30px 70px -20px #0f0f0f40;text-align:left}
+.bs-done-card h3{font:700 22px/1.25 var(--fh);margin:6px 0 8px}.bs-done-card p{margin:0 0 14px;color:var(--grey);font-size:13.5px}
+.bs-res{display:flex;flex-direction:column;gap:10px;margin:14px 0 18px}.bs-res a{color:inherit;text-decoration:none}
+.bs-res .it{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--row);border-radius:10px;padding:10px 12px}
+.bs-res .it b{font:600 13.5px/1.35 var(--fb)}.bs-res .it small{color:var(--grey);font-size:11.5px}
+.bs-burst{position:absolute;width:10px;height:10px;border-radius:50%;pointer-events:none}
+/* minimised */
+.bs-mini{position:fixed;right:20px;bottom:20px;z-index:1000;display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:99px;background:var(--ink);color:#fff;font:600 12.5px var(--fb);border:0;cursor:pointer;box-shadow:0 10px 24px -6px #0f0f0f60}
+.bs-mini[hidden]{display:none}.bs-mini i{width:8px;height:8px;border-radius:50%;background:var(--red);animation:ai-breathe 1.2s infinite}
+@keyframes bs-sweep{0%,100%{top:14%}50%{top:88%}}@keyframes bs-blink{50%{opacity:0}}@keyframes bs-glow{50%{opacity:.55;transform:translate(-50%,-50%) scale(1.08)}}
+@keyframes bs-pop{from{opacity:0;transform:scale(.85) translateY(6px)}to{opacity:1;transform:none}}@keyframes bs-drift{to{transform:translateY(-8px)}}@keyframes bs-out{to{opacity:0;transform:scale(.9)}}
+@keyframes bs-fly{to{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+@media(max-width:1100px){.bs-main{grid-template-columns:220px minmax(0,1fr)}.bs-side{display:none}}
+@media(max-width:760px){.bs-main{grid-template-columns:1fr;padding:14px 16px;overflow:auto}.bs-steps-col{order:2}.bs-stage{min-height:420px}.bs-top{padding:12px 16px;flex-wrap:wrap}.bs-orbit{display:none}.bs-page{padding:18px}.bs-float{display:none}}
+@media(prefers-reduced-motion:reduce){.bs *,.bs::after{animation:none!important;transition:none!important}}
+</style>
+<script>
+(() => {'use strict';
+const CHECK = '<svg viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const STEPS = [
+  ["Reading your search data", "Search Console queries, AI answers and Reddit questions behind this topic"],
+  ["Locking the brief", "Primary keyword, related searches and the intent to answer"],
+  ["Researching on the web", "Live search for facts and sources worth citing"],
+  ["Outlining", "Question-led H2s and H3s, a direct answer up top"],
+  ["Writing the sections", "1,000 to 1,200 words in your brand rules"],
+  ["Linking your store pages", "3 to 5 real collections and products, nothing invented"],
+  ["Running on-page checks", "Headings, meta, links, FAQs, brand words"],
+  ["Draft ready for review", "Nothing goes live until someone publishes it"]];
+const AT = [0, 6, 14, 42, 70, 125, 150];           // seconds into a draft when each stage starts (one model call does 3 to 6)
+const GATE = ["Headings in order", "Meta title and description", "Internal links are real pages", "FAQs answered", "Brand words and claims", "No filler, no em dashes"];
+const LOG = ["Brief loaded", "Reading the signals behind the topic", "Web search on: looking for sources", "Outline drafted",
+             "Writing in the brand's voice", "Matching links to store pages", "Checks running", "Draft saved for review"];
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const slug = s => String(s || "draft").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+const domain = {{ (client.domain or 'your-store.com')|tojson }}, base = document.body.dataset.orbitActivityBase;
+
+const root = document.createElement("section");
+root.className = "bs"; root.hidden = true; root.setAttribute("role", "dialog"); root.setAttribute("aria-modal", "true"); root.setAttribute("aria-label", "Writing blog drafts");
+root.innerHTML = `
+ <header class="bs-top">
+  <svg class="bs-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><g class="r1"><ellipse cx="20" cy="20" rx="17" ry="7.5" stroke="currentColor" stroke-width="1.6" transform="rotate(-35 20 20)"/><circle cx="34" cy="11" r="2.3" fill="currentColor"/></g><g class="r2"><ellipse cx="20" cy="20" rx="17" ry="7.5" stroke="currentColor" stroke-width="1.2" opacity=".5" transform="rotate(55 20 20)"/></g><circle cx="20" cy="20" r="4" fill="currentColor"/></svg>
+  <div><h2>Orbit Writer</h2><small class="bs-sub">{{ "Claude Sonnet 5.5 with live web search" if staff else "Live web research on" }}</small></div>
+  <span class="bs-live" role="status" aria-live="polite"><i></i><span class="bs-state">Starting</span> · <span class="bs-time">0:00</span></span>
+  <button class="bs-btn bs-min" type="button">Keep browsing</button>
+  <button class="bs-btn bs-x" type="button" aria-label="Close">&times;</button>
+ </header>
+ <div class="bs-main">
+  <div class="bs-col bs-steps-col"><p class="bs-k">Pipeline</p><ol class="bs-steps"><span class="fill"></span>${STEPS.map(([t, d]) => `<li><span class="bs-dot">${CHECK}</span><div><b>${t}</b><span>${d}</span></div></li>`).join("")}</ol></div>
+  <div class="bs-stage">
+   <div class="bs-orbit"><i></i></div><div class="bs-orbit o2"><i></i></div>
+   <article class="bs-doc" aria-hidden="true">
+    <div class="bs-chrome"><i></i><i></i><i></i><span class="bs-url"></span></div>
+    <div class="bs-page">
+     <div class="bs-sweep"><span class="bs-pill"><i></i><span class="bs-pilltext">Starting</span></span></div>
+     <span class="bs-eyebrow"></span><div class="bs-title"></div><div class="bs-rule"></div>
+     <div class="bs-blocks">
+      <div class="bs-l" style="width:96%"></div><div class="bs-l" style="width:88%"></div>
+      <div class="bs-h"></div><div class="bs-l lk" style="width:94%"></div><div class="bs-l" style="width:91%"></div><div class="bs-l" style="width:72%"></div>
+      <div class="bs-h" style="width:38%"></div><div class="bs-tbl"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="bs-l" style="width:93%"></div><div class="bs-l lk" style="width:85%"></div>
+      <div class="bs-h" style="width:52%"></div><div class="bs-l" style="width:90%"></div><div class="bs-l" style="width:64%"></div>
+      <div class="bs-faq"><i></i><i style="width:92%"></i></div><div class="bs-faq"><i></i><i style="width:84%"></i></div>
+     </div>
+    </div>
+   </article>
+   <div class="bs-done" hidden><div class="bs-done-card"><span class="bs-eyebrow bs-done-k">Done</span><h3 class="bs-done-h"></h3><p class="bs-done-p"></p><div class="bs-res"></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="bs-btn red bs-review" href="#">Review the draft</a><button class="bs-btn bs-close2" type="button">Back to blog posts</button></div></div></div>
+  </div>
+  <div class="bs-col bs-side">
+   <div class="bs-card"><p class="bs-k">The brief</p><p class="bs-kw">Picking the topic</p><div class="bs-chips"></div><ul class="bs-why"></ul></div>
+   <div class="bs-card"><p class="bs-k">Quality gate</p><ul class="bs-gate">${GATE.map(g => `<li><i></i>${g}</li>`).join("")}</ul>
+     <div class="bs-meter"><i></i></div><div class="bs-meta"><span class="bs-count">Draft 1</span><span class="bs-pct">0%</span></div></div>
+  </div>
+ </div>
+ <footer class="bs-foot"><p class="bs-k">Live log</p><div class="bs-log"></div></footer>`;
+const mini = document.createElement("button");
+mini.className = "bs-mini"; mini.type = "button"; mini.hidden = true; mini.innerHTML = '<i></i><span>Writing your draft</span>';
+document.body.append(root, mini);
+const $ = s => root.querySelector(s), $$ = s => [...root.querySelectorAll(s)];
+const steps = $$(".bs-steps li"), blocks = $$(".bs-blocks>*"), gate = $$(".bs-gate li");
+
+let t0 = Date.now(), offset = 0, stage = -1, logged = new Set(), floats = 0, data = null, polling = false, timer = null, typed = "", typing = null, doneCount = 0, draftBase = 0;
+
+function clock() { return Math.max(0, Math.round((Date.now() - t0) / 1000) + offset); }
+function fmt(s) { return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+function log(text) {
+  if (logged.has(text)) return; logged.add(text);
+  const el = document.createElement("span"); el.textContent = text; $(".bs-log").prepend(el);
+  while ($(".bs-log").children.length > 7) $(".bs-log").lastChild.remove();
+}
+function typeTitle(text) {
+  if (text === typed) return; typed = text; clearInterval(typing);
+  const el = $(".bs-title"); let i = 0; el.innerHTML = '<span></span><span class="cur"></span>';
+  const span = el.firstChild;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { span.textContent = text; return; }
+  typing = setInterval(() => { span.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(typing); }, 38);
+}
+function float(label, text) {
+  if (!text || floats > 40) return; floats++;
+  const f = document.createElement("div"); f.className = "bs-float";
+  const spots = [[2, 6], [64, 10], [1, 62], [64, 60], [4, 84], [62, 34]], [x, y] = spots[floats % spots.length];
+  f.style.left = x + "%"; f.style.top = y + "%";
+  f.innerHTML = `<small>${esc(label)}</small>${esc(text)}`;
+  $(".bs-stage").append(f);
+  setTimeout(() => { f.classList.add("out"); setTimeout(() => f.remove(), 400); }, 5200);
+}
+function setStage(n, final) {
+  steps.forEach((li, i) => li.dataset.s = i < n || (final && i === n) ? "done" : i === n ? "run" : "");
+  const fill = $(".bs-steps .fill"), last = steps[Math.min(n, steps.length - 1)];
+  fill.style.height = (last.offsetTop + 14 - steps[0].offsetTop) + "px";
+  $(".bs-pilltext").textContent = STEPS[Math.min(n, 7)][0];
+  if (n !== stage) { stage = n; log(LOG[Math.min(n, 7)] + (data && cur() ? " · " + cur().keyword : "")); }
+  const shown = Math.round(blocks.length * Math.min(1, n < 3 ? 0 : n === 3 ? 0.25 : n === 4 ? 0.75 : 1));
+  blocks.forEach((b, i) => b.classList.toggle("on", i < shown || (n === 4 && i < shown + Math.floor((clock() - draftBase) % 10 / 3))));
+  gate.forEach((g, i) => g.dataset.s = final || n > 6 ? "done" : n === 6 ? (i < ((clock() - draftBase - AT[6]) / 3 | 0) ? "done" : i === ((clock() - draftBase - AT[6]) / 3 | 0) ? "run" : "") : "");
+  const pct = final ? 100 : Math.min(96, Math.round(((clock() - draftBase) / 175) * 100));
+  $(".bs-meter i").style.width = pct + "%"; $(".bs-pct").textContent = pct + "%";
+}
+function cur() { return (data?.blog?.drafts || []).find(d => d.status === "writing") || null; }
+function brief(d) {
+  if (!d) return;
+  $(".bs-kw").textContent = d.keyword;
+  $(".bs-url").textContent = domain + "/blogs/" + slug(d.title || d.keyword);
+  typeTitle(d.title || d.keyword.replace(/^./, c => c.toUpperCase()));
+  const chips = $(".bs-chips");
+  if (chips.dataset.k !== d.keyword) {
+    chips.dataset.k = d.keyword; chips.replaceChildren(); $(".bs-why").replaceChildren();
+    d.related.forEach((r, i) => { const s = document.createElement("span"); s.textContent = r; s.style.animationDelay = (i * 120) + "ms"; chips.append(s); });
+    d.why.forEach(([src, text], i) => { const li = document.createElement("li"); li.style.animationDelay = (300 + i * 150) + "ms"; li.innerHTML = `<b>${esc(src)}</b>${esc(text)}`; $(".bs-why").append(li); });
+    d.why.forEach(([src, text], i) => setTimeout(() => float("Signal · " + src, text), 900 + i * 2600));
+    d.related.forEach((r, i) => setTimeout(() => float("Related search", r), 2200 + i * 2900));
+  }
+}
+function burst() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const card = $(".bs-done-card").getBoundingClientRect();
+  for (let i = 0; i < 26; i++) {
+    const b = document.createElement("span"); b.className = "bs-burst";
+    b.style.background = i % 3 ? "var(--red)" : "var(--ink)"; b.style.left = (card.left + card.width / 2) + "px"; b.style.top = (card.top + 30) + "px";
+    const a = (i / 26) * Math.PI * 2, r = 120 + Math.random() * 120;
+    b.style.setProperty("--dx", Math.cos(a) * r + "px"); b.style.setProperty("--dy", Math.sin(a) * r + "px");
+    b.style.position = "fixed"; b.style.animation = `bs-fly ${0.7 + Math.random() * 0.5}s cubic-bezier(.2,.8,.3,1) forwards`;
+    document.body.append(b); setTimeout(() => b.remove(), 1400);
+  }
+}
+function finish(state) {
+  const b = data?.blog || {}, written = (b.drafts || []).filter(d => d.status === "draft"), failed = (b.drafts || []).filter(d => d.status === "failed");
+  setStage(7, written.length > 0);
+  root.dataset.state = state; $(".bs-state").textContent = written.length ? "Done" : "Stopped";
+  const box = $(".bs-done"), res = $(".bs-res"); res.replaceChildren();
+  if (written.length) {
+    $(".bs-done-k").textContent = written.length === 1 ? "Draft ready" : written.length + " drafts ready";
+    $(".bs-done-h").textContent = written[0].title || written[0].keyword;
+    $(".bs-done-p").textContent = "Saved for review with its checks. Nothing is published until someone reviews it and clicks Publish.";
+    written.forEach(d => { const a = document.createElement("a"); a.href = d.url; a.className = "it";
+      a.innerHTML = `<span><b>${esc(d.title || d.keyword)}</b><br><small>${esc(d.keyword)}${d.words ? " · " + d.words.toLocaleString() + " words" : ""}</small></span><span class="tag ${d.score >= 80 ? "t-pass" : d.score >= 60 ? "t-na" : "t-sev-error"}">Checks ${d.score ?? "–"}/100</span>`; res.append(a); });
+    $(".bs-review").href = written[0].url; $(".bs-review").hidden = false;
+    box.hidden = false; burst();
+  } else {
+    $(".bs-done-k").textContent = "Not written";
+    $(".bs-done-h").textContent = failed.length ? "The draft could not be written" : "No draft was written this time";
+    $(".bs-done-p").textContent = (failed[0]?.error) || b.note || "Open the blog posts list to see the run's status.";
+    $(".bs-review").hidden = true; box.hidden = false;
+  }
+  mini.querySelector("span").textContent = written.length ? "Draft ready · open" : "Writing stopped · open";
+  mini.querySelector("i").style.animation = "none";
+}
+function tick() {
+  if (root.hidden && mini.hidden) return;
+  const s = clock(); $(".bs-time").textContent = fmt(s);
+  if (!data || ["finished", "error"].includes(root.dataset.state)) return;
+  if (data.state === "queued") { setStage(0); $(".bs-state").textContent = "Queued"; $(".bs-pilltext").textContent = "Waiting for the writer"; return; }
+  const t = s - draftBase; let n = 0; AT.forEach((a, i) => { if (t >= a) n = i; });
+  setStage(Math.min(n, 6)); $(".bs-state").textContent = "Writing";
+  mini.querySelector("span").textContent = "Writing · " + fmt(s);
+}
+async function poll(url) {
+  if (!polling) return;
+  try {
+    const r = await fetch(url, {credentials: "same-origin", cache: "no-store", headers: {Accept: "application/json"}});
+    if (!r.ok) throw Error(r.status);
+    data = await r.json();
+    const b = data.blog || {};
+    offset = (b.running_for || b.elapsed || 0) - Math.round((Date.now() - t0) / 1000);
+    const done = (b.drafts || []).filter(d => d.status === "draft").length;
+    if (done > doneCount && data.state === "running") { doneCount = done; draftBase = clock(); typed = ""; log("Draft " + done + " saved; starting the next"); }
+    $(".bs-count").textContent = "Draft " + Math.min(doneCount + 1, b.asked || 1) + " of " + (b.asked || 1);
+    $(".bs-eyebrow").textContent = "DRAFT " + Math.min(doneCount + 1, b.asked || 1) + " OF " + (b.asked || 1) + " · " + domain.toUpperCase();
+    brief(cur() || (b.drafts || [])[0]);
+    if (["finished", "error"].includes(data.state)) { polling = false; finish(data.state); return; }
+    root.dataset.state = data.state;
+  } catch (e) { log("Status check failed; retrying"); }
+  timer = setTimeout(() => poll(url), 3000);
+}
+function open(asking) {
+  root.hidden = false; mini.hidden = true; document.documentElement.style.overflow = "hidden";
+  if (asking) { root.dataset.state = "queued"; $(".bs-state").textContent = "Sending"; setStage(0); log("Request sent"); typeTitle("Choosing the topic"); }
+}
+function minimise() { root.hidden = true; mini.hidden = false; document.documentElement.style.overflow = ""; }
+function close() {
+  polling = false; clearTimeout(timer); root.hidden = true; mini.hidden = true; document.documentElement.style.overflow = "";
+  const u = new URL(location.href); if (u.searchParams.has("activity")) { u.searchParams.delete("activity"); location.replace(u); }
+}
+$(".bs-min").onclick = minimise; mini.onclick = () => { root.hidden = false; mini.hidden = true; document.documentElement.style.overflow = "hidden"; };
+$(".bs-x").onclick = close; $(".bs-close2").onclick = close;
+addEventListener("keydown", e => { if (e.key === "Escape" && !root.hidden) minimise(); });
+setInterval(tick, 500);
+
+// Start: a request on this page that writes a draft
+document.addEventListener("submit", e => {
+  const f = e.target, b = e.submitter; if (!b || f.method.toLowerCase() !== "post") return;
+  const what = b.name === "what" ? b.value : f.elements.namedItem("what")?.value;
+  const writes = what === "run" || what === "write" || (what === "add" && b.name === "now" && b.value === "1");
+  if (!writes) return;
+  queueMicrotask(() => { if (!e.defaultPrevented) open(true); });
+});
+// Follow: a run already started (the page came back with ?activity=)
+addEventListener("pageshow", () => {
+  const id = new URL(location.href).searchParams.get("activity");
+  if (!id || !/^\d+$/.test(id) || !base) return;
+  const url = new URL(base, location.origin); if (url.origin !== location.origin || !url.pathname.endsWith("/0")) return;
+  url.pathname = url.pathname.slice(0, -1) + id;
+  open(false); t0 = Date.now(); polling = true; poll(url);
+});
+})();
+</script>

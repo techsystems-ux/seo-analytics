@@ -214,6 +214,8 @@ def brief(d):
             f"Search intent: {d['intent']}\nWhy this post: " + "; ".join(why))
 
 def ask(session, key, system, user):
+    if getattr(key, "kind", None) == "claude":                    # the Generate button: Claude writes (claude_blogs.py)
+        return key.draft(session, system, user, DRAFT_SCHEMA)
     body = {"model": MODEL, "input": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "tools": [{"type": "web_search"}],
             "text": {"format": {"type": "json_schema", "name": "blog_post", "schema": DRAFT_SCHEMA, "strict": True}}}
@@ -285,7 +287,7 @@ def run(conn, cid, key=None, n=None):
                     AND updated_at < now() - interval '1 hour'""", [cid])           # a run cut off half way
     added = research(conn, cid)
     written = write(conn, cid, key, n) if key else []
-    return f"{added} new ideas, {len(written)} drafts written" + ("" if key else " (no OpenAI key: ideas only)")
+    return f"{added} new ideas, {len(written)} drafts written" + ("" if key else " (ideas only)")
 
 if __name__ == "__main__":
     from common import connect

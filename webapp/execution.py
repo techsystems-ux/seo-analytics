@@ -24,6 +24,9 @@ def err_to(url, text):
     from urllib.parse import urlencode
     return redirect(url + ("&" if "?" in url else "?") + urlencode({"err": text}))
 
+def staff_view():
+    return bool(session.get("staff_email"))
+
 def who():
     return session.get("staff_email") or session.get("viewer_email")
 
@@ -68,12 +71,15 @@ def blogs(cid):
         last = conn.execute("""SELECT started_at, status, error FROM collector_runs WHERE client_id=%s AND collector='blogs'
                                ORDER BY started_at DESC LIMIT 1""", [cid]).fetchone()
         has_gsc = conn.execute("SELECT EXISTS (SELECT 1 FROM gsc_search_daily WHERE client_id=%s)", [cid]).fetchone()[0]
-        import worker
-        can_write, next_at = worker.paid_next(conn, cid, "blogs")
+        import worker, claude_blogs
+        writer = claude_blogs.status(conn)
+        can_write, next_at = writer["key"] and writer["room"], None
+        writing = conn.execute("SELECT target_keyword FROM content_drafts WHERE client_id=%s AND status='writing' ORDER BY updated_at DESC LIMIT 3", [cid]).fetchall()
     tabcount = {k: sum(counts.get(x, 0) for x in v) for k, _, v in TABS}
     return view("blogs.html", c, "blogs", tab=tab, tabs=TABS, tabcount=tabcount, rows=rows, S=STATUS, why=why, store=s, last=last,
                 has_gsc=has_gsc, edit=can_edit(cid), msg=request.args.get("msg"), preview_url=preview_url,
-                can_write=can_write, next_at=next_at, per_day=worker.paid_per_day(), max_drafts=worker.blog_count_limit())
+                can_write=can_write, next_at=next_at, per_day=worker.paid_per_day(), max_drafts=worker.blog_count_limit(),
+                writer=writer, writing=[w[0] for w in writing])
 
 @bp.post("/c/<cid>/blogs")
 def blogs_post(cid):
@@ -105,14 +111,14 @@ def blogs_post(cid):
                 return back_with(url_for("dash.blogs", cid=cid, tab="ideas"), f"Added “{kw}” to the ideas.")
         elif what != "run":
             abort(400)
-        import worker
-        ok, nxt = worker.paid_next(conn, cid, "blogs")
-        if not ok:
-            when = nxt.astimezone(__import__("zoneinfo").ZoneInfo("Asia/Kolkata")).strftime("%d %b, %H:%M IST") if hasattr(nxt, "astimezone") else nxt
+        import claude_blogs
+        why = None if claude_blogs.available() else "the writer is not set up yet"
+        why = why or claude_blogs.room(conn)
+        if why:
             return back_with(url_for("dash.blogs", cid=cid, tab=request.form.get("tab", "review")),
-                             f"Saved. Drafts are written {worker.paid_per_day()} time(s) a day per brand; the next run can start {when}. Connect the brand's ChatGPT plan in Integrations to write drafts any time.")
-    start_job(cid, "blogs", blog_count=write_count)
-    return back_with(url_for("dash.blogs", cid=cid, tab="review"), "Writing has started. Drafts appear here in a few minutes, each with a preview link.")
+                             "Saved. Drafts can't be written right now: " + (why if staff_view() else "please ask the Hovers team."))
+    start_job(cid, "blogs", blog_count=write_count, manual=True)
+    return back_with(url_for("dash.blogs", cid=cid, tab="review"), "Writing has started. Each draft takes two to three minutes and appears here with a preview link.")
 
 @bp.get("/c/<cid>/blogs/<did>")
 def blog(cid, did):

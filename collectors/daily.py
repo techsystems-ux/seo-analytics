@@ -6,7 +6,7 @@
   first, weekly  Reddit (Apify) and YouTube, on their own once their keys are set
   on request     Semrush, from Settings only (lifetime credit cap, see semrush.py); SEMRUSH_AUTO=1 adds it to Mondays
 Each step is logged in collector_runs; one failure never stops the rest.
-  every day      blog ideas and up to BLOGS_PER_RUN drafts for review (Execution screen); nothing is published automatically
+  every day      blog topic ideas; drafts only from the Generate button, written by Claude (claude_blogs.py); nothing is published automatically
   every day      Search Console sitemaps + URL index status, Core Web Vitals (PageSpeed) for top pages; each URL weekly
 Usage: python daily.py [--client-id UUID] [--only gsc,ga4,rank,ai,semrush,pages,index,cwv,crawl,blogs] [--force-weekly]
 """
@@ -142,7 +142,9 @@ def main(argv=None):
             # Execution: blog ideas from the data pulled above, and drafts for review (OpenAI). Never publishes.
             if "blogs" in only:
                 import blog_writer
-                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "blogs"), n=a.blog_count))
+                import claude_blogs                  # drafts only from the Generate button, written by Claude; nightly = ideas
+                writer = claude_blogs.ClaudeWriter(conn, cid) if a.manual and claude_blogs.available() and not claude_blogs.room(conn) else None
+                ok &= log(conn, cid, "blogs", lambda: blog_writer.run(conn, cid, writer, n=a.blog_count or 1))
             if "crawl" in only and weekly_due(conn, cid, "crawl", a.force_weekly):
                 import crawler
                 ok &= log(conn, cid, "crawl", lambda: "{pages} pages crawled, health {health}%, {error} errors, {warning} warnings, {notice} notices".format(

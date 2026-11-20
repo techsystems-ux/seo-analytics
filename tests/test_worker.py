@@ -36,7 +36,9 @@ def fake_ai(conn, cid, key, samples=1, cycle=None, session=None, sentiment=True,
     ai_calls.append(deadline); return ({"ok": 5, "more": 1} if len(ai_calls) == 1 else {"ok": 3}), {}
 ai_visibility.sync_client = fake_ai
 blog_writer.research = lambda conn, cid: 4
-blog_writer.write = lambda conn, cid, key, n=None, session=None: drafts.append(cid) or ["Draft title"]
+blog_writer.write = lambda conn, cid, key, n=None, session=None: drafts.append((cid, getattr(key, "kind", None))) or ["Draft title"]
+import claude_blogs
+claude_blogs.available = lambda: True
 crawler.run = lambda conn, cid, limit=500, pause=0.5, deadline=None: {"pages": 12, "health": 90, "error": 1, "warning": 0, "notice": 0}
 fail_once = {"rank": 1}
 def fake_daily(argv):
@@ -48,7 +50,8 @@ worker.kick = lambda: kicks.append(1) or True
 
 # 1. a button pull for one brand becomes ordered tasks
 with connect() as conn:
-    pid = worker.enqueue(conn, A, "gsc,rank,ai,blogs,crawl", ["--client-id", A, "--only", "gsc,rank,ai,blogs,crawl", "--force-weekly"], "seo@hovers.in")
+    pid = worker.enqueue(conn, A, "gsc,rank,ai,blogs,crawl", ["--client-id", A, "--only", "gsc,rank,ai,blogs,crawl", "--force-weekly",
+                                                             "--manual", "1", "--blog-count", "3"], "seo@hovers.in")
     steps = [r[0] for r in conn.execute("SELECT step FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [pid])]
     started = conn.execute("SELECT started_at IS NOT NULL FROM pull_queue WHERE pull_id=%s", [pid]).fetchone()[0]
 assert steps == ["gsc", "rank", "ai", "blogs", "crawl"] and started, steps          # marked started: an old Mac app never takes it
@@ -64,7 +67,7 @@ assert [s for s, st in by].count("gsc") == 10 and by[-1][0] == "gsc_history" and
 assert [s for s, _ in by if s != "gsc" and s != "gsc_history"] == ["rank", "ai", "ai", "blogs", "blogs", "blogs", "crawl"], by
 assert all(st == "done" for _, st in by) and fin == (True, 0), (by, fin)
 assert next(r for r in rows if r[0] == "rank")[5] == 2                                    # failed once, retried, done
-assert len(ai_calls) == 2 and len(drafts) == 3                                           # prompts continued; three drafts, one per task
+assert len(ai_calls) == 2 and drafts == [(A, "claude")] * 3                               # prompts continued; three drafts by Claude, one per task
 assert {"gsc", "gsc_history", "ai", "blogs"} <= logged and "crawl" in logged
 order = [r[0] for r in rows]
 assert order.index("rank") > max(i for i, s in enumerate(order) if s == "gsc")           # rank only after Search Console finished
@@ -124,7 +127,7 @@ worker.work(budget=30, kick_after=False)
 with connect() as conn:
     notes = [r[0] for r in conn.execute("SELECT note FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [p2])]
     ok_now, nxt = worker.paid_next(conn, B, "ai")
-assert first[0] >= 1 and first[1] >= 1 and (len(ai_calls), len(drafts)) == first, (first, len(ai_calls), len(drafts))  # nothing more spent
+assert first[0] >= 1 and first[1] == 0 and (len(ai_calls), len(drafts)) == first, (first, len(ai_calls), len(drafts))  # nothing more spent; scheduled blogs = ideas only
 assert all(n.startswith("skipped: already ran 1 time in 24 hours") for n in notes) and not ok_now and nxt, notes
 os.environ.update(PAID_RUNS_PER_DAY="2")
 with connect() as conn:
@@ -227,3 +230,18 @@ with connect() as conn:
 if r is not None:
     assert r.status_code == 302 and "msg=Started.+Results+appear" in r.headers["Location"] and kicks and last[1] == "seo@hovers.in", (r.headers.get("Location"), last)
 print("endpoints: worker and schedule need the secret; a Pull button queues the tasks and starts the server at once")
+
+# blogs: the nightly run prepares ideas only; drafts come from the button (worker.work is a stub from here: call the step)
+drafts.clear()
+T = lambda args: {"task_id": None, "pull_id": None, "client_id": A, "step": "blogs", "args": args, "seq": 0, "attempts": 1}
+with connect() as conn:
+    conn.execute("DELETE FROM paid_runs")
+    nightly_note, more = worker.run_task(conn, T({}), 9e9)
+    assert drafts == [] and nightly_note == "0 draft" and more == [], (drafts, nightly_note)
+    note, more = worker.run_task(conn, T({"manual": "1", "left": 2}), 9e9)
+    assert drafts == [(A, "claude")] and more and more[0][1]["left"] == 1, (drafts, more)             # button: Claude, outside the daily limit
+    claude_blogs.room = lambda conn, need=None: "the Claude blog limit is reached ($2.40 of $2.50 used)"
+    drafts.clear(); note, more = worker.run_task(conn, T({"manual": "1", "left": 2}), 9e9)
+    assert drafts == [] and more == [], drafts
+    msg = conn.execute("SELECT error FROM collector_runs WHERE client_id=%s AND collector='blogs' ORDER BY run_id DESC LIMIT 1", [A]).fetchone()
+print("blogs: nightly = ideas only; the Generate button writes with Claude outside the daily limit and stops at the blog limit")
