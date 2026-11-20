@@ -237,6 +237,19 @@ with connect() as conn:
     conn.execute("UPDATE chatgpt_connections SET use_for_blogs=true WHERE client_id=%s", [A])
 print("blog drafts: written on the plan with the system brief as instructions; switch off per use")
 
+# on the brand's own plan the once-a-day limit on paid runs does not apply (it costs Hovers nothing)
+import worker
+with connect() as conn:
+    conn.execute("INSERT INTO paid_runs (client_id, kind) VALUES (%s,'blogs'), (%s,'blogs')", [A, Bc])
+    assert worker.paid_next(conn, A, "blogs") == (True, "") and worker.paid_ok(conn, A, "blogs")[0]
+    assert worker.paid_next(conn, Bc, "blogs")[0] is False and worker.paid_ok(conn, Bc, "blogs")[0] is False
+    assert worker.paid_next(conn, A, "semrush")[0] is True                      # other paid sources untouched (none run yet)
+    assert conn.execute("SELECT count(*) FROM paid_runs WHERE client_id=%s AND kind='blogs'", [A]).fetchone()[0] == 1   # not recorded
+    conn.execute("UPDATE chatgpt_connections SET use_for_blogs=false WHERE client_id=%s", [A])
+    assert worker.paid_next(conn, A, "blogs")[0] is False                        # back on the key: the limit applies again
+    conn.execute("UPDATE chatgpt_connections SET use_for_blogs=true WHERE client_id=%s", [A])
+print("daily limit: lifted while the brand's own plan writes; applies again on the API key")
+
 # ---------------------------------------------------------------- refresh, then a revoked sign-in
 with connect() as conn:
     conn.execute("UPDATE chatgpt_connections SET expires_at = now() + interval '1 minute' WHERE client_id=%s", [A])

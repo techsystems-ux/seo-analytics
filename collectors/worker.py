@@ -91,10 +91,19 @@ def nightly(conn, slot="nightly"):
         return None
     return enqueue(conn, None, slot, ["--only", NIGHTLY if slot == "nightly" else ",".join(PAID_STEPS)], "schedule")
 
+def on_own_plan(conn, cid, kind):
+    if kind not in ("ai", "blogs"): return False
+    try:
+        import chatgpt_plan
+        return chatgpt_plan.on_plan(conn, cid, kind)
+    except Exception:
+        return False
+
 def paid_ok(conn, cid, kind, pull_id=None):
     """The guardrail for paid sources: at most PAID_RUNS_PER_DAY starts per brand and kind in 24 hours, spaced at least
     PAID_MIN_GAP_HOURS apart (default: 22 h for once a day, 10 h for twice). Records the start when allowed.
     Whatever asked for it (schedule, a button, a sign-up), the same limit applies; opening a page never asks."""
+    if on_own_plan(conn, cid, kind): return True, ""                      # the brand's own ChatGPT plan pays: no daily limit
     per_day = paid_per_day()
     if per_day == 0: return False, "paid sources are switched off (PAID_RUNS_PER_DAY=0)"
     gap = float(os.environ.get("PAID_MIN_GAP_HOURS", str(max(1, 24 / per_day - 2))))
@@ -116,6 +125,7 @@ def manual_ok(conn, cid, kind, pull_id=None):
 
 def paid_next(conn, cid, kind):
     """For screens: (True, '') if a paid run may start now for this brand, else (False, when it can next run)."""
+    if on_own_plan(conn, cid, kind): return True, ""
     per_day = paid_per_day()
     if per_day == 0: return False, "switched off"
     gap = float(os.environ.get("PAID_MIN_GAP_HOURS", str(max(1, 24 / per_day - 2))))

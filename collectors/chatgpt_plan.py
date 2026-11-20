@@ -433,6 +433,11 @@ def route_for(conn, client_id, api_key, purpose="ai"):
     if c["limit_hit_at"] and c["limit_hit_at"] > now() - dt.timedelta(hours=12) and api_key: return api_key
     return PlanRoute(conn, client_id, api_key, c["model"])
 
+def on_plan(conn, client_id, purpose):
+    """True when this brand's AI answers ('ai') or blog drafts ('blogs') run on its own ChatGPT plan right now. Those runs
+    cost Hovers nothing, so the once-a-day limit on paid runs does not apply to them."""
+    return isinstance(route_for(conn, client_id, "backup", purpose), PlanRoute)
+
 def test(conn, client_id, session=None):
     """Refresh the model list and ask one tiny question on the plan. -> (ok, message)"""
     session = session or requests.Session()

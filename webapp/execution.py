@@ -110,7 +110,7 @@ def blogs_post(cid):
         if not ok:
             when = nxt.astimezone(__import__("zoneinfo").ZoneInfo("Asia/Kolkata")).strftime("%d %b, %H:%M IST") if hasattr(nxt, "astimezone") else nxt
             return back_with(url_for("dash.blogs", cid=cid, tab=request.form.get("tab", "review")),
-                             f"Saved. Drafts are written {worker.paid_per_day()} time(s) a day per brand to keep OpenAI costs predictable; the next run can start {when}.")
+                             f"Saved. Drafts are written {worker.paid_per_day()} time(s) a day per brand; the next run can start {when}. Connect the brand's ChatGPT plan in Integrations to write drafts any time.")
     start_job(cid, "blogs", blog_count=write_count)
     return back_with(url_for("dash.blogs", cid=cid, tab="review"), "Writing has started. Drafts appear here in a few minutes, each with a preview link.")
 
