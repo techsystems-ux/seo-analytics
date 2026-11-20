@@ -311,19 +311,38 @@ def simplify(b, param):
         if "user_location" in t: t.pop("user_location"); return b
     return None
 
+def events(r):
+    """Server-sent events -> one dict per event. Lines arrive as bytes when the reply names no charset (OpenAI's event
+    stream does not), so decode them ourselves; an event may span several data: lines and ends at a blank line."""
+    buf = []
+    for raw in r.iter_lines():
+        line = raw.decode("utf-8", "replace") if isinstance(raw, (bytes, bytearray)) else (raw or "")
+        line = line.rstrip("\r")
+        if not line:
+            if buf:
+                data, buf = "\n".join(buf), []
+                if data.strip() == "[DONE]": return
+                try: yield json.loads(data)
+                except ValueError: pass
+            continue
+        if line.startswith("data:"): buf.append(line[5:].lstrip())
+    if buf:
+        data = "\n".join(buf)
+        if data.strip() != "[DONE]":
+            try: yield json.loads(data)
+            except ValueError: pass
+
 def stream(session, token, body, timeout):
     """Send one streamed Responses request; return the final response object (as the API returns without streaming)."""
-    r = session.post(RESPONSES, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "text/event-stream"},
-                     json=body, timeout=timeout, stream=True)
+    try:
+        r = session.post(RESPONSES, headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "Accept": "text/event-stream"},
+                         json=body, timeout=timeout, stream=True)
+    except requests.RequestException as e:
+        return None, ("interrupted", f"Could not reach ChatGPT ({type(e).__name__}).", None)
     if r.status_code != 200: return r, None
     final, err = None, None
     try:
-        for line in r.iter_lines(decode_unicode=True):
-            if not line or not line.startswith("data:"): continue
-            data = line[5:].strip()
-            if data == "[DONE]": break
-            try: ev = json.loads(data)
-            except ValueError: continue
+        for ev in events(r):
             t = ev.get("type")
             if t == "response.completed": final = ev.get("response"); break
             if t in ("response.failed", "error"):
@@ -332,6 +351,8 @@ def stream(session, token, body, timeout):
             if t == "response.incomplete":
                 reason = ((ev.get("response") or {}).get("incomplete_details") or {}).get("reason") or "incomplete"
                 err = ("incomplete", f"The answer stopped early ({reason}).", None); break
+    except requests.RequestException as e:
+        err = ("interrupted", f"The answer stream was cut off ({type(e).__name__}).", None)
     finally:
         r.close()
     if err: return None, err
@@ -359,7 +380,8 @@ class PlanRoute:
                 self.conn.execute("""UPDATE chatgpt_connections SET plan_calls=plan_calls+1, last_used_at=now(), last_error=NULL
                                      WHERE client_id=%s""", [self.client_id])
                 return j
-            except PlanError as e:
+            except Exception as e:                       # anything unexpected on the plan route: the key answers instead
+                if not isinstance(e, PlanError): e = PlanError("failed", f"Unexpected problem on the ChatGPT plan route: {e}")
                 if e.kind in ("limit", "not_eligible", "reconnect"): self.off = str(e)
                 if e.kind == "reconnect": mark(self.conn, self.client_id, "reconnect", str(e))
                 elif e.kind in ("unsupported", "unavailable", "failed"): mark(self.conn, self.client_id, None, str(e)[:500])

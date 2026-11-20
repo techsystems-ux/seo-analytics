@@ -43,6 +43,11 @@ assert "include" not in s1 and "user_location" in s1["tools"][0]
 s2 = cp.simplify(s1, None); assert "user_location" not in s2["tools"][0] and cp.simplify(s2, None) is None
 assert cp.params_from("http://127.0.0.1:1455/auth/callback?code=abc&state=xyz&client_id=oaiapp_1") == {"code": "abc", "state": "xyz", "client_id": "oaiapp_1"}
 assert cp.params_from("code=abc&state=xyz")["code"] == "abc"
+class _L:
+    def __init__(s, lines): s.l = lines
+    def iter_lines(s): return iter(s.l)
+evs = list(cp.events(_L([b"event: x", b'data: {"type":"a",', b'data: "n":1}', b"", "data: {\"type\":\"b\"}", b"", b"data: [DONE]", b""])))
+assert evs == [{"type": "a", "n": 1}, {"type": "b"}], evs
 print("helpers: plan request shape (store off, streamed, system to instructions, unsupported fields out), step-down, pasted address")
 
 # ---------------------------------------------------------------- fake OpenAI
@@ -66,7 +71,10 @@ class R:
     def iter_lines(s, decode_unicode=True): return iter(s._lines or [])
     def close(s): pass
 
-def sse(*events): return [f"data: {json.dumps(e)}" for e in events]
+def sse(*events):                                   # as OpenAI sends it: bytes, "event:" and "data:" lines, a blank line after each
+    out = []
+    for e in events: out += [f"event: {e.get('type')}".encode(), f"data: {json.dumps(e)}".encode(), b""]
+    return out
 COMPLETED = {"model": "gpt-plan-1", "id": "resp_1", "output": [
     {"type": "web_search_call", "action": {"sources": [{"url": "https://www.giva.co/silver"}]}},
     {"type": "message", "content": [{"type": "output_text", "text": "Top picks: GIVA and Gargi. Gargi is hallmarked.",
@@ -250,6 +258,20 @@ with connect() as conn:
 page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)
 assert "Connect again" in page and "Continue with ChatGPT" in page
 print("tokens: refreshed before expiry with the rotating refresh token; a revoked sign-in falls back to the key and asks to connect again")
+
+# anything unexpected on the plan route (here a broken stream) is covered by the key, not a failed draft
+class Odd(Responses):
+    def post(s, url, headers=None, json=None, timeout=None, stream=False):
+        if headers["Authorization"].startswith("Bearer at-"):
+            class Bad(R):
+                def iter_lines(s2): raise TypeError("startswith first arg must be bytes or a tuple of bytes, not str")
+            return Bad(200)
+        return super().post(url, headers=headers, json=json, timeout=timeout, stream=stream)
+with connect() as conn:
+    conn.execute("UPDATE chatgpt_connections SET status='active', expires_at=now()+interval '1 hour', last_error=NULL WHERE client_id=%s", [A])
+    od = Odd(); j = cp.post(od, cp.route_for(conn, A, "sk-api", "blogs"), {"model": "x", "input": "q"}, 30)
+    assert j["model"] == "gpt-api" and [c[0] for c in od.calls] == ["api"] and "Unexpected problem" in cp.connection(conn, A)["last_error"]
+print("unexpected plan error: the key writes it instead, and the reason is kept for the team")
 
 # no backup key: a plan failure is an error, not a silent empty answer
 with connect() as conn:
