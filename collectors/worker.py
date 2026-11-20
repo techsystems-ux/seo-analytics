@@ -19,9 +19,9 @@ import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
-ORDER = ["rescore", "gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
+ORDER = ["rescore", "gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "gemma", "phi", "deepseek", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
-NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,index,cwv,blogs,crawl,youtube,reddit"
+NIGHTLY = "gsc,ga4,rank,semrush,ai,gemma,phi,deepseek,pages,index,cwv,blogs,crawl,youtube,reddit"
 PAID_STEPS = ("ai", "claude", "blogs", "semrush")   # OpenAI (prompts, blog drafts), Claude and Semrush: limited per brand per day
 BUTTON_ONLY = ("claude",)                          # never scheduled or started by opening a page: the team's button only
 FREE_REFRESH = "gsc,ga4,rank,pages,index,cwv"  # what opening a dashboard with stale data may start (costs nothing)
@@ -170,6 +170,12 @@ def ai_due(conn, cid):
     if os.environ.get("SEMRUSH_API_KEY") and int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")) > 0 and stale("semrush") \
             and paid_next(conn, cid, "semrush")[0]:
         steps.append("semrush")
+    import open_models                                                # free open models (NVIDIA): once a day, no paid limit
+    if prompts and open_models.available():
+        for e in open_models.FAMILIES:
+            fresh = conn.execute(f"""SELECT EXISTS (SELECT 1 FROM runs WHERE client_id=%s AND engine=%s AND status='ok'
+                                     AND run_at > now() - interval '{AI_FRESH_HOURS} hours')""", [cid, e]).fetchone()[0]
+            if not fresh and stale(e, 0.5): steps.append(e)               # and not tried in the last 12 hours
     steps += [s for s, key in WEEKLY_AI.items() if os.environ.get(key) and stale(s)]
     return steps
 
@@ -270,6 +276,17 @@ def step_claude(conn, task, deadline):
     daily.log(conn, cid, "claude", go)
     return str(out), ([("claude", {"cont": True})] if out.get("more") and not out.get("stopped") else [])
 
+def step_open(conn, task, deadline):
+    """Gemma, Phi or DeepSeek through NVIDIA's free API: the same prompts, read the same way as ChatGPT."""
+    import open_models, daily
+    cid, engine, out = task["client_id"], task["step"], {}
+    if not open_models.available(): return "no NVIDIA key on the server", []
+    def go():
+        tally, _ = open_models.sync_client(conn, cid, engine, deadline=deadline - 45)
+        out.update(tally); return {k: v for k, v in tally.items() if k != "more"}
+    daily.log(conn, cid, engine, go)
+    return str(out), ([(engine, {"cont": True})] if out.get("more") else [])
+
 def step_blogs(conn, task, deadline):
     """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
     import blog_writer, daily, chatgpt_plan
@@ -321,6 +338,7 @@ def run_task(conn, task, deadline):
         return f"{out.get('n', 0)} answers re-read", []
     if step == "ai": return step_ai(conn, task, deadline)
     if step == "claude": return step_claude(conn, task, deadline)
+    if step in ("gemma", "phi", "deepseek"): return step_open(conn, task, deadline)
     if step == "blogs": return step_blogs(conn, task, deadline)
     if step == "crawl": return step_crawl(conn, task, deadline)
     rc = _daily(task["client_id"], step, task["args"])          # ga4, rank, pages, reddit, youtube, semrush...: one call each

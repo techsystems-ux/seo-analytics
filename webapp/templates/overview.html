@@ -66,8 +66,9 @@
 <div class="g2">
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><path d="M14 3H6a1 1 0 00-1 1v16a1 1 0 001 1h12a1 1 0 001-1V8z"/><path d="M14 3v5h5"/></svg></span>Prompts in LLMs</h2>
       <span class="note">{{ me.name }} named in {{ pm.named }} of {{ pm.asked }}{% if pm.cycle %} · run {{ pm.cycle.strftime('%d %b') }}{% endif %}</span></div>
-    {% if pm.rows %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Prompt</th>{% for e in engs %}<th class="e" title="{{ e.label }}"><img class="lg sm" src="{{ e.logo }}" alt="{{ e.label }}" onerror="this.style.visibility='hidden'"></th>{% endfor %}</tr>
-      {% for p in pm.rows[:6] %}<tr><td class="t">{{ p.text }}</td>{% for e in engs %}{% set c = p.cells.get(e.key) %}<td class="c">{% if not c %}<span class="ck na" title="Not asked">–</span>{% elif c.named %}<span class="ck" title="Named{{ ', #' ~ c.rank if c.rank }}">✓</span>{% else %}<span class="ck no" title="Not named">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</table></div>
+    {% set cols = engs|selectattr('connected')|list %}
+    {% if pm.rows %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Prompt</th>{% for e in cols %}<th class="e" title="{{ e.full }}"><img class="lg sm" src="{{ e.logo }}" alt="{{ e.label }}" onerror="this.style.visibility='hidden'"></th>{% endfor %}</tr>
+      {% for p in pm.rows[:6] %}<tr><td class="t">{{ p.text }}</td>{% for e in cols %}{% set c = p.cells.get(e.key) %}<td class="c">{% if not c %}<span class="ck na" title="Not asked yet">·</span>{% elif c.named %}<a class="ck" href="{{ url_for('dash.answer', cid=client.id, aid=c.answer_id) }}" title="{{ e.label }}: named{{ ', #' ~ c.rank if c.rank }}">✓</a>{% else %}<a class="ck no" href="{{ url_for('dash.answer', cid=client.id, aid=c.answer_id) }}" title="{{ e.label }}: not named">✗</a>{% endif %}</td>{% endfor %}</tr>{% endfor %}</table></div>
       <a class="more" href="{{ url_for('dash.ai', cid=client.id, **arg) }}">View all prompts</a>
     {% else %}<p class="empty">Collecting the first AI answers; they appear here within a few minutes.</p>{% endif %}
   </section>

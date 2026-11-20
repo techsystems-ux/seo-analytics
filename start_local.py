@@ -11,7 +11,7 @@ import psycopg
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MIGRATIONS = ["db/schema.sql", "db/002_pagespeed.sql", "db/003_gsc_ga4.sql", "db/004_google_oauth.sql",
-              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql", "db/018_lean_audit.sql", "db/019_cloud_worker.sql", "db/020_paid_runs.sql", "db/021_gsc_index.sql", "db/022_chatgpt_plan.sql", "db/023_more_engines.sql", "db/024_api_spend.sql", "db/025_score_versions.sql"]
+              "db/005_brand_rules_pages.sql", "db/006_analytics.sql", "db/007_semrush_suite.sql", "db/008_own_brands.sql", "db/009_sample_data.sql", "db/010_research_community.sql", "db/011_reddit_communities.sql", "db/012_monthly_report.sql", "db/013_pull_queue.sql", "db/014_client_access.sql", "db/015_sources_modes.sql", "db/016_self_serve.sql", "db/017_execution.sql", "db/018_lean_audit.sql", "db/019_cloud_worker.sql", "db/020_paid_runs.sql", "db/021_gsc_index.sql", "db/022_chatgpt_plan.sql", "db/023_more_engines.sql", "db/024_api_spend.sql", "db/025_score_versions.sql", "db/026_open_model_engines.sql"]
 
 def migrate(conn):
     """Apply each migration once, in order. Databases set up before tracking existed already have 001-004."""

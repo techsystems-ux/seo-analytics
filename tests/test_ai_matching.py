@@ -72,7 +72,7 @@ cl = webapp.app.test_client()
 with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"] = "tok"
 page = cl.get(f"/c/{A}").get_data(as_text=True)
 links = re.findall(r'<a class="eng[^"]*" href="([^"]+)"', page)
-assert len(links) == 6 and all("e=" in l for l in links), links
+assert len(links) == 9 and all("e=" in l for l in links), links
 assert re.search(r'<a class="eng on" href="[^"]*e=chatgpt', page) and "Zavya" in page and ">zavya.co<" not in page
 assert "no answers from" not in page                                    # ChatGPT has answers
 gem = cl.get(f"/c/{A}?e=gemini").get_data(as_text=True)
@@ -91,4 +91,55 @@ with connect() as conn:
     assert conn.execute("SELECT version FROM score_versions WHERE client_id=%s", [A]).fetchone()[0] == AV.SCORING_VERSION
 print("dashboard: every engine button is a link, the chosen one is marked and kept across tabs; an empty engine says so "
       "(the team sees what it needs); competitors show as brand names; adding one re-reads the answers")
+# ---------------------------------------------------------------- open models through NVIDIA
+import open_models as OM
+class NR:
+    def __init__(s, status, body): s.status_code, s._b, s.text, s.headers = status, body, json.dumps(body), {}
+    def json(s): return s._b
+CATALOG = {"data": [{"id": i} for i in ("google/gemma-2-9b-it", "google/gemma-3-27b-it", "google/gemma-3n-e4b-it", "nvidia/embed-qa-4",
+                                        "google/codegemma-7b", "microsoft/phi-3-mini-128k-instruct", "microsoft/phi-4-mini-instruct",
+                                        "microsoft/phi-4-multimodal-instruct", "deepseek-ai/deepseek-r1", "deepseek-ai/deepseek-v4-flash",
+                                        "deepseek-ai/deepseek-coder-6.7b-instruct")]}
+class Nv:
+    def __init__(s): s.calls = []
+    def get(s, url, headers=None, timeout=None):
+        assert url == OM.BASE + "/models" and headers["Authorization"] == "Bearer nvapi-test"; return NR(200, CATALOG)
+    def post(s, url, headers=None, json=None, timeout=None):
+        assert url == OM.BASE + "/chat/completions"; s.calls.append(json)
+        if "Reply with JSON only" in json["messages"][0]["content"]:
+            return NR(200, {"choices": [{"message": {"content": 'Sure: {"brands":[{"name":"Zavya","sentiment":"positive","recommended":true},'
+                                                                 '{"name":"Tanishq","sentiment":"neutral","recommended":false}]}'}}]})
+        return NR(200, {"model": json["model"], "id": "x", "usage": {"total_tokens": 300}, "choices": [{"message": {
+            "content": "<think>shopper in India...</think>For silver, Zavya and True Silver are popular; Tanishq also sells silver."}}]})
+os.environ["NVIDIA_GOOGLE_KEY"] = "nvapi-test"
+OM._models.clear()
+nv = Nv()
+assert OM.pick_model(nv, "nvapi-test", "gemma") == "google/gemma-3-27b-it"
+assert OM.pick_model(nv, "nvapi-test", "phi") == "microsoft/phi-4-mini-instruct"
+assert OM.pick_model(nv, "nvapi-test", "deepseek") == "deepseek-ai/deepseek-v4-flash"
+with connect() as conn:
+    tally, _ = OM.sync_client(conn, A, "gemma", session=nv)
+    assert tally == {"ok": 1}, tally
+    ask = nv.calls[0]
+    assert ask["model"] == "google/gemma-3-27b-it" and ask["messages"][0]["role"] == "system" and "India" in ask["messages"][0]["content"]
+    row = conn.execute("""SELECT a.full_text, a.engine_version, a.raw_json FROM answers a JOIN runs r USING (run_id) WHERE r.engine='gemma'""").fetchone()
+    assert row[0].startswith("For silver, Zavya") and "<think>" not in row[0] and row[1] == "google/gemma-3-27b-it" and row[2]["via"] == "nvidia"
+    ms = conn.execute("""SELECT brand, rank_in_answer, sentiment FROM mentions m JOIN answers a USING (answer_id) JOIN runs r USING (run_id)
+                         WHERE r.engine='gemma' ORDER BY rank_in_answer NULLS LAST""").fetchall()
+    assert ms[0] == ("zavya.co", 1, "positive") and ms[1][:2] == ("truesilver.co.in", 2) and ms[-1][0] == "Tanishq" and ms[-1][1] is None, ms
+    assert conn.execute("SELECT 1 FROM scores_daily WHERE client_id=%s AND engine='gemma'", [A]).fetchone()
+    assert not conn.execute("SELECT 1 FROM citations c JOIN answers a USING (answer_id) JOIN runs r USING (run_id) WHERE r.engine='gemma'").fetchone()
+    conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM pull_queue")
+    due = worker.ai_due(conn, A)
+    assert "gemma" not in due and "phi" in due and "deepseek" in due and "claude" not in due, due   # gemma answered today
+print("open models: newest instruction model per family picked from NVIDIA's list, the shopper's country given, a reasoning "
+      "block dropped, brands read like ChatGPT (no citations: no web search), and they run by themselves once a day")
+
+page = cl.get(f"/c/{A}/ai").get_data(as_text=True)
+import html as _h; heads = [_h.unescape(h) for h in re.findall(r"<th class=\"e\"[^>]*title=\"([^\"]+)\"", page)]
+assert "Gemma (Google's open model)" in heads and "Phi (Microsoft's open model)" in heads and not any("Gemini" == h for h in heads), heads
+assert re.search(r'<a class="ck r" href="/c/%s/ai/answer/' % A, page)               # cells open that engine's answer
+assert "Not connected yet: AI Overviews, Gemini, Perplexity, Copilot" in page
+assert "zavya.co, truesilver.co.in" in page or "Zavya" in page
+print("prompts table: a column per connected engine (Gemini, Perplexity, Copilot listed as not connected), each cell opens that answer")
 print("ALL MATCHING TESTS PASSED")

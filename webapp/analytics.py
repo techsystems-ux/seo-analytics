@@ -129,8 +129,8 @@ def prompt_results(conn, client_id, cycle=None, engine="chatgpt"):
                                       (SELECT m.rank_in_answer FROM mentions m WHERE m.answer_id=a.answer_id AND m.is_client LIMIT 1),
                                       (SELECT m.sentiment FROM mentions m WHERE m.answer_id=a.answer_id AND m.is_client LIMIT 1),
                                       EXISTS (SELECT 1 FROM citations c WHERE c.answer_id=a.answer_id AND c.cited AND c.is_client),
-                                      (SELECT string_agg(m.brand, ', ' ORDER BY m.rank_in_answer) FROM mentions m
-                                        WHERE m.answer_id=a.answer_id AND NOT m.is_client AND m.rank_in_answer IS NOT NULL),
+                                      (SELECT string_agg(m.brand, ', ' ORDER BY m.rank_in_answer NULLS LAST, m.ctid) FROM mentions m
+                                        WHERE m.answer_id=a.answer_id AND NOT m.is_client),
                                       r.status, r.error
                                FROM prompts p LEFT JOIN runs r ON r.prompt_id=p.prompt_id AND r.cycle=%s AND r.engine=%s AND r.sample_no=1
                                LEFT JOIN answers a ON a.run_id=r.run_id

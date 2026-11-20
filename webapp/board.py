@@ -12,7 +12,11 @@ ENGINES = [("chatgpt", "ChatGPT", "chatgpt.com", ("chatgpt", "openai")),
            ("gemini", "Gemini", "gemini.google.com", ("gemini", "bard")),
            ("perplexity", "Perplexity", "perplexity.ai", ("perplexity",)),
            ("bing_copilot", "Copilot", "copilot.microsoft.com", ("copilot", "bing")),
-           ("claude", "Claude", "claude.ai", ("claude", "anthropic"))]
+           ("claude", "Claude", "claude.ai", ("claude", "anthropic")),
+           ("gemma", "Gemma", "ai.google.dev", ()),             # Google's open model, via NVIDIA (not Gemini)
+           ("phi", "Phi", "microsoft.com", ()),                 # Microsoft's open model, via NVIDIA (not Copilot)
+           ("deepseek", "DeepSeek", "deepseek.com", ("deepseek",))]
+FULL = {"gemma": "Gemma (Google's open model)", "phi": "Phi (Microsoft's open model)", "deepseek": "DeepSeek (open model)"}
 LABEL = {k: l for k, l, _, _ in ENGINES}
 
 def logo(domain, size=64):
@@ -20,8 +24,24 @@ def logo(domain, size=64):
 
 def engines(conn, cid):
     """All engines with tracked = whether Orbit has any answers from it for this brand."""
-    have = {r[0] for r in conn.execute("SELECT DISTINCT engine::text FROM scores_daily WHERE client_id=%s", [cid])}
-    return [{"key": k, "label": l, "logo": logo(d), "tracked": k in have} for k, l, d, _ in ENGINES]
+    have = {r[0] for r in conn.execute("SELECT DISTINCT engine::text FROM runs WHERE client_id=%s AND status='ok'", [cid])}
+    have |= {r[0] for r in conn.execute("SELECT DISTINCT engine::text FROM scores_daily WHERE client_id=%s", [cid])}
+    can = connected()
+    return [{"key": k, "label": l, "full": FULL.get(k, l), "logo": logo(d), "tracked": k in have, "connected": k in have or k in can}
+            for k, l, d, _ in ENGINES]
+
+def connected():
+    """Engines Orbit can ask right now (a key on the server), whether or not they have answered yet."""
+    import os
+    out = set()
+    if os.environ.get("OPENAI_API_KEY_2"): out.add("chatgpt")
+    if os.environ.get("ANTHROPIC_API_KEY"): out.add("claude")
+    try:
+        import open_models
+        if open_models.available(): out |= set(open_models.FAMILIES)
+    except Exception:
+        pass
+    return out
 
 def source_engine(source):
     s = (source or "").lower()
@@ -125,7 +145,10 @@ NEEDS = {"chatgpt": "OpenAI key (OPENAI_API_KEY_2) or a connected ChatGPT plan, 
          "ai_overviews": "Google results with AI Overviews: a DataForSEO key (DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD), not built yet",
          "gemini": "a Google AI Studio key (GEMINI_API_KEY), collector not built yet",
          "perplexity": "a Perplexity Sonar key (PERPLEXITY_API_KEY), collector not built yet",
-         "bing_copilot": "no public API; only through a data vendor such as DataForSEO"}
+         "bing_copilot": "no public API; only through a data vendor such as DataForSEO",
+         "gemma": "the NVIDIA key (Vercel name 'Google'); runs by itself once a day",
+         "phi": "the NVIDIA key (Vercel name 'Microsoft'); runs by itself once a day",
+         "deepseek": "the NVIDIA key ('Google' or 'Microsoft'); runs by itself once a day"}
 
 def prompt_matrix(conn, cid, key, ents, engs):
     """Every approved prompt: for each engine, is the chosen entity named in the latest run (None = not asked), its place,

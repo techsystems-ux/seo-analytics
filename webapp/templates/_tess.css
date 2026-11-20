@@ -124,6 +124,7 @@ a.ent:hover{border-color:#C9CFDA;box-shadow:0 6px 18px -10px rgba(16,24,40,.25);
 .mx td{padding:10px 12px;border-bottom:1px solid var(--grid);font-size:13px}
 .mx td.t{font-weight:600;max-width:460px}
 .mx td.c{text-align:center}
+a.ck{text-decoration:none;cursor:pointer}a.ck:hover{outline:2px solid #B20F0033}
 .ck{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--ok);color:#fff;font:700 12px var(--fb)}
 .ck.no{background:#F1F3F7;color:var(--txt3)}.ck.na{background:transparent;color:#C5C9D1;font-weight:500}
 .ck.r{border-radius:999px;width:auto;min-width:22px;padding:0 7px}

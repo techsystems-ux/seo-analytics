@@ -99,7 +99,7 @@ with connect() as conn:
     n1 = worker.nightly(conn); n2 = worker.nightly(conn)
     steps = conn.execute("SELECT client_id::text, array_agg(step ORDER BY seq) FROM pull_tasks WHERE pull_id=%s GROUP BY 1", [n1]).fetchall()
 assert n1 and n2 is None and {s[0] for s in steps} == {A, B}
-assert steps[0][1] == ["gsc", "ga4", "rank", "semrush", "ai", "pages", "index", "cwv", "reddit", "youtube", "blogs", "crawl"], steps
+assert steps[0][1] == ["gsc", "ga4", "rank", "semrush", "ai", "gemma", "phi", "deepseek", "pages", "index", "cwv", "reddit", "youtube", "blogs", "crawl"], steps
 with connect() as conn: assert worker.nightly(conn, "midday") is None                                     # once a day: no midday run
 print("nightly: every brand once a day, Search Console to crawl, Semrush included; no midday run at one paid run a day")
 

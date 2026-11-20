@@ -32,16 +32,20 @@
 <div class="ph"><div><h2>LLM prompts{% if cycle %} · {{ cycle.strftime('%d %b %Y') }}{% endif %}</h2><p class="sub">Whether <b>{{ focus.name }}</b> is named in each engine's latest answer. Pick a brand to see its row.</p></div>
   <div class="seg"><a class="{{ 'on' if stage=='all' }}" href="?stage=all{{ '&b=' ~ focus.key if focus.key }}">All</a>{% for k,v in stages.items() %}<a class="{{ 'on' if stage==k }}" href="?stage={{ k }}{{ '&b=' ~ focus.key if focus.key }}">{{ v }}</a>{% endfor %}</div></div>
 <div class="mpill">{% for e in board.ents %}<a class="{{ 'on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}"><span class="dotav" style="background:{{ e.colour }};width:20px;height:20px;font-size:10px">{{ e.initial }}</span>{{ e.name }}</a>{% endfor %}</div>
-<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Prompt</th><th>Stage</th>{% for e in engs %}<th class="e" style="width:auto;padding:10px 8px" title="{{ e.label }}"><img class="lg sm" src="{{ e.logo }}" alt="" onerror="this.style.display='none'">{{ e.label }}</th>{% endfor %}<th>Others named, in order</th><th></th></tr>
+{% set cols = engs|selectattr('connected')|list %}
+<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Prompt</th><th>Stage</th>{% for e in cols %}<th class="e" style="width:auto;padding:10px 8px" title="{{ e.full }}"><img class="lg sm" src="{{ e.logo }}" alt="" onerror="this.style.display='none'">{{ e.label }}</th>{% endfor %}<th>Others named, in order</th><th></th></tr>
 {% for r in rows %}{% set p = r.base %}<tr><td class="t" style="min-width:240px">{{ r.text }}</td><td>{{ stages[r.stage] }}</td>
-{% for e in engs %}{% set cell = r.cells.get(e.key) %}<td class="c">
+{% for e in cols %}{% set cell = r.cells.get(e.key) %}<td class="c">
   {% if e.key == 'chatgpt' and not p.answer_id and p.status == 'error' %}<span class="tag t-fail" title="{{ p.error }}">Failed</span>
-  {% elif not cell %}<span class="ck na" title="{{ 'Not asked yet' if e.tracked else 'Not tracked' }}">–</span>
-  {% elif cell.named %}<span class="ck r" title="Named">{{ '#' ~ cell.rank if cell.rank else '✓' }}</span>
-  {% else %}<span class="ck no" title="Not named">–</span>{% endif %}</td>{% endfor %}
+  {% elif not cell %}<span class="ck na" title="Not asked yet">·</span>
+  {% elif cell.named %}<a class="ck r" href="{{ url_for('dash.answer', cid=client.id, aid=cell.answer_id) }}" title="{{ e.label }}: named{{ ', #' ~ cell.rank if cell.rank }}. Open the answer">{{ '#' ~ cell.rank if cell.rank else '✓' }}</a>
+  {% else %}<a class="ck no" href="{{ url_for('dash.answer', cid=client.id, aid=cell.answer_id) }}" title="{{ e.label }}: not named. Open the answer">✗</a>{% endif %}</td>{% endfor %}
 <td>{{ p.others or '–' }}</td>
 <td>{% if p.answer_id %}<a href="{{ url_for('dash.answer', cid=client.id, aid=p.answer_id) }}">Answer</a>{% endif %}</td></tr>
-{% else %}<tr><td colspan="{{ 4 + engs|length }}" class="empty">No approved prompts. <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Add or approve prompts.</a></td></tr>{% endfor %}</table></div></section>
+{% else %}<tr><td colspan="{{ 4 + cols|length }}" class="empty">The starting prompts are being set up; they appear here when the brand is next opened.</td></tr>{% endfor %}</table></div>
+<p class="note" style="margin:8px 0 0">✓ or #place: named in that engine's latest answer · ✗: asked, not named · ·: not asked yet. Click a cell to read the answer.
+  {% set notyet = engs|rejectattr('connected')|map(attribute='label')|list %}{% if notyet %}Not connected yet: {{ notyet|join(', ') }}.{% endif %}
+  Gemma, Phi and DeepSeek are open models answering from their own knowledge, without web search.</p></section>
 
 <div class="g2">
 <section class="card"><div class="ph"><div><h2>Sites AI cites most</h2><p class="sub">Last 30 days. These are the places to be mentioned.</p></div><a class="note" href="{{ url_for('dash.sources', cid=client.id) }}">All AI citations</a></div>
