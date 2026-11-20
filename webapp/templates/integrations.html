@@ -46,9 +46,8 @@
       <p style="margin:0"><b>AI answers from ChatGPT</b> · {{ approved }} approved prompt{{ 's' if approved != 1 }}{% if last_ai %} · last checked {{ last_ai.strftime('%d %b, %H:%M') }}{% endif %}</p>
       <p class="note" style="margin:0">Orbit asks each approved prompt in ChatGPT with web search on, then records which brands it names, in what order, how it describes them and which sites it cites.
         That fills the Dashboard score, Prompts, AI citations and competitor comparison.</p>
-      {% if approved %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red" name="what" value="run_ai" {{ 'disabled' if not gpt.use_for_ai }}>Check AI answers now</button></form>
-      {% elif staff %}<p class="note" style="margin:0;color:var(--red)">No prompts approved yet{% if suggested %} ({{ suggested }} suggested){% endif %}. <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Approve prompts in Settings</a>, then check AI answers here.</p>
-      {% else %}<p class="note" style="margin:0">The Hovers team is setting up the prompts to track. Answers appear here once they are approved.</p>{% endif %}
+      <p class="note" style="margin:0">{% if approved %}Updates automatically: whenever {{ client.name }} is opened and the answers are more than a day old, plus every night.
+        {% else %}The starting prompts are approved automatically the first time {{ client.name }} is opened, then answers fill in by themselves.{% endif %}</p>
     </div>
     <form method="post" onsubmit="return confirm('Disconnect ChatGPT for {{ client.name }}?')"><input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="btn ln" name="what" value="disconnect">Disconnect</button></form>
@@ -73,10 +72,12 @@
   <p style="margin:0">Orbit asks each approved prompt in Claude with web search on, and records the brands it names, their order and tone, and the sites it cites.
     The results sit beside ChatGPT on the Dashboard, Prompts and AI citations screens.</p>
   {% if claude.key %}
-    <p class="note" style="margin:0">{% if claude.last %}Last checked {{ claude.last.strftime('%d %b, %H:%M') }}{% if claude.today %} · {{ claude.today }} prompt{{ 's' if claude.today != 1 }} today{% endif %}.{% else %}Not checked yet; the first check runs tonight at 02:00 IST.{% endif %}</p>
+    <p class="note" style="margin:0">{% if claude.last %}Last checked {{ claude.last.strftime('%d %b, %H:%M') }}{% if claude.today %} · {{ claude.today }} prompt{{ 's' if claude.today != 1 }} today{% endif %}.{% else %}Not checked yet.{% endif %}</p>
     <div class="staff-only" style="display:flex;flex-direction:column;gap:8px">
-      <p class="note" style="margin:0">Team note: model {{ claude.model }} · this month ${{ '%.2f'|format(claude.spent) }} of the ${{ '%.0f'|format(claude.cap) }} limit (all brands). Runs once a day per brand.</p>
-      {% if approved %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red" name="what" value="run_claude">Check Claude answers now</button></form>{% endif %}
+      <p class="note" style="margin:0">Team note: model {{ claude.model }} · ${{ '%.2f'|format(claude.spent) }} of the ${{ '%.0f'|format(claude.cap) }} limit used (all brands, all time).
+        Runs only from this button, once a day per brand, at most ${{ '%.0f'|format(claude.run_cap) }} per click. It stops before it could go over the limit.</p>
+      {% if approved and claude.room %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red" name="what" value="run_claude">Check Claude answers now</button></form>
+      {% elif not claude.room %}<p class="note" style="margin:0;color:var(--red)">The Claude spend limit is reached, so Claude checks are paused.</p>{% endif %}
     </div>
   {% else %}
     <p class="note" style="margin:0">Not connected yet.</p>

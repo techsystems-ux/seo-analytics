@@ -80,7 +80,9 @@ def integrations_post(cid):
                 return err_to(here, "Claude is not connected yet: add ANTHROPIC_API_KEY in Vercel (Sensitive, Production).")
             n = prompt_counts(conn, cid)[0]
             if not n: return err_to(here, ai_note(0).strip())
-            import worker
+            import worker, claude_answers
+            if not claude_answers.status(conn)["room"]:
+                return err_to(here, "The Claude spend limit is reached, so no more Claude checks will run.")
             ok, when = worker.paid_next(conn, cid, "claude")
             if not ok: return err_to(here, f"Claude answers already ran today for this brand; the next run can start {when}.")
             queue_claude(conn, cid)

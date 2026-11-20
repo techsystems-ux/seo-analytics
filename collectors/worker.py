@@ -21,8 +21,9 @@ sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
 ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
-NIGHTLY = "gsc,ga4,rank,semrush,ai,claude,pages,index,cwv,blogs,crawl,youtube,reddit"
+NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,index,cwv,blogs,crawl,youtube,reddit"
 PAID_STEPS = ("ai", "claude", "blogs", "semrush")   # OpenAI (prompts, blog drafts), Claude and Semrush: limited per brand per day
+BUTTON_ONLY = ("claude",)                          # never scheduled or started by opening a page: the team's button only
 FREE_REFRESH = "gsc,ga4,rank,pages,index,cwv"  # what opening a dashboard with stale data may start (costs nothing)
 RUN_BUDGET = int(os.environ.get("WORKER_BUDGET", "100"))       # seconds a run keeps starting new tasks
 HARD_STOP = int(os.environ.get("WORKER_HARD_STOP", "270"))     # tasks must wrap up before this (Vercel stops at 300)
@@ -89,7 +90,8 @@ def nightly(conn, slot="nightly"):
     if slot == "midday" and paid_per_day() < 2: return None
     if conn.execute("SELECT 1 FROM pull_queue WHERE label=%s AND requested_at > now() - interval '10 hours'", [slot]).fetchone():
         return None
-    return enqueue(conn, None, slot, ["--only", NIGHTLY if slot == "nightly" else ",".join(PAID_STEPS)], "schedule")
+    return enqueue(conn, None, slot, ["--only", NIGHTLY if slot == "nightly" else ",".join(s for s in PAID_STEPS if s not in BUTTON_ONLY)],
+                   "schedule")
 
 def on_own_plan(conn, cid, kind):
     if kind not in ("ai", "blogs"): return False
@@ -137,23 +139,65 @@ def paid_next(conn, cid, kind):
     if len(rows) < per_day and nxt <= now: return True, ""
     return False, nxt
 
+AI_FRESH_HOURS = int(os.environ.get("AI_FRESH_HOURS", "20"))     # AI answers older than this are refreshed when someone opens the brand
+WEEKLY_AI = {"reddit": "APIFY_TOKEN", "youtube": "YOUTUBE_API_KEY"}  # AI-search sources refreshed weekly
+
+def auto_approve(conn, cid):
+    """A brand with prompts but none approved: approve its starting prompts (up to AUTO_APPROVE_PROMPTS, default 20), so AI
+    answers fill in without anyone clicking. AUTO_APPROVE_PROMPTS=0 turns this off."""
+    n = int(os.environ.get("AUTO_APPROVE_PROMPTS", "20"))
+    if n <= 0 or conn.execute("SELECT EXISTS (SELECT 1 FROM prompts WHERE client_id=%s AND approved AND active)", [cid]).fetchone()[0]:
+        return 0
+    return conn.execute("""UPDATE prompts SET approved=true WHERE prompt_id IN (
+                             SELECT prompt_id FROM prompts WHERE client_id=%s AND active AND NOT approved ORDER BY funnel_stage, created_at LIMIT %s)""",
+                        [cid, n]).rowcount
+
+def ai_due(conn, cid):
+    """The AI steps a brand needs now: ChatGPT answers when the last ones are older than AI_FRESH_HOURS (and the daily limit
+    allows), Semrush when the brand has no keyword data in 7 days (AI Overview keywords come from it), Reddit and YouTube
+    weekly. Claude is never here: it runs from its button only."""
+    import chatgpt_plan
+    steps = []
+    auto_approve(conn, cid)
+    prompts = conn.execute("SELECT EXISTS (SELECT 1 FROM prompts WHERE client_id=%s AND approved AND active)", [cid]).fetchone()[0]
+    if prompts and chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "ai"):
+        recent = conn.execute(f"""SELECT EXISTS (SELECT 1 FROM runs WHERE client_id=%s AND engine='chatgpt' AND status='ok'
+                                  AND run_at > now() - interval '{AI_FRESH_HOURS} hours')""", [cid]).fetchone()[0]
+        if not recent and paid_next(conn, cid, "ai")[0]: steps.append("ai")
+    def stale(collector, days=7):
+        return not conn.execute(f"""SELECT EXISTS (SELECT 1 FROM collector_runs WHERE client_id=%s AND collector=%s AND status='ok'
+                                    AND started_at > now() - interval '{days} days')""", [cid, collector]).fetchone()[0]
+    if os.environ.get("SEMRUSH_API_KEY") and int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")) > 0 and stale("semrush") \
+            and paid_next(conn, cid, "semrush")[0]:
+        steps.append("semrush")
+    steps += [s for s, key in WEEKLY_AI.items() if os.environ.get(key) and stale(s)]
+    return steps
+
 def ensure_fresh(conn, cid, who=None):
-    """Called when someone opens a brand. Starts a free refresh (Search Console, GA4, rankings, page checks) if the brand
-    has Search Console linked and its data is missing or more than 30 hours old, nothing is already waiting, and no
-    automatic refresh was queued in the last 2 hours. Paid sources are added only for a brand's very first pull, and
-    even then the daily limit applies. Returns the pull id or None."""
-    linked = conn.execute("SELECT gsc_site_url IS NOT NULL FROM client_integrations WHERE client_id=%s", [cid]).fetchone()
-    if not linked or not linked[0]: return None
+    """Called when someone opens a brand, so data is there without anyone clicking:
+    - free sources (Search Console, GA4, rankings, page checks) when Search Console is linked and its data is missing or more
+      than 30 hours old;
+    - the AI sources (ai_due): ChatGPT answers once a day, Semrush keyword data and Reddit/YouTube weekly, all within the
+      paid daily limits. Claude is never started here.
+    Nothing starts if something is already waiting or an automatic refresh was queued in the last 2 hours.
+    Returns the pull id (the last one queued) or None."""
     busy = conn.execute("""SELECT EXISTS (SELECT 1 FROM pull_tasks WHERE client_id=%s AND status IN ('queued','running'))
                            OR EXISTS (SELECT 1 FROM pull_queue WHERE client_id=%s AND label='auto' AND requested_at > now() - interval '2 hours')""",
                         [cid, cid]).fetchone()[0]
     if busy: return None
-    has_data = conn.execute("SELECT EXISTS (SELECT 1 FROM gsc_search_daily WHERE client_id=%s)", [cid]).fetchone()[0]
-    fresh = conn.execute("""SELECT EXISTS (SELECT 1 FROM collector_runs WHERE client_id=%s AND collector='gsc' AND status='ok'
-                            AND started_at > now() - interval '30 hours')""", [cid]).fetchone()[0]
-    if has_data and fresh: return None
-    only = FREE_REFRESH + ("" if has_data else ",ai,blogs,crawl")
-    return enqueue(conn, cid, "auto", ["--client-id", cid, "--only", only] + ([] if has_data else ["--force-weekly"]), who or "auto")
+    pid = None
+    linked = conn.execute("SELECT gsc_site_url IS NOT NULL FROM client_integrations WHERE client_id=%s", [cid]).fetchone()
+    if linked and linked[0]:
+        has_data = conn.execute("SELECT EXISTS (SELECT 1 FROM gsc_search_daily WHERE client_id=%s)", [cid]).fetchone()[0]
+        fresh = conn.execute("""SELECT EXISTS (SELECT 1 FROM collector_runs WHERE client_id=%s AND collector='gsc' AND status='ok'
+                                AND started_at > now() - interval '30 hours')""", [cid]).fetchone()[0]
+        if not (has_data and fresh):
+            only = FREE_REFRESH + ("" if has_data else ",blogs,crawl")
+            pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", only] + ([] if has_data else ["--force-weekly"]), who or "auto")
+    ai = ai_due(conn, cid)
+    if ai:
+        pid = enqueue(conn, cid, "auto", ["--client-id", cid, "--only", ",".join(ai), "--force-weekly"], who or "auto")
+    return pid
 
 # ------------------------------------------------------------------ steps
 def _daily(cid, step, a):

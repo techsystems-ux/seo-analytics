@@ -21,7 +21,7 @@ with psycopg.connect(owner, autocommit=True) as c: migrate(c)
 from cryptography.fernet import Fernet
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app", FLASK_SECRET="t", TOKEN_KEY=Fernet.generate_key().decode(),
                   GOOGLE_OAUTH_CLIENT_ID="x", GOOGLE_OAUTH_CLIENT_SECRET="x", OAUTH_REDIRECT_URI="http://localhost/cb",
-                  ANTHROPIC_API_KEY="sk-ant-test", CLAUDE_MONTHLY_USD="25")
+                  ANTHROPIC_API_KEY="sk-ant-test")
 os.environ.pop("VERCEL", None)
 from common import connect
 import claude_answers as CA, ai_visibility as AV
@@ -101,22 +101,36 @@ with connect() as conn:
     sc = dict(conn.execute("SELECT brand, visibility_score FROM scores_daily WHERE client_id=%s AND engine='claude'", [A]).fetchall())
     assert set(sc) == {"", "GIVA", "Palmonas"} and float(sc[""]) > 0 and float(sc["Palmonas"]) == 0
     assert not conn.execute("SELECT 1 FROM scores_daily WHERE engine='chatgpt'").fetchone()        # ChatGPT's numbers untouched
-    assert abs(CA.month_spend(conn) - 3 * meta[0]["cost_usd"]) < 1e-5
+    assert abs(CA.total_spend(conn) - 3 * meta[0]["cost_usd"]) < 1e-5
+    led = conn.execute("SELECT count(*), sum(searches) FROM api_spend WHERE provider='anthropic' AND client_id=%s", [A]).fetchone()
+    assert led == (6, 3)                                                 # every billed reply (3 answers + 3 judges) in the ledger
     again = CA.sync_client(conn, A, "sk-ant-test", session=F)[0]
     assert again == {"skipped": 3}                                       # once per prompt per day; no paid repeats
 print("run: three prompts asked with web search for India, brands and order, Haiku's verdicts, own and competitor citations, "
       "Reddit read, cost kept per answer, scores under 'claude' only; a second run the same day asks nothing")
 
-# ---------------------------------------------------------------- the monthly limit
+# ---------------------------------------------------------------- the strict limits
 import datetime as dt
+os.environ["CLAUDE_MAX_USD"] = "50"; assert CA.total_cap() == 10.0          # can be lowered, never raised above $10
+os.environ["CLAUDE_MAX_USD"] = "abc"; assert CA.total_cap() == 10.0
+os.environ.pop("CLAUDE_MAX_USD")
 with connect() as conn:
-    os.environ["CLAUDE_MONTHLY_USD"] = "0.01"
-    F.calls.clear()
+    spent = CA.total_spend(conn)
+    conn.execute("INSERT INTO api_spend (provider, client_id, model, usd) VALUES ('anthropic',%s,'x',%s)", [A, 10 - spent - 0.10])
+    F.calls.clear()                                                      # $9.90 used: one more prompt's worst case would cross $10
     t = CA.sync_client(conn, A, "sk-ant-test", session=F, cycle=dt.date.today() + dt.timedelta(days=1))[0]
-    assert "reached the $0 limit" in t["stopped"] or "limit" in t["stopped"], t
-    assert F.calls == [] and "ok" not in t
-    os.environ["CLAUDE_MONTHLY_USD"] = "25"
-print("monthly limit: no prompt starts once this month's Claude spend reaches CLAUDE_MONTHLY_USD")
+    assert "spend limit is reached" in t["stopped"] and F.calls == [] and "ok" not in t, t
+    assert CA.status(conn)["room"] is False
+    try: conn.execute("DELETE FROM api_spend WHERE model='x'"); raise AssertionError("ledger must be append-only for the app")
+    except psycopg.errors.InsufficientPrivilege: pass
+    with psycopg.connect(admin.replace("/postgres?", "/aeo_claude?"), autocommit=True) as oc:      # a superuser clears it
+        assert oc.execute("DELETE FROM api_spend WHERE model='x'").rowcount == 1
+    os.environ["CLAUDE_RUN_USD"] = "0.2"                                 # per click: stops once this run could cross it
+    t = CA.sync_client(conn, A, "sk-ant-test", session=F, cycle=dt.date.today() + dt.timedelta(days=4))[0]
+    assert t.get("ok") == 2 and "run reached its $0.2 limit" in t["stopped"], t      # 2 prompts fit; a 3rd could cross $0.20
+    os.environ.pop("CLAUDE_RUN_USD")
+    assert CA.total_spend(conn) < 10
+print("limits: never above $10 in total (env can only lower it), stops before a prompt could cross it, and at most $2 per click")
 
 # ---------------------------------------------------------------- refused key / no credit stop the run after one try
 for mode, words in (("badkey", "key was refused"), ("nocredit", "run out of credit")):
@@ -143,11 +157,19 @@ print("busy API: retried; a paused long turn is continued and its usage summed")
 
 # ---------------------------------------------------------------- worker: a paid step, once a day per brand
 import worker
-assert "claude" in worker.PAID_STEPS and "claude" in worker.NIGHTLY.split(",") and worker.ORDER.index("claude") == worker.ORDER.index("ai") + 1
+assert "claude" in worker.PAID_STEPS and "claude" not in worker.NIGHTLY.split(",") and "claude" in worker.BUTTON_ONLY
+assert worker.ORDER.index("claude") == worker.ORDER.index("ai") + 1
 with connect() as conn:
     assert worker.paid_ok(conn, A, "claude")[0] is True and worker.paid_ok(conn, A, "claude")[0] is False
     assert worker.paid_next(conn, A, "claude")[0] is False and worker.paid_next(conn, A, "ai")[0] is True     # ChatGPT's limit separate
-print("worker: Claude runs nightly after ChatGPT, at most once a day per brand, with its own limit")
+with connect() as conn:
+    q = worker.nightly(conn, "nightly"); args = conn.execute("SELECT args FROM pull_queue WHERE pull_id=%s", [q]).fetchone()[0]
+    assert "claude" not in ",".join(args)
+    os.environ["PAID_RUNS_PER_DAY"] = "2"; conn.execute("UPDATE pull_queue SET requested_at = now() - interval '11 hours'")
+    m = worker.nightly(conn, "midday"); margs = conn.execute("SELECT args FROM pull_queue WHERE pull_id=%s", [m]).fetchone()[0]
+    assert "claude" not in ",".join(margs) and "ai" in ",".join(margs); os.environ.pop("PAID_RUNS_PER_DAY")
+    assert "claude" not in worker.ai_due(conn, A)
+print("worker: Claude never runs on a schedule or on page open, only from its button, at most once a day per brand")
 
 # ---------------------------------------------------------------- Integrations card
 import app as webapp, dashboard
@@ -155,7 +177,7 @@ ran = []; dashboard.run_daily = lambda args, out=None: ran.append(args)
 cl = webapp.app.test_client()
 with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"] = "tok"
 page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)
-assert "Claude" in page and "Check Claude answers now" in page and "of the $25 limit" in page and "claude-sonnet-5-5" in page
+assert "Claude" in page and "Check Claude answers now" in page and "of the $10 limit used" in page and "claude-sonnet-5-5" in page
 r = cl.post(f"/c/{A}/integrations", data={"csrf": "tok", "what": "run_claude"})
 assert "err=" in r.headers["Location"] and "already+ran+today" in r.headers["Location"]          # the paid_ok above used today's run
 with connect() as conn: conn.execute("DELETE FROM paid_runs WHERE client_id=%s AND kind='claude'", [A])
@@ -164,7 +186,7 @@ assert "msg=Asking+Claude+3+prompts" in r.headers["Location"] and ran[-1][:4] ==
 v = webapp.app.test_client()
 with v.session_transaction() as s: s["viewer_email"] = "c@gargi.shop"; s["viewer_clients"] = [A]; s["csrf"] = "tok"
 vp = v.get(f"/c/{A}/integrations").get_data(as_text=True)
-assert "Claude" in vp and "Check Claude answers now" not in vp and "of the $25 limit" not in vp and "ANTHROPIC" not in vp and "claude-sonnet" not in vp
+assert "Claude" in vp and "Check Claude answers now" not in vp and "limit used" not in vp and "ANTHROPIC" not in vp and "claude-sonnet" not in vp
 assert v.post(f"/c/{A}/integrations", data={"csrf": "tok", "what": "run_claude"}).status_code == 403
 os.environ.pop("ANTHROPIC_API_KEY")
 page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)

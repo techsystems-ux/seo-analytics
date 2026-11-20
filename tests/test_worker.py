@@ -99,7 +99,7 @@ with connect() as conn:
     n1 = worker.nightly(conn); n2 = worker.nightly(conn)
     steps = conn.execute("SELECT client_id::text, array_agg(step ORDER BY seq) FROM pull_tasks WHERE pull_id=%s GROUP BY 1", [n1]).fetchall()
 assert n1 and n2 is None and {s[0] for s in steps} == {A, B}
-assert steps[0][1] == ["gsc", "ga4", "rank", "semrush", "ai", "claude", "pages", "index", "cwv", "reddit", "youtube", "blogs", "crawl"], steps
+assert steps[0][1] == ["gsc", "ga4", "rank", "semrush", "ai", "pages", "index", "cwv", "reddit", "youtube", "blogs", "crawl"], steps
 with connect() as conn: assert worker.nightly(conn, "midday") is None                                     # once a day: no midday run
 print("nightly: every brand once a day, Search Console to crawl, Semrush included; no midday run at one paid run a day")
 
@@ -139,7 +139,7 @@ with connect() as conn:
 worker.work(budget=30, kick_after=False)
 with connect() as conn:
     assert not conn.execute("SELECT note FROM pull_tasks WHERE pull_id=%s", [p4]).fetchone()[0].startswith("skipped")   # second run allowed
-    assert mid and [r[0] for r in conn.execute("SELECT DISTINCT step FROM pull_tasks WHERE pull_id=%s ORDER BY 1", [mid])] == ["ai", "blogs", "claude", "semrush"]
+    assert mid and [r[0] for r in conn.execute("SELECT DISTINCT step FROM pull_tasks WHERE pull_id=%s ORDER BY 1", [mid])] == ["ai", "blogs", "semrush"]
 os.environ.update(PAID_RUNS_PER_DAY="0")
 with connect() as conn: assert worker.paid_ok(conn, A, "semrush")[0] is False
 os.environ.update(PAID_RUNS_PER_DAY="1")
@@ -172,26 +172,43 @@ with connect() as conn:
     assert note(ai_btn).startswith("skipped: already ran"), note(ai_btn)                                 # only Semrush has the button path
 print("refresh button: Semrush on demand outside the daily limit, at most once in 30 minutes; schedule and OpenAI unchanged")
 
-# 7. data ready on open: a linked brand with no data starts its first pull; stale free data refreshes; nothing paid on revisits
+# 7. data ready on open: a linked brand with no data starts its first pull; stale free data refreshes; the AI sources refresh
+#    by themselves once a day (starting prompts approved automatically); Claude never starts here
+def auto_steps(conn, cid, since):
+    return sorted({r[0] for r in conn.execute("""SELECT t.step FROM pull_tasks t JOIN pull_queue q USING (pull_id)
+                                                  WHERE q.label='auto' AND t.client_id=%s AND q.requested_at >= %s""", [cid, since])})
 with connect() as conn:
     conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM pull_queue WHERE label='auto'")
+    conn.execute("DELETE FROM paid_runs WHERE client_id=%s", [B])
+    conn.execute("DELETE FROM prompts WHERE client_id=%s", [B])
+    conn.execute("INSERT INTO prompts (client_id, text, approved) VALUES (%s,'best beta brands',false), (%s,'beta vs alpha',false)", [B, B])
     conn.execute("INSERT INTO client_integrations (client_id, gsc_site_url, google_connection_id) VALUES (%s,'sc-domain:beta.shop',%s) ON CONFLICT (client_id) DO UPDATE SET gsc_site_url=EXCLUDED.gsc_site_url", [B, gid])
+    t0 = conn.execute("SELECT now()").fetchone()[0]
     first = worker.ensure_fresh(conn, B)
     again = worker.ensure_fresh(conn, B)
-    steps = [r[0] for r in conn.execute("SELECT step FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [first])]
-assert first and again is None and steps == ["gsc", "ga4", "rank", "ai", "pages", "index", "cwv", "blogs", "crawl"], steps
+    steps = auto_steps(conn, B, t0)
+    approved = conn.execute("SELECT count(*) FROM prompts WHERE client_id=%s AND approved", [B]).fetchone()[0]
+assert first and again is None and steps == sorted(["gsc", "ga4", "rank", "ai", "pages", "index", "cwv", "blogs", "crawl"]), steps
+assert approved == 2                                                     # starting prompts approved without a click
 with connect() as conn:
     conn.execute("UPDATE pull_tasks SET status='done'"); conn.execute("UPDATE pull_queue SET requested_at = now() - interval '3 hours' WHERE label='auto'")
     conn.execute("""INSERT INTO gsc_search_daily (client_id, date, query, page, country, device, clicks, impressions, position, is_branded)
                     VALUES (%s, current_date - 3, 'q', 'https://beta.shop/', 'ind', 'MOBILE', 1, 10, 5, false)""", [B])
     conn.execute("INSERT INTO collector_runs (client_id, collector, status, started_at) VALUES (%s,'gsc','ok', now() - interval '40 hours')", [B])
+    conn.execute("DELETE FROM paid_runs WHERE client_id=%s", [B])     # yesterday's AI run is old enough
+    t1 = conn.execute("SELECT now()").fetchone()[0]
     stale = worker.ensure_fresh(conn, B)
-    steps = [r[0] for r in conn.execute("SELECT step FROM pull_tasks WHERE pull_id=%s ORDER BY seq", [stale])]
+    steps = auto_steps(conn, B, t1)
     conn.execute("UPDATE pull_tasks SET status='done'"); conn.execute("UPDATE pull_queue SET requested_at = now() - interval '3 hours' WHERE label='auto'")
     conn.execute("INSERT INTO collector_runs (client_id, collector, status, started_at) VALUES (%s,'gsc','ok', now())", [B])
-    fresh = worker.ensure_fresh(conn, B)
-assert steps == ["gsc", "ga4", "rank", "pages", "index", "cwv"] and fresh is None, steps                                 # free only; nothing when fresh
-print("ready on open: a new brand's first pull starts by itself; stale data refreshes for free; fresh data starts nothing")
+    pid = conn.execute("SELECT prompt_id FROM prompts WHERE client_id=%s LIMIT 1", [B]).fetchone()[0]
+    conn.execute("INSERT INTO runs (client_id, prompt_id, engine, region, sample_no, cycle, status, run_at) VALUES (%s,%s,'chatgpt','IN',1,current_date,'ok',now())", [B, pid])
+    fresh = worker.ensure_fresh(conn, B)                                  # free data fresh and ChatGPT answered today: nothing
+    conn.execute("UPDATE runs SET run_at = now() - interval '30 hours' WHERE client_id=%s", [B])
+    conn.execute("INSERT INTO paid_runs (client_id, kind) VALUES (%s,'ai')", [B])
+    capped = worker.ensure_fresh(conn, B)                                 # old answers, but today's paid run is used: nothing
+assert steps == sorted(["gsc", "ga4", "rank", "pages", "index", "cwv", "ai"]) and fresh is None and capped is None, steps
+print("ready on open: first pull by itself (starting prompts approved); stale free data and day-old AI answers refresh by themselves, within the daily paid limit; fresh data starts nothing")
 
 # 5. the endpoints: locked without the secret; the schedule queues and works; the buttons start at once
 import app as webapp, dashboard

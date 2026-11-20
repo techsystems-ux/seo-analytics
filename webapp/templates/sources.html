@@ -23,7 +23,7 @@
     <td class="c">{{ d.rank }}</td><td style="min-width:220px"><div style="display:flex;justify-content:space-between;font:600 12.5px var(--fb)"><span>{{ d.share|pct(1) }}</span><span class="note" style="margin:0">of total</span></div>
       <div class="hb-r" style="display:block"><span class="tr" style="display:block;height:6px"><i style="width:{{ 100 * d.share }}%;background:{{ '#B20F00' if d.is_client else '#8B5CF6' }}"></i></span></div></td>
     <td class="c"><span class="eng" style="border-color:#DDE5FB;background:#F3F6FE;color:var(--blu)"><b>{{ d.citations }}</b> {{ 'link' if d.citations == 1 else 'links' }}</span></td></tr>{% endfor %}</table></div>
-  {% else %}<p class="empty">Appears after the first AI run of approved prompts.</p>{% endif %}</section>
+  {% else %}<p class="empty">Appears within a few minutes, once the first AI answers are in.</p>{% endif %}</section>
 
 <div class="sep"><span>Sources that matter in {{ niche_label or 'your category' }}</span></div>
 
@@ -44,7 +44,7 @@
 </section>
 
 <section class="card"><div class="top" style="align-items:flex-end"><div><h2>{{ t('Sources, by how often AI uses them', 'Source citation share vs brand co-occurrence') }}</h2>
-  <p class="note" style="margin:4px 0 0">{% if S.answers %}{{ t('Share of', 'Citation share across') }} {{ S.answers }} ChatGPT {{ t('answers to your prompts', 'answers to tracked prompts') }}, last 30 days.{% else %}Fills in after the first ChatGPT run of approved prompts. The list is already set for the niche.{% endif %}</p></div></div>
+  <p class="note" style="margin:4px 0 0">{% if S.answers %}{{ t('Share of', 'Citation share across') }} {{ S.answers }} ChatGPT {{ t('answers to your prompts', 'answers to tracked prompts') }}, last 30 days.{% else %}Fills in once the first ChatGPT answers are in. The list is already set for the niche.{% endif %}</p></div></div>
 <div class="tw"><table>
 <tr><th>{{ t('Website', 'Domain') }}</th><th>{{ t('Type', 'Source type') }}</th><th>{{ t('How often AI quotes it', 'Citation share') }}</th>
 <th class="r">{{ t('Names ' ~ client.name, 'Brand co-occurrence') }}</th><th>{{ t('Competitor seen most', 'Top rival co-occurrence') }}</th>

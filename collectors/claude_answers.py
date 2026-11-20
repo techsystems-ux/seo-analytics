@@ -6,12 +6,15 @@ the sites cited and the sites only read, and the Hovers Visibility Score per bra
 These are Claude's own answers to a shopper's question, asked fresh with live web search. They are not a copy of what any
 one person sees on claude.ai, which depends on that person's settings and history.
 
-Spend guard: the cost of every answer (tokens + searches, at Anthropic's published rates) is kept with the answer, and no new
-prompt starts once this calendar month's Claude spend reaches CLAUDE_MONTHLY_USD (default 25). The worker also runs Claude
-at most PAID_RUNS_PER_DAY times per brand per day.
+Runs only when the team clicks "Check Claude answers now" (never on a schedule or on page open), at most once a day per brand.
 
-Env: ANTHROPIC_API_KEY (Vercel, Sensitive, Production only), CLAUDE_MODEL (default claude-sonnet-5-5),
-     CLAUDE_JUDGE_MODEL (default claude-haiku-5-5), CLAUDE_MONTHLY_USD (default 25), CLAUDE_MAX_SEARCHES (default 3)
+Spend limit, strict: every billed reply is written to api_spend the moment it returns (tokens + searches at Anthropic's
+published rates). No request starts unless all-time Claude spend plus the worst case for one more prompt stays within
+CLAUDE_MAX_USD, which can be lowered but never set above HARD_CAP_USD ($10). One click spends at most CLAUDE_RUN_USD ($2).
+
+Env: ANTHROPIC_API_KEY (Vercel name 'Claude' also read; Sensitive, Production only), CLAUDE_MODEL (default claude-sonnet-5-5),
+     CLAUDE_JUDGE_MODEL (default claude-haiku-5-5), CLAUDE_MAX_USD (default and ceiling 10), CLAUDE_RUN_USD (default 2),
+     CLAUDE_MAX_SEARCHES (default 3)
 Usage: python claude_answers.py --client-id UUID [--date 2026-11-20]
 """
 import argparse, datetime as dt, json, os, sys, time
@@ -30,7 +33,19 @@ PRICES = {"claude-fable-5-2": (8, 40, 0.20, 10), "claude-opus-5-5": (4, 20, 0.20
           "claude-haiku-5-5": (0.10, 0.50, 0.01, 0.125)}
 HAIKU_LONG = (0.50, 2.50, 0.05, 0.625)              # Haiku 5.5 when a prompt is over 100K input tokens
 
-def monthly_cap(): return float(os.environ.get("CLAUDE_MONTHLY_USD", "25"))
+HARD_CAP_USD = 10.0                                 # the user's limit: Claude never spends more than this in total
+PROMPT_WORST_USD = 0.15                             # one prompt at most: 2,048 output + ~30K input tokens, 3 searches, the judge
+
+def total_cap():
+    try: v = float(os.environ.get("CLAUDE_MAX_USD", HARD_CAP_USD))
+    except ValueError: v = HARD_CAP_USD
+    return max(0.0, min(v, HARD_CAP_USD))
+
+def run_cap():
+    try: return max(0.0, float(os.environ.get("CLAUDE_RUN_USD", "2")))
+    except ValueError: return 2.0
+
+monthly_cap = total_cap                             # older name
 def max_searches(): return max(1, int(os.environ.get("CLAUDE_MAX_SEARCHES", "3")))
 
 class ClaudeError(RuntimeError):
@@ -55,10 +70,31 @@ def cost(model, usage):
     return round((usage.get("input_tokens", 0) * i + usage.get("output_tokens", 0) * o + usage.get("cache_read_input_tokens", 0) * cr
                   + usage.get("cache_creation_input_tokens", 0) * cw) / 1e6 + searches * SEARCH_USD, 6)
 
-def month_spend(conn):
-    """This calendar month's Claude spend across all brands (the API key is one account)."""
-    return float(conn.execute("""SELECT coalesce(sum((a.raw_json->>'cost_usd')::numeric), 0) FROM answers a JOIN runs r USING (run_id)
-                                 WHERE r.engine='claude' AND a.parsed_at >= date_trunc('month', now())""").fetchone()[0] or 0)
+def total_spend(conn):
+    """All Claude spend ever, across all brands (one Anthropic account), from the ledger of billed replies."""
+    return float(conn.execute("SELECT coalesce(sum(usd), 0) FROM api_spend WHERE provider='anthropic'").fetchone()[0] or 0)
+
+month_spend = total_spend                           # older name
+
+_ctx = {}                                            # the run in progress: conn, client_id, what this run spent
+
+def record(model, usage):
+    """Write one billed reply to the ledger at once; nothing is billed without being counted."""
+    usd = cost(model, usage)
+    _ctx["spent"] = _ctx.get("spent", 0.0) + usd
+    if _ctx.get("conn"):
+        _ctx["conn"].execute("INSERT INTO api_spend (provider, client_id, model, usd, searches) VALUES ('anthropic',%s,%s,%s,%s)",
+                             [_ctx["client_id"], model, usd, ((usage or {}).get("server_tool_use") or {}).get("web_search_requests") or 0])
+    return usd
+
+def room(conn, need=PROMPT_WORST_USD):
+    """None if one more request of up to `need` USD fits within both limits, else the reason it does not."""
+    spent, cap = total_spend(conn), total_cap()
+    if spent + need > cap:
+        return f"the Claude spend limit is reached (${spent:.2f} of ${cap:.0f} used)"
+    if _ctx.get("spent", 0.0) + need > run_cap():
+        return f"this run reached its ${run_cap():g} limit; the rest of the prompts run next time"
+    return None
 
 # ------------------------------------------------------------------ the API
 def headers(key):
@@ -72,7 +108,8 @@ def call(session, key, body, timeout=180):
         except requests.RequestException as e:
             if attempt < 2: time.sleep(3 * (attempt + 1)); continue
             raise ClaudeError(f"Could not reach the Claude API ({type(e).__name__}).")
-        if r.status_code == 200: return r.json()
+        if r.status_code == 200:
+            j = r.json(); record(j.get("model") or body.get("model"), j.get("usage") or {}); return j
         try: err = (r.json().get("error") or {})
         except ValueError: err = {}
         kind, msg = err.get("type") or "", err.get("message") or (r.text or "")[:200]
@@ -100,6 +137,9 @@ def ask(session, key, prompt, country="IN"):
     messages = [{"role": "user", "content": prompt}]
     merged = {"content": [], "usage": {}, "model": MODEL}
     for _ in range(4):
+        if _ctx.get("conn"):
+            why = room(_ctx["conn"], PROMPT_WORST_USD / 2 if merged["content"] else PROMPT_WORST_USD)
+            if why: raise fatal(why)
         j = call(session, key, {"model": MODEL, "max_tokens": 2048, "messages": messages, "tools": [tool]})
         merged["model"] = j.get("model") or MODEL; merged["id"] = j.get("id"); merged["stop_reason"] = j.get("stop_reason")
         merged["content"] += j.get("content") or []
@@ -167,18 +207,20 @@ class ClaudeEngine:
     @staticmethod
     def guard(conn, client_id):
         if _stop.get("why"): return _stop["why"]
-        spent, cap = month_spend(conn), monthly_cap()
-        if spent >= cap:
-            return f"this month's Claude spend (${spent:.2f}) reached the ${cap:.0f} limit (CLAUDE_MONTHLY_USD)"
-        return None
+        return room(conn)
 
 def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, deadline=None):
-    _stop.clear()
-    return AV.sync_client(conn, client_id, key, samples, cycle, session, True, deadline, eng=ClaudeEngine)
+    _stop.clear(); _ctx.clear(); _ctx.update(conn=conn, client_id=client_id, spent=0.0)
+    try:
+        return AV.sync_client(conn, client_id, key, samples, cycle, session, True, deadline, eng=ClaudeEngine)
+    finally:
+        _ctx.clear()
 
 def status(conn):
     """For screens: key set, this month's spend and limit, last run per brand is read separately."""
-    return {"key": bool(os.environ.get("ANTHROPIC_API_KEY")), "spent": month_spend(conn), "cap": monthly_cap(), "model": MODEL}
+    spent = total_spend(conn)
+    return {"key": bool(os.environ.get("ANTHROPIC_API_KEY")), "spent": spent, "cap": total_cap(), "model": MODEL,
+            "room": spent + PROMPT_WORST_USD <= total_cap(), "run_cap": run_cap()}
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--client-id", required=True); ap.add_argument("--date")
@@ -187,7 +229,7 @@ def main():
     if not key: print("ANTHROPIC_API_KEY is not set"); return 1
     with connect() as conn:
         tally, scores = sync_client(conn, a.client_id, key, cycle=dt.date.fromisoformat(a.date) if a.date else None)
-        print("runs:", tally, f"spent this month: ${month_spend(conn):.2f}")
+        print("runs:", tally, f"Claude spend so far: ${total_spend(conn):.2f} of ${total_cap():.0f}")
         for region, s in scores.items():
             for brand, v in s.items(): print(f"{region} {brand}: {v['score']} ({AV.band(v['score'])})")
         return 1 if tally.get("error") else 0

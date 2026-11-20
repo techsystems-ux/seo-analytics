@@ -26,7 +26,7 @@
 <section class="card"><div class="ph"><div><h2>Trend analysis · {{ me.name }}</h2><p class="sub">0 to 39 Not shortlisted · 40 to 59 Emerging · 60 to 79 Competitive · 80 and above Leader</p></div>
   <div class="mpill" style="margin:0">{% for e in board.ents %}<a class="{{ 'on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}"><span class="dotav" style="background:{{ e.colour }};width:20px;height:20px;font-size:10px">{{ e.initial }}</span>{{ e.name }}</a>{% endfor %}</div></div>
   {{ trend }}</section>
-{% else %}<div class="card empty">No score yet. Approve prompts in Settings, then the next daily run (or Settings, Data, Ask ChatGPT now) produces one.</div>{% endif %}
+{% else %}<div class="card empty">No score yet. ChatGPT's answers are being collected and the score appears within a few minutes; refresh this page shortly.</div>{% endif %}
 
 <section class="card">
 <div class="ph"><div><h2>LLM prompts{% if cycle %} · {{ cycle.strftime('%d %b %Y') }}{% endif %}</h2><p class="sub">Whether <b>{{ focus.name }}</b> is named in each engine's latest answer. Pick a brand to see its row.</p></div>

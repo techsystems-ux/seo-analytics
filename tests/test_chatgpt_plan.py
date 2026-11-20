@@ -191,7 +191,7 @@ n0 = len(ran)
 r = cl.post(f"/c/{A}/integrations", data={"csrf": "tok", "what": "run_ai"})
 assert "msg=Asking+ChatGPT" in r.headers["Location"] and len(ran) == n0 + 1
 page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)
-assert "1 approved prompt" in page and "Check AI answers now" in page
+assert "1 approved prompt" in page and "Check AI answers now" not in page and "Updates automatically" in page
 print("screen: account, models (hidden ones left out), choose model and what it is used for, test connection")
 
 # ---------------------------------------------------------------- AI answers on the plan, then the limit

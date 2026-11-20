@@ -21,7 +21,7 @@
 <div class="g3">
   <section class="card"><div class="ph"><h2>Brand visibility score <span class="info" title="Hovers Visibility Score for {{ me.name }} in {{ board.engine and engine_label(board.engine) or 'AI answers' }}: how often, how high and how positively it is named across the tracked prompts, 0 to 100.">i</span></h2></div>
     <div class="vis">{{ ring(me.score, colour=me.colour, label='Visibility score') }}
-      <p class="note" style="margin:0">{% if me.change is not none %}{% if me.change > 0 %}<span class="up" style="color:var(--ok)">▲ {{ me.change }} pts</span>{% elif me.change < 0 %}<span class="down">▼ {{ -me.change }} pts</span>{% else %}No change{% endif %} in four weeks{% elif me.score is none %}Runs once prompts are approved{% else %}First weeks of data{% endif %}</p>
+      <p class="note" style="margin:0">{% if me.change is not none %}{% if me.change > 0 %}<span class="up" style="color:var(--ok)">▲ {{ me.change }} pts</span>{% elif me.change < 0 %}<span class="down">▼ {{ -me.change }} pts</span>{% else %}No change{% endif %} in four weeks{% elif me.score is none %}Collecting the first answers{% else %}First weeks of data{% endif %}</p>
       <div class="reach">
         <div><b>{{ me.citations|n }}</b><span>Citations · 30 days</span></div>
         <div><b>{{ me.mentions|n }}</b><span>Brand mentions · 30 days</span></div>
@@ -65,7 +65,7 @@
     {% if pm.rows %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Prompt</th>{% for e in engs %}<th class="e" title="{{ e.label }}"><img class="lg sm" src="{{ e.logo }}" alt="{{ e.label }}" onerror="this.style.visibility='hidden'"></th>{% endfor %}</tr>
       {% for p in pm.rows[:6] %}<tr><td class="t">{{ p.text }}</td>{% for e in engs %}{% set c = p.cells.get(e.key) %}<td class="c">{% if not c %}<span class="ck na" title="Not asked">–</span>{% elif c.named %}<span class="ck" title="Named{{ ', #' ~ c.rank if c.rank }}">✓</span>{% else %}<span class="ck no" title="Not named">–</span>{% endif %}</td>{% endfor %}</tr>{% endfor %}</table></div>
       <a class="more" href="{{ url_for('dash.ai', cid=client.id, **arg) }}">View all prompts</a>
-    {% else %}<p class="empty">No AI prompts approved yet.{% if staff %} <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Approve prompts in Settings</a>.{% endif %}</p>{% endif %}
+    {% else %}<p class="empty">Collecting the first AI answers; they appear here within a few minutes.</p>{% endif %}
   </section>
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></span>Keywords in AI Overview</h2>
       {% if aio.date %}<span class="note">{{ aio.owned }} of {{ aio.with }} cite {{ client.name }}</span>{% endif %}</div>
