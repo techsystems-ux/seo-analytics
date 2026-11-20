@@ -153,4 +153,36 @@ assert re.search(r'<a class="ck r" href="/c/%s/ai/answer/' % A, page)           
 assert "Not connected yet: AI Overviews, Perplexity" in page and "Gemini," not in page.split("Not connected yet:")[1][:80]
 assert "zavya.co, truesilver.co.in" in page or "Zavya" in page
 print("prompts table: a column per connected engine (Gemini, Perplexity, Copilot listed as not connected), each cell opens that answer")
+
+# ---------------------------------------------------------------- prompts from search demand
+import prompt_builder as PB
+with connect() as conn:
+    for k, v in (("silver anklets for women", 22200), ("silver anklet for women", 4400), ("gargi silver anklets", 9000), ("zavya rings", 8000),
+                 ("truesilver chain", 5000), ("silver mangalsutra", 12100), ("buy silver toe rings online", 1900), ("how to clean silver jewellery", 3600),
+                 ("silver vs gold plated earrings", 2900), ("gargi login", 500), ("rings", 50000)):
+        conn.execute("""INSERT INTO semrush_keywords (client_id, domain, database, pulled_on, keyword, search_volume) VALUES (%s,'gargi.shop','in',current_date,%s,%s)""", [A, k, v])
+    ps = PB.build(conn, A, n=12)
+    texts = " | ".join(p["text"].lower() for p in ps)
+    assert ps and not any(b in texts for b in ("gargi", "zavya", "truesilver", "true silver", "login")), texts      # no brand named
+    assert "rings?" not in texts.split(" | ")[0]                                                         # one-word searches dropped
+    vols = [p["volume"] for p in ps]
+    assert vols == sorted(vols, reverse=True) and ps[0]["volume"] == 22200 + 4400, vols                  # topics by demand; variants merged
+    assert {p["stage"] for p in ps} == {"awareness", "consideration", "decision"}
+    assert sum(1 for p in ps if p["topic"] == "silver anklets for women") <= PB.MAX_PER_TOPIC
+    assert any(p["stage"] == "decision" and "toe rings" in p["text"] for p in ps) or all(p["topic"] != "buy silver toe rings online" for p in ps)
+    assert any(p["text"].startswith("How to clean silver jewellery?") for p in ps)                     # a question search kept as asked
+    assert any("silver vs gold plated earrings, which is better?" in p["text"].lower() for p in ps)
+    assert len({p["text"].split()[0] + p["text"].split()[1] for p in ps}) >= 4                            # wording varies
+    n = PB.save(conn, A, ps)
+    assert n == len(ps) and PB.save(conn, A, ps) == 0                                                     # saved once
+    row = conn.execute("SELECT approved, source, search_volume, source_keyword FROM prompts WHERE client_id=%s AND search_volume=26600 LIMIT 1", [A]).fetchone()
+    assert row == (False, "semrush", 26600, "silver anklets for women"), row                              # suggestions wait for approval
+    assert AV.demand_weight(None) == 1 and AV.demand_weight(100) == 1.0 and abs(AV.demand_weight(10000) - 1.4) < 1e-9 and AV.demand_weight(10**7) == 1.6
+r = cl.get(f"/c/{A}/settings?tab=prompts").get_data(as_text=True)
+assert "Suggest prompts from search demand" in r and "26,600" in r and "Semrush keyword" in r
+os.environ["PROMPT_TARGET"] = "12"
+r = cl.post(f"/c/{A}/settings", data={"csrf": "tok", "what": "prompt_suggest"})
+assert r.status_code == 302 and "No+new+prompts" in r.headers["Location"], r.headers["Location"]
+print("prompts from demand: branded and one-word searches dropped, variants merged into topics, ranked by monthly searches, "
+      "spread over the three stages, saved once as suggestions with their keyword and volume; demand weight in the score")
 print("ALL MATCHING TESTS PASSED")

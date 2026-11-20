@@ -516,8 +516,8 @@ def settings(cid):
     with connect() as conn:
         c = client_or_404(conn, cid)
         rules = run_checks.load_brand(conn, cid)
-        prompts = conn.execute("SELECT prompt_id, text, funnel_stage, approved, active FROM prompts WHERE client_id=%s ORDER BY approved, funnel_stage, text",
-                               [cid]).fetchall()
+        prompts = conn.execute("""SELECT prompt_id, text, funnel_stage, approved, active, search_volume, source, source_keyword FROM prompts
+                                  WHERE client_id=%s ORDER BY approved, search_volume DESC NULLS LAST, funnel_stage, text""", [cid]).fetchall()
         integ = conn.execute("SELECT gsc_site_url, ga4_property_id FROM client_integrations WHERE client_id=%s", [cid]).fetchone()
         runs, budget = A.last_runs(conn, cid), A.semrush_budget(conn)
         project = conn.execute("SELECT semrush_project_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
@@ -576,6 +576,13 @@ def settings_save(cid):
                     conn.execute("DELETE FROM client_viewers WHERE client_id=%s AND email=%s", [cid, e])
             msg = (f"{len(emails)} added. Share the client sign-in address with them." if what == "viewer_add" else "Access removed.") if emails else "No email given."
             return redirect(url_for("dash.settings", cid=cid, tab="access", msg=msg))
+        elif what == "prompt_suggest":
+            import prompt_builder as PB
+            n = PB.save(conn, cid, PB.build(conn, cid, int(os.environ.get("PROMPT_TARGET", "40"))))
+            PB.refresh_volumes(conn, cid)
+            return redirect(url_for("dash.settings", cid=cid, tab="prompts",
+                                    msg=f"{n} prompt{'s' if n != 1 else ''} suggested from search demand. Approve the ones to track." if n else
+                                        "No new prompts: every topic with search demand is already covered, or keyword data has not arrived yet."))
         elif what == "prompt_delete":
             conn.execute("DELETE FROM prompts WHERE client_id=%s AND prompt_id::text=%s", [cid, request.form["id"]])
         elif what in ("sample_load", "sample_clear"):

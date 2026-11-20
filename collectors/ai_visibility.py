@@ -13,7 +13,8 @@ Orbit AI Visibility Score (OVS), 0-100, per brand per engine per region per day.
       E  endorsement: the answer recommends it (1) or only names it (0)
       S  sentiment: positive 1, neutral .5, negative 0
       C  source authority: the answer cites the brand's own site (engines without web search: dropped, the rest rescaled)
-  Per prompt weight w: buying stage (awareness .8, consideration 1, decision 1.25) x 0.25 when the prompt itself names the brand.
+  Per prompt weight w: buying stage (awareness .8, consideration 1, decision 1.25) x demand (0.6 + 0.2 log10 monthly searches,
+      0.6 to 1.6; 1 when unknown) x 0.25 when the prompt itself names the brand.
   Score = 100 * sum(w v) / (sum(w) + K), K = 2: two answers' worth of 'not yet seen' so thin evidence can't read as dominance.
   Share of voice: the brand's share of all prominence (w * D) earned by tracked brands.
 Bands: 0-14 Not shortlisted, 15-34 Emerging, 35-59 Competitive, 60+ Leader.
@@ -97,7 +98,7 @@ def judge_brands(session, key, answer):
     return json.loads(text).get("brands", [])
 
 # ------------------------------------------------------------------ reading the answer
-SCORING_VERSION = 3            # bump when brand detection changes: saved answers are re-read for free (rescore)
+SCORING_VERSION = 4            # bump when brand detection changes: saved answers are re-read for free (rescore)
 
 def stem(text):
     """'zavya.co' -> 'zavya', 'www.truesilver.co.in' -> 'truesilver', 'CaratLane' -> 'caratlane' (letters and digits only)."""
@@ -255,6 +256,12 @@ def position_score(rank):
     import math
     return 1 / math.log2(rank + 1) if rank else 0.0
 
+def demand_weight(volume):
+    """Monthly searches behind a prompt's topic: 100 -> 1.0, 1,000 -> 1.2, 10,000 -> 1.4, 100,000 -> 1.6; unknown -> 1."""
+    import math
+    if not volume or volume <= 0: return 1.0
+    return max(0.6, min(1.6, 0.6 + 0.2 * math.log10(volume)))
+
 def answer_value(a, citing=True):
     """One answer's value for one brand, 0-1. a = {mentioned, rank, recommended, sentiment, cited}."""
     W = WEIGHTS
@@ -283,7 +290,7 @@ def score_brand(answers, citing=True, k=PRIOR_K):
 
 def evidence(conn, client_id, cycle, region, engine):
     """The newest ok answer per (prompt, sample) in the window ending on `cycle`: [(answer_id, prompt text, funnel stage)]."""
-    return conn.execute("""SELECT DISTINCT ON (r.prompt_id, r.sample_no) a.answer_id, p.text, p.funnel_stage::text
+    return conn.execute("""SELECT DISTINCT ON (r.prompt_id, r.sample_no) a.answer_id, p.text, p.funnel_stage::text, p.search_volume
                            FROM runs r JOIN answers a USING (run_id) JOIN prompts p USING (prompt_id)
                            WHERE r.client_id=%s AND r.region=%s AND r.engine::text=%s AND r.status='ok' AND p.active
                              AND r.cycle <= %s AND r.cycle > %s::date - %s
@@ -301,12 +308,12 @@ def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
         ment[(aid, brand)] = (rank, sent, rec)
     cites = conn.execute("SELECT answer_id, domain FROM citations WHERE answer_id = ANY(%s) AND cited", [ids]).fetchall()
     citing = engine in CITING and bool(conn.execute("SELECT EXISTS (SELECT 1 FROM citations WHERE answer_id = ANY(%s))", [ids]).fetchone()[0])
-    stage_w = {aid: STAGE.get(stage, 1.0) for aid, _, stage in ev}
+    stage_w = {aid: STAGE.get(stage, 1.0) * demand_weight(vol) for aid, _, stage, vol in ev}
     out = {}
     for b in brands:
         pats = brand_patterns(b["name"], b["aliases"], b["domain"])
         ans = []
-        for aid, text, _ in ev:
+        for aid, text, _, _ in ev:
             rank, sent, rec = ment.get((aid, b["name"]), (None, None, None))
             branded = any(p.search(text or "") for p in pats)
             ans.append({"mentioned": rank is not None, "rank": rank, "sentiment": sent, "recommended": rec,

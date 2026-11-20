@@ -196,6 +196,13 @@ def ensure_fresh(conn, cid, who=None):
         if conn.execute("SELECT count(*) FROM answers WHERE client_id=%s", [cid]).fetchone()[0] <= 300:
             try: ai_visibility.rescore(conn, cid)
             except Exception: pass
+    try:                                                                  # free: prompts from search demand, suggested once
+        if conn.execute("""SELECT NOT EXISTS (SELECT 1 FROM prompts WHERE client_id=%(c)s AND source <> 'team')
+                             AND EXISTS (SELECT 1 FROM semrush_keywords WHERE client_id=%(c)s)""", {"c": cid}).fetchone()[0]:
+            import prompt_builder as PB
+            PB.save(conn, cid, PB.build(conn, cid, int(os.environ.get("PROMPT_TARGET", "40")))); PB.refresh_volumes(conn, cid)
+    except Exception:
+        pass
     recent = {r[0] for r in conn.execute("""
         SELECT t.step FROM pull_tasks t JOIN pull_queue q USING (pull_id) WHERE t.client_id=%s
           AND (t.status IN ('queued','running') OR (q.label='auto' AND q.requested_at > now() - interval '2 hours'))""", [cid])}
@@ -330,7 +337,15 @@ def step_semrush(conn, task, deadline):
     units = task["args"].get("max_units") or int(os.environ.get("SEMRUSH_AUTO_UNITS", "400"))
     if int(units) <= 0: return "automatic Semrush is off (SEMRUSH_AUTO_UNITS=0)", []
     rc = _daily(task["client_id"], "semrush", {**task["args"], "force": True, "max_units": units})
-    return ("ok" if rc == 0 else "finished with errors (see the run log)"), []
+    note = "ok" if rc == 0 else "finished with errors (see the run log)"
+    try:                                                                   # new demand data: suggest prompts (not approved)
+        import prompt_builder as PB
+        n = PB.save(conn, task["client_id"], PB.build(conn, task["client_id"], int(os.environ.get("PROMPT_TARGET", "40"))))
+        PB.refresh_volumes(conn, task["client_id"])
+        if n: note += f"; {n} prompts suggested"
+    except Exception as e:
+        note += f"; prompt suggestions failed ({type(e).__name__})"
+    return note, []
 
 def run_task(conn, task, deadline):
     """-> (note, [(step, args)] to queue next)."""
