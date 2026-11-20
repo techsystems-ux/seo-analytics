@@ -37,7 +37,7 @@
       {% for k, l in choices %}<option value="{{ k }}" {{ 'selected' if k == (niche or guessed) }}>{{ l }}</option>{% endfor %}</select></div>
     <button class="btn ln">Save</button></form>
   <div class="grid sources-metrics">
-    <div class="kpi"><div class="l">{{ t('AI answers read', 'Answers sampled (30d)') }}</div><div class="v sm">{{ S.answers|n }}</div></div>
+    <div class="kpi"><div class="l">AI answers read (30 days)</div><div class="v sm">{{ S.answers|n }}</div></div>
     <div class="kpi"><div class="l">{{ t('Sites AI quotes', 'Sources with citations') }}</div><div class="v sm">{{ S.sources|selectattr('answers')|list|length }} of {{ S.sources|length }}</div></div>
     <div class="kpi"><div class="l">{{ t('Where competitors lead', 'Co-occurrence gaps') }}</div><div class="v sm">{{ S.sources|selectattr('gap')|list|length }}</div></div>
   </div>
@@ -88,5 +88,4 @@
     <button class="btn blk" style="align-self:flex-start">Add source</button></form></section>
 </div>
 
-<p class="note">{% if pro %}Method: citation share = answers citing the domain (or a subdomain) / all sampled answers; co-occurrence = answers citing the domain that also name the brand in the ranked recommendation list. Niche presets are a researched starting list, editable per brand.{% else %}How this works: Orbit reads ChatGPT's answers to your prompts and counts which websites it quotes and which brands it names next to them. The starting list per category is a researched shortlist your Hovers team can change.{% endif %}</p>
 {% endblock %}

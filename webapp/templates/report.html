@@ -20,8 +20,7 @@
 
 <section class="card staff-only" style="display:flex;flex-direction:column;gap:8px"><h2>Data for this month</h2>
   {% for label, have, need in ready %}<p style="margin:0">{% if have >= need %}<span class="tag t-pass">complete</span>{% elif have %}<span class="tag t-na">{{ have }} of {{ need }} days</span>{% else %}<span class="tag t-sev-error">missing</span>{% endif %} {{ label }}</p>{% endfor %}
-  <p class="note" style="margin:0">Same month last year: {{ 'GA4 data found, so traffic and revenue compare with ' ~ R.ly.strftime('%B %Y') if R.traffic.ly else 'not stored yet; the first GA4 pull after this update fetches 14 months' }}.
-  {% if not R.products %}Product sales: not available from GA4 for this property yet, so revenue is shown by landing page.{% endif %}</p>
+  {% if R.traffic.ly %}<p class="note" style="margin:0">Compared with {{ R.ly.strftime('%B %Y') }}.</p>{% endif %}
 </section>
 
 <form method="post" class="grid2" style="align-items:stretch;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="month" value="{{ month.strftime('%Y-%m') }}">

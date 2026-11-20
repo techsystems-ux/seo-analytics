@@ -6,7 +6,7 @@
     <span class="bh-av" style="background:{{ fe.colour if fe else '#B20F00' }}">{{ (fe.name if fe else client.name)[:1]|upper }}
       {% set d = fe.domain if fe else client.domain %}{% if d %}<img src="https://www.google.com/s2/favicons?domain={{ d }}&sz=64" alt="" onerror="this.remove()">{% endif %}</span>
     <div><h1 class="bh-name">{{ fe.name if fe else client.name }}{% if fe and not fe.primary %} <span class="bh-badge cmp">Competitor</span>{% else %} <span class="bh-badge">Your brand</span>{% endif %}</h1>
-      <p class="bh-sub">Last updated: {{ intel.updated.strftime('%d %b %Y, %H:%M') ~ ' UTC' if intel and intel.updated else 'waiting for the first refresh' }}</p></div>
+      <p class="bh-sub">{% if intel and intel.updated %}Last updated: {{ intel.updated.strftime('%d %b %Y') }}{% elif intel and intel.data_to %}Data to {{ intel.data_to.strftime('%d %b %Y') }}{% else %}Setting up: the first data arrives within a day{% endif %}</p></div>
   </div>
   <div class="bh-meta">
     {% set d = fe.domain if fe else client.domain %}{% if d %}<span><b>URL:</b> <a href="https://{{ d }}" target="_blank" rel="noopener">https://{{ d }}/</a></span>{% endif %}

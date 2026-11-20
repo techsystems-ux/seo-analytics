@@ -22,7 +22,7 @@
   {% if r.status!='planned' %}<button class="btn red" name="status" value="planned">Plan</button>{% endif %}
   {% if r.status=='planned' %}<button class="btn blk" name="status" value="done">Written</button>{% endif %}
   {% if r.status!='dismissed' %}<button class="btn ln" name="status" value="dismissed">Dismiss</button>{% else %}<button class="btn ln" name="status" value="new">Restore</button>{% endif %}</form></td></tr>{% endfor %}</table>
-  {% else %}<p class="empty">{{ 'No ideas yet. Find ideas above (Semrush credits).' if status=='new' and not kind else 'Nothing in this view.' }}</p>{% endif %}</div>
+  {% else %}<p class="empty">{{ 'No ideas yet. Use Find ideas above.' if status=='new' and not kind else 'Nothing in this view.' }}</p>{% endif %}</div>
   <p class="note">Difficulty is Semrush's 0–100 estimate of how hard it is to reach the top 10. AI Overview or People also ask on the page means a clear, direct answer in the copy has a chance to be quoted.</p>
 </section>
 {% endblock %}

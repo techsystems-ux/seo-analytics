@@ -158,12 +158,12 @@ with connect() as conn:
 checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Brand visibility score", "LLMs overview", "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"], f"/c/{cid}?tab=competitors": ["Brand visibility ranking", "Google footprint", "GIVA", "Primary"], f"/c/{cid}/ai-traffic": ["AI traffic performance"], f"/c/{cid}/ai?b=GIVA": ["LLM prompts", "GIVA"],
           f"/c/{cid}/search": ["Non-branded clicks", "silver mangalsutra"], f"/c/{cid}/search?tab=revenue": ["/collections/mangalsutra", "100.0%"],
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
-          f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women", "Refresh Semrush now", "refreshes on its own nightly"], f"/c/{cid}/settings?tab=data": ["up to 400 credits", "disabled", "Semrush project ID", "Refresh Semrush now", "refresh on their own every night"],
+          f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women", "Refresh keyword data"], f"/c/{cid}/settings?tab=data": ["Uses up to 400 Semrush credits", "disabled", "Semrush project ID", "Refresh keyword data now", "Data sources", "Refresh history"],
           f"/c/{cid}/technical": ["Crawlability, indexation and site health", "Technical SEO index", "No crawl yet", "Import Site Audit"], f"/c/{cid}/ideas": ["Query demand", "No ideas yet"],
           f"/c/{cid}/search?tab=rankings": ["silver mangalsutra", "Track"], f"/c/{cid}/competitors?tab=backlinks": ["No backlink data yet", "Pull backlinks"],
           f"/c/{cid}/research/keyword": ["Keyword research", "No lookups yet", "disabled"], f"/c/{cid}/research/domain": ["Quick pick", "gargi.shop"],
           f"/c/{cid}/research/backlinks": ["Backlink analytics"], f"/c/{cid}/research/paid": ["Paid and shopping"],
-          f"/c/{cid}/reddit": ["What Reddit says", "No Reddit data yet", "No Apify token"], f"/c/{cid}/youtube": ["What YouTube shows", "No YouTube API key"],
+          f"/c/{cid}/reddit": ["What Reddit says", "Reddit insights appear after the first weekly refresh", "Not connected yet"], f"/c/{cid}/youtube": ["What YouTube shows", "Not connected yet"],
           f"/c/{cid}/ai": ["Hovers Visibility Score", "#2", "Zaveri Pearls", "Failed"], f"/c/{cid}/ai/answer/{aid}": ["GIVA is the best known", "Read only"],
           f"/c/{cid}/pages": ["Pages found", "No checked pages in this view yet"], f"/c/{cid}/pages?show=unchecked": ["silver mangalsutra", "Not checked yet"], f"/c/{cid}/settings": ["Gargi by PNG"],
           f"/c/{cid}/settings?tab=prompts": ["best silver jewellery brands in India", "Approve all"]}
@@ -184,7 +184,7 @@ r = cl.post(f"/c/{cid}/competitors", data={"csrf": "tok", "add_name": "Zaveri Pe
 with connect() as conn:
     assert conn.execute("SELECT tracked FROM competitors WHERE client_id=%s AND name='Zaveri Pearls'", [cid]).fetchone()[0] is True
 r = cl.post(f"/c/{cid}/semrush", data={"csrf": "tok", "feature": "audit", "back": "https://evil.example/"})
-assert r.status_code == 302 and r.location.startswith(f"/c/{cid}/settings") and "msg=No+Semrush+key" in r.location, r.location    # not ready: nothing runs, no outside redirect
+assert r.status_code == 302 and r.location.startswith(f"/c/{cid}/settings") and "msg=Keyword+data+is+not+connected" in r.location, r.location    # not ready: nothing runs, no outside redirect
 with connect() as conn:
     assert conn.execute("SELECT count(*) FROM collector_runs WHERE client_id=%s AND collector LIKE 'semrush_%%'", [cid]).fetchone()[0] == 0
     conn.execute("""INSERT INTO tech_issues (client_id, issue_code, source, title, severity, pages) VALUES (%s,'page_4xx','hovers','Page returns a 4xx error','error',2)""", [cid])
@@ -229,7 +229,7 @@ real_start_job = dashboard.start_job
 dashboard.start_job = lambda cid_, only, **k: started.append(only)
 os.environ["APIFY_TOKEN"] = "x"; os.environ["YOUTUBE_API_KEY"] = "x"
 page = cl.get(f"/c/{cid}/reddit").get_data(as_text=True)
-assert started == ["reddit"] and "Pulling now" in page and "Waiting for a key" not in page, (started, page[:200])
+assert started == ["reddit"] and "Pulling now" in page and "Not connected yet" not in page, (started, page[:200])
 cl.get(f"/c/{cid}/reddit"); assert started == ["reddit"]                     # not started twice
 assert "Pulling now" in cl.get(f"/c/{cid}/youtube").get_data(as_text=True) and started == ["reddit", "youtube"]
 with connect() as conn:                                                     # a finished run this week: nothing starts
@@ -336,7 +336,7 @@ dashboard.start_job = real_start_job
 dashboard.ONLINE = True
 _kicks = []; _real_kick = _worker.kick; _worker.kick = lambda: _kicks.append(1) or True
 r = cl.post(f"/c/{cid}/youtube", data={"csrf": "tok"}, headers={"Referer": f"http://localhost/c/{cid}/youtube"})
-assert r.status_code == 302 and "Started+on+the+Orbit+server" in r.headers["Location"] and _kicks, r.headers.get("Location")
+assert r.status_code == 302 and "msg=Started.+Results+appear" in r.headers["Location"] and _kicks, r.headers.get("Location")
 dashboard.ONLINE = False; _worker.kick = _real_kick
 with connect() as conn:
     q = conn.execute("SELECT pull_id, label, args, requested_by, started_at FROM pull_queue WHERE client_id=%s", [cid]).fetchall()
@@ -365,10 +365,13 @@ link = sent[0][1].split("localhost", 1)[1]
 r = vc.get(link); assert r.status_code == 302 and r.headers["Location"].endswith("/portal")
 assert vc.get(link).headers["Location"].find("expired") > 0                # a link works once
 r = vc.get("/portal"); assert r.status_code == 302 and r.headers["Location"].endswith(f"/c/{cid}")
-for path in ("", "/search", "/ai", "/competitors", "/reddit", "/youtube", "/report"):
+for path in ("", "?tab=competitors", "/search", "/search?tab=rankings", "/ai", "/ai-traffic", "/sources", "/competitors", "/competitors?tab=keywords", "/reddit", "/youtube", "/report", "/blogs"):
     r = vc.get(f"/c/{cid}{path}"); assert r.status_code == 200, (path, r.status_code)
     page = r.get_data(as_text=True)
     assert 'class="viewer"' in page and "marketing@gargi.shop" in page and "Google connections" not in page and "Keyword research" not in page, path
+    low = page.lower()                                                # nothing team-only reaches a client's browser, not even hidden
+    assert not __import__("re").search(r"class=\"[^\"]*\bstaff-only", page) and "credits" not in low and "apify" not in low and "intelligence layer" not in low \
+        and "on the server" not in low and "confidential" not in low, (path, [w for w in ("credits", "apify", "on the server", "confidential") if w in low])
 for path in (f"/c/{cid}/settings", f"/c/{cid}/pages", f"/c/{cid}/technical", f"/c/{cid}/research/keyword", "/c", f"/c/{other}", f"/c/{other}/search"):
     r = vc.get(path); assert r.status_code == 302 and r.headers["Location"].endswith("/portal"), (path, r.status_code)
 for path, data in ((f"/c/{cid}/settings", {"what": "viewer_add", "emails": "x@y.com"}), (f"/c/{cid}/youtube", {}), (f"/c/{cid}/report", {})):

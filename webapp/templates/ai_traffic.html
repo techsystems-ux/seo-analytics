@@ -26,7 +26,6 @@
     {% if tr.sources %}{% set mx = (tr.sources|map(attribute='sessions')|max) or 1 %}
     {% for s in tr.sources %}<div class="lb" style="grid-template-columns:28px 110px minmax(0,1fr) 56px"><img class="lg" src="{{ s.logo }}" alt="" onerror="this.style.visibility='hidden'"><span style="font:600 12.5px var(--fb)">{{ s.label }}</span>
       <span class="tr"><i style="width:{{ 100 * s.sessions / mx }}%"></i></span><span class="v">{{ s.sessions|n }}</span></div>{% endfor %}
-    <p class="note" style="margin:10px 0 0">GA4 sources counted: {{ tr.sources|map(attribute='sources')|sum(start=[])|join(', ') }}.</p>
     {% else %}<p class="empty">No visits from AI assistants in this window.</p>{% endif %}</section>
   <section class="card"><div class="ph"><div><h2>AI vs organic, quality</h2><p class="sub">Same window, per session.</p></div></div>
     <table class="vs"><tr><th>Metric</th><th>AI</th><th>Organic</th></tr>

@@ -33,7 +33,7 @@ customers. Posts are published only when someone clicks Publish on a reviewed dr
       {% else %}<p class="note" style="margin:0">The .myshopify.com address is in Shopify admin, Settings, Domains.</p>{% endif %}
       <button class="btn red" style="align-self:flex-start" {{ 'disabled' if not (shared or own_app) }}>Connect Shopify</button></form>
     <p class="note" style="margin:0">You will see Shopify's own approval screen. Approve with a store owner or staff account that can install apps.</p>
-    {% if not (shared or own_app) %}<p class="note" style="margin:0;color:var(--red)">Shopify publishing is not switched on yet{{ ': add the Orbit Shopify app keys (SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET) in Vercel, or this store\'s own app below' if staff else '. The Hovers team is setting it up' }}.</p>{% endif %}
+    {% if not (shared or own_app) %}<p class="note" style="margin:0;color:var(--red)">Shopify publishing is not switched on yet{{ ': connect it with the store\'s own Shopify app below' if staff else '. The Hovers team is setting it up' }}.</p>{% endif %}
   {% endif %}
 </section>
 

@@ -6,7 +6,7 @@
 <p class="lead">A weekly crawl of up to 500 pages of {{ client.domain }}, highest-traffic pages first, run as an analyst would run a site audit:
 a checklist of what stops Google crawling and indexing the site, each failing item one task with an owner and a due date. Orbit keeps the issues and the
 affected URLs of the latest crawl, not copies of pages. The next crawl checks the fix.</p></div>
-<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Crawl site now (free)</button></form></div>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red">Crawl site now</button></form></div>
 
 {% if checklist %}<section class="card"><div class="top" style="align-items:flex-end"><div><h2>Audit checklist</h2>
   <p class="note" style="margin:4px 0 0">{{ checklist.passed }} of {{ checklist.total }} checks pass in the latest crawl. Click a failing check for its URLs and the fix.</p></div></div>
@@ -25,7 +25,7 @@ affected URLs of the latest crawl, not copies of pages. The next crawl checks th
 </style>{% endif %}
 
 {% if pro %}<section class="card"><div class="top" style="align-items:flex-end"><div><h2>Technical SEO index</h2>
-  <p class="note" style="margin:4px 0 0">Five pillars scored 0–100 from open crawl issues, weighted by severity (error 10, warning 4, notice 1) and share of affected URLs{% if tix.crawled %} across {{ tix.crawled|n }} crawled URLs{% endif %}. Performance blends TTFB from the crawl with Lighthouse and CrUX.</p></div>
+  <p class="note" style="margin:4px 0 0">Five areas scored 0 to 100 from the issues open in the latest crawl{% if tix.crawled %} of {{ tix.crawled|n }} URLs{% endif %}; errors weigh most.</p></div>
   <div class="kpi" style="padding:0;text-align:right"><div class="l">Overall</div><div class="v">{{ tix.overall if tix.overall is not none else '–' }}</div></div></div>
   <div class="pillars">{% for p in tix.pillars %}<div class="pil"><div class="top" style="align-items:baseline"><b>{{ p.name }}</b><span class="pv">{{ p.score if p.score is not none else '–' }}</span></div>
     <div class="bar"><i style="width:{{ p.score or 0 }}%;background:{{ '#B20F00' if (p.score or 0) < 70 else '#0F0F0F' }}"></i></div>
@@ -75,14 +75,14 @@ affected URLs of the latest crawl, not copies of pages. The next crawl checks th
   {% if pages and sel.pages > pages|length %}<p class="note" style="margin:0">Showing {{ pages|length }} of {{ sel.pages|n }} affected URLs. Orbit keeps {{ 'up to 500' if sel.severity == 'error' else 'a sample of ' ~ (100 if sel.severity == 'warning' else 25) }} per issue; the fix is usually one template change, and the next crawl re-counts them all.</p>{% endif %}
   <div class="tw">{% if pages %}<table><tr><th>Page</th><th>Detail</th></tr>
   {% for p in pages %}<tr><td><a href="{{ p.url }}" target="_blank" rel="noopener">{{ p.url|path }}</a></td><td class="note">{{ p.detail or '' }}</td></tr>{% endfor %}</table>
-  {% elif sel.source=='semrush' %}<p class="note">Semrush lists the pages for the top error types only, to save credits. Open Site Audit in Semrush for the rest.</p>
+  {% elif sel.source=='semrush' %}<p class="note">Pages are listed for the top error types. Open Site Audit in Semrush for the rest.</p>
   {% else %}<p class="note">No pages in the latest crawl.</p>{% endif %}</div>
 {% else %}
   <h2>What the crawl checks</h2>
   <p class="note">Status codes and redirect chains, broken internal links, links through redirects, canonical and noindex tags, hreflang, missing or duplicate titles and descriptions, H1s, image alt text, http files on https pages, slow server responses, and sitemap pages nothing links to.</p>
   <p class="note">Pick an issue on the left to see its pages and assign it.</p>
   <h2 style="margin-top:8px">Semrush Site Audit</h2>
-  <p class="note">If the team already runs Site Audit in Semrush, its results can sit here too. The import reads the summary and the pages for the worst error types; it never calls the 10,000-credit snapshot report.</p>
+  <p class="note">If the team already runs Site Audit in Semrush, its results can sit here too. The import brings in the summary and the pages for the worst error types.</p>
   {{ sm.run(actions.audit, 'Import Site Audit') }}
 {% endif %}
 </section>

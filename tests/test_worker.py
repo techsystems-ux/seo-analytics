@@ -208,5 +208,5 @@ r = cl.post(f"/c/{A}/settings", data={"csrf": "tok", "what": "run", "only": "gsc
 with connect() as conn:
     last = conn.execute("SELECT label, requested_by FROM pull_queue ORDER BY pull_id DESC LIMIT 1").fetchone()
 if r is not None:
-    assert r.status_code == 302 and "Started+on+the+Orbit+server" in r.headers["Location"] and kicks and last[1] == "seo@hovers.in", (r.headers.get("Location"), last)
+    assert r.status_code == 302 and "msg=Started.+Results+appear" in r.headers["Location"] and kicks and last[1] == "seo@hovers.in", (r.headers.get("Location"), last)
 print("endpoints: worker and schedule need the secret; a Pull button queues the tasks and starts the server at once")

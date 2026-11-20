@@ -4,14 +4,14 @@
   <div class="top staff-only" style="align-items:center">
     <div style="display:flex;gap:10px;align-items:center">
       {% if status.running %}<span class="tag t-blk">Pulling now</span><span class="note">started {{ status.running.strftime('%H:%M') }} · refresh in a few minutes</span>
-      {% elif why %}<span class="tag t-na">Waiting for a key</span><span class="note">{{ why }}. Once it is added, this fills itself.</span>
+      {% elif why %}<span class="tag t-na">Not connected yet</span><span class="note">Starts on its own once the source is connected in Settings.</span>
       {% elif status.last_ok %}<span class="tag t-pass">Automatic</span><span class="note">updated {{ status.last_ok.strftime('%d %b, %H:%M') }} · refreshes itself every week</span>
       {% else %}<span class="tag t-pass">Automatic</span><span class="note">the first pull starts on its own</span>{% endif %}
     </div>
     {% if not why %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="what" value="run">
       <button class="btn ln" {{ 'disabled' if status.running }}>{{ refresh_label }}</button></form>{% endif %}
   </div>
-  {% if status.error and not status.running %}<p class="note down staff-only" style="margin:0">Last pull failed: {{ status.error }}. It runs again in the nightly refresh (02:00 IST); press the button above to try now.</p>{% endif %}
+  {% if status.error and not status.running %}<p class="note down staff-only" style="margin:0">The last refresh did not finish. It runs again tonight, or press Refresh now. <span class="mute" title="{{ status.error }}">Details</span></p>{% endif %}
   <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="note">Tracking:</span>
     <span class="tag t-blk">{{ client.name }}</span>{% for b in cols[1:] %}<span class="tag t-pass">{{ b.label }}</span>{% endfor %}
     <span class="note" style="margin-left:6px">Topics{{ ' (found from your site and searches)' if auto }}:</span>{% for t in topics %}<span class="tag t-pass">{{ t }}</span>{% else %}<span class="note">found after the first Search Console pull</span>{% endfor %}

@@ -55,6 +55,40 @@ def csrf():
 def check_csrf():
     if not request.form.get("csrf") or request.form.get("csrf") != session.get("csrf"): abort(400, "Form expired. Reload the page and try again.")
 
+_TAG = __import__("re").compile(r"<(/?)([a-zA-Z][a-zA-Z0-9-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*)>")
+_VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+def strip_staff_only(html):
+    """Remove every element marked class="staff-only" (with all it contains) from a page, so a client's browser never
+    receives team-only content, not even hidden by CSS. Script and style bodies are skipped while matching tags."""
+    import re
+    out, pos, i = [], 0, 0
+    skip = re.compile(r"(?is)<(script|style)\b.*?</\1>")
+    spans = [(m.start(), m.end()) for m in skip.finditer(html)]
+    def in_skip(k): return any(a <= k < b for a, b in spans)
+    for m in _TAG.finditer(html):
+        if m.start() < pos or in_skip(m.start()) or m.group(1): continue
+        cls = re.search(r"""class\s*=\s*["']([^"']*)["']""", m.group(3))
+        if not cls or "staff-only" not in cls.group(1).split(): continue
+        name = m.group(2).lower()
+        if name in _VOID or m.group(3).rstrip().endswith("/"):
+            out.append(html[pos:m.start()]); pos = m.end(); continue
+        depth, end = 1, len(html)
+        for n in _TAG.finditer(html, m.end()):
+            if n.group(2).lower() != name or in_skip(n.start()): continue
+            if n.group(1): depth -= 1
+            elif not n.group(3).rstrip().endswith("/"): depth += 1
+            if depth == 0: end = n.end(); break
+        out.append(html[pos:m.start()]); pos = end
+    out.append(html[pos:])
+    return "".join(out)
+
+@bp.after_request
+def _client_view(resp):
+    if is_viewer() and resp.mimetype == "text/html" and not resp.direct_passthrough:
+        resp.set_data(strip_staff_only(resp.get_data(as_text=True)))
+    return resp
+
 @bp.before_request
 def _gate():
     if session.get("staff_email"): return
@@ -600,7 +634,7 @@ def semrush_actions(conn, cid, seeds=None):
     recent = conn.execute("""SELECT 1 FROM paid_runs WHERE client_id=%s AND kind='semrush'
                              AND started_at > now() - make_interval(mins => %s)""", [cid, worker.MANUAL_GAP_MIN]).fetchone()
     out = {
-        "keywords":  {"label": "Refresh Semrush now: ranking keywords and competitors", "cost": int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")) or 400, "where": "Competitors"},
+        "keywords":  {"label": "Refresh keyword data now", "cost": int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")) or 400, "where": "Competitors"},
         "ideas":     {"label": "Content ideas: questions and related searches", "cost": ss.estimate("ideas", seeds=len(seeds or []) or 3), "where": "Content ideas"},
         "backlinks": {"label": "Backlinks and link prospects", "cost": ss.estimate("backlinks", competitors=min(tracked, 3)), "where": "Competitors"},
         "gap":       {"label": "Keyword gap: what competitors rank for and you don't", "cost": ss.estimate("gap"), "where": "Competitors"},
@@ -609,10 +643,10 @@ def semrush_actions(conn, cid, seeds=None):
     }
     for k, a in out.items():
         why = None
-        if not key: why = "No Semrush key on the server"
+        if not key: why = "Keyword data is not connected yet"
         elif k in ("audit", "rank") and not project: why = "Add the Semrush project ID in Settings first"
         elif k == "gap" and not tracked: why = "Track at least one competitor first"
-        elif a["cost"] > budget["left"]: why = f"Needs up to {a['cost']:,} credits; the limit leaves {budget['left']:,}"
+        elif a["cost"] > budget["left"]: why = "The monthly data allowance is used up"
         elif k == "keywords" and recent: why = f"Refreshed under {worker.MANUAL_GAP_MIN} minutes ago; try again shortly"
         a.update(key=k, ready=why is None, why=why)
     out["keywords"]["last"] = last
@@ -634,10 +668,10 @@ def semrush_run(cid):
         import sample_semrush; sample_semrush.clear(conn, cid, only='semrush')
     if feature == "keywords": start_job(cid, "semrush", max_units=a["cost"], manual=True)   # the refresh button: outside the daily limit
     else: start_job(cid, f"semrush_{feature}", max_units=a["cost"], seeds=request.form.get("seeds", ""))
-    return redirect(back + sep + urlencode({"msg": f"Semrush started: up to {a['cost']:,} credits. Results appear when it finishes."}))
+    return redirect(back + sep + urlencode({"msg": "Started. Results appear here in a few minutes."}))
 
 ONLINE = bool(os.environ.get("VERCEL"))     # the online copy on Vercel: a request cannot outlive its response
-QUEUED = "Started on the Orbit server. Results appear here as each step finishes, usually within a few minutes."
+QUEUED = "Started. Results appear here as each step finishes, usually within a few minutes."
 
 def queue_pull(cid, label, args):
     """Online, a pull is split into tasks (collectors/worker.py) and the server starts working through them at once."""
@@ -733,8 +767,8 @@ def research(cid, tool):
         tracked = {r[0] for r in conn.execute("SELECT lower(keyword) FROM rank_keywords WHERE client_id=%s", [cid])}
         ideas = {r[0] for r in conn.execute("SELECT lower(keyword) FROM keyword_ideas WHERE client_id=%s", [cid])}
     cost = sr.estimate(tool)
-    why = (None if os.environ.get("SEMRUSH_API_KEY") else "No Semrush key on the server") or \
-          (f"Needs up to {cost:,} credits; the limit leaves {budget['left']:,}" if cost > budget["left"] else None)
+    why = (None if os.environ.get("SEMRUSH_API_KEY") else "Keyword data is not connected yet") or \
+          ("The data allowance is used up" if cost > budget["left"] else None)
     chart = None
     if cur and tool == "domain" and cur["result"].get("history"):
         pts = sorted(cur["result"]["history"], key=lambda r: str(r.get("date")))
@@ -766,10 +800,10 @@ def research_run(cid, tool):
         q = (request.form.get("query") or "").strip()
         if not q: return back_with(back, "Type a keyword or domain first.")
         cost, budget = sr.estimate(tool), A.semrush_budget(conn)
-        if not os.environ.get("SEMRUSH_API_KEY"): return back_with(back, "No Semrush key on the server, so nothing was pulled.")
-        if cost > budget["left"]: return back_with(back, f"Needs up to {cost:,} credits; the limit leaves {budget['left']:,}. Nothing was pulled.")
+        if not os.environ.get("SEMRUSH_API_KEY"): return back_with(back, "Keyword data is not connected yet, so nothing was pulled.")
+        if cost > budget["left"]: return back_with(back, "The data allowance is used up, so nothing was looked up.")
     start_job(cid, "research", max_units=cost, research=f"{tool}:{q}")
-    return back_with(url_for("dash.research", cid=cid, tool=tool), f"Looking up {q}: up to {cost:,} credits. Refresh in a minute.")
+    return back_with(url_for("dash.research", cid=cid, tool=tool), f"Looking up {q}. Refresh in a minute.")
 
 # ------------------------------------------------------------------ Community: Reddit and YouTube
 def brand_cols(conn, cid):
@@ -819,8 +853,8 @@ def reddit_view(cid):
         comms = A.reddit_communities(conn, cid)
         left = rd.items_left(conn)
     labels = {b["name"]: b["label"] for b in cols}
-    why = None if ONLINE or os.environ.get("APIFY_TOKEN") else "No Apify token on the server"
-    if not why and left <= 0: why = "The Apify result limit is used up"
+    why = None if ONLINE or os.environ.get("APIFY_TOKEN") else "Reddit is not connected yet"
+    if not why and left <= 0: why = "The Reddit data allowance is used up"
     return view("reddit.html", c, "reddit", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, auto=auto, status=status,
                 comms=comms, auto_items=min(rd.AUTO_ITEMS, left), run_items=min(rd.RUN_ITEMS, left), left=left, why=why, msg=request.args.get("msg"),
                 brand=request.args.get("brand"), sentiment=request.args.get("sentiment"))
@@ -834,9 +868,9 @@ def reddit_save(cid):
         if request.form.get("what") == "topics":
             save_topics(conn, cid, request.form.get("topics", ""))
             return back_with(url_for("dash.reddit_view", cid=cid, tab=request.form.get("tab", "overview")), "Topics saved for Reddit and YouTube." if request.form.get("topics", "").strip() else "Topics are automatic again.")
-        if not ONLINE and not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "No Apify token on the server, so nothing was pulled.")
+        if not ONLINE and not os.environ.get("APIFY_TOKEN"): return back_with(url_for("dash.reddit_view", cid=cid), "Reddit is not connected yet, so nothing was pulled.")
         n = min(rd.RUN_ITEMS, rd.items_left(conn))
-        if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Apify result limit is used up.")
+        if n <= 0: return back_with(url_for("dash.reddit_view", cid=cid), "The Reddit data allowance is used up.")
         import sample_semrush; sample_semrush.clear(conn, cid, only='reddit')
     start_job(cid, "reddit", max_units=n)
     return back_with(url_for("dash.reddit_view", cid=cid), f"Reddit pull started: up to {n} results. Refresh in a few minutes.")
@@ -865,7 +899,7 @@ def youtube_view(cid):
         channel = conn.execute("SELECT youtube_channel_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         quota = yt.used_today(conn)
     labels = {b["name"]: b["label"] for b in cols}
-    why = None if ONLINE or os.environ.get("YOUTUBE_API_KEY") else "No YouTube API key on the server"
+    why = None if ONLINE or os.environ.get("YOUTUBE_API_KEY") else "YouTube is not connected yet"
     return view("youtube.html", c, "youtube", tab=tab, summ=summ, cols=cols, labels=labels, data=data, topics=topics, auto=auto, status=status,
                 channel=channel, quota=quota, daily=yt.DAILY, why=why, msg=request.args.get("msg"), brand=request.args.get("brand"))
 
@@ -882,7 +916,7 @@ def youtube_save(cid):
             ch = "".join(ch for ch in request.form.get("channel", "") if ch.isalnum() or ch in "-_")[:40] or None
             conn.execute("UPDATE clients SET youtube_channel_id=%s WHERE client_id=%s", [ch, cid])
             return back_with(url_for("dash.youtube_view", cid=cid), "Channel saved.")
-        if not ONLINE and not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "No YouTube API key on the server, so nothing was pulled.")
+        if not ONLINE and not os.environ.get("YOUTUBE_API_KEY"): return back_with(url_for("dash.youtube_view", cid=cid), "YouTube is not connected yet, so nothing was pulled.")
         import sample_semrush; sample_semrush.clear(conn, cid, only='youtube')
     start_job(cid, "youtube")
     return back_with(url_for("dash.youtube_view", cid=cid), "YouTube pull started (free daily quota). Refresh in a minute or two.")

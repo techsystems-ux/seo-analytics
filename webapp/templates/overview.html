@@ -68,13 +68,13 @@
     {% else %}<p class="empty">No AI prompts approved yet.{% if staff %} <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Approve prompts in Settings</a>.{% endif %}</p>{% endif %}
   </section>
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></span>Keywords in AI Overview</h2>
-      {% if aio.date %}<span class="note">{{ aio.owned }} of {{ aio.with }} cite {{ client.name }} · Semrush {{ aio.date.strftime('%d %b') }}</span>{% endif %}</div>
+      {% if aio.date %}<span class="note">{{ aio.owned }} of {{ aio.with }} cite {{ client.name }}</span>{% endif %}</div>
     {% if aio.rows %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Keyword</th><th style="text-align:right">Volume</th><th class="e">Rank</th><th class="e">Cited in AIO</th></tr>
       {% for k in aio.rows[:6] %}<tr><td class="t">{{ k.keyword }}</td><td style="text-align:right">{{ k.volume|n }}</td>
         <td class="c"><span class="rk {{ 'g' if k.position and k.position <= 3 else 'y' if k.position and k.position <= 10 else 'b' }}">{{ k.position or '–' }}</span></td>
         <td class="c">{% if k.owned %}<span class="ck">✓</span>{% else %}<span class="ck no">–</span>{% endif %}</td></tr>{% endfor %}</table></div>
       <a class="more" href="{{ url_for('dash.competitors', cid=client.id, tab='keywords') }}">View all keywords</a>
-    {% else %}<p class="empty">{{ 'No keyword in the latest Semrush pull shows an AI Overview.' if aio.date else 'Appears after the first Semrush keyword pull.' }}</p>{% endif %}
+    {% else %}<p class="empty">{{ 'None of the tracked keywords shows an AI Overview right now.' if aio.date else 'Appears after the first keyword data refresh.' }}</p>{% endif %}
   </section>
 </div>
 
@@ -108,17 +108,12 @@
     <td>{% set b = BAND[r.band] %}<span class="tag {{ b[1] }}">{{ b[0] }}</span></td></tr>{% endfor %}</table></div>
   {% else %}<p class="empty">Target keywords have not been chosen yet.{% if staff %} <a href="{{ url_for('dash.search', cid=client.id, tab='rankings') }}">Add them in Search, Rankings</a>.{% endif %}</p>{% endif %}</section>
 </div>
-<div class="g2">
-  <section class="card"><div class="ph"><div><h2>Keyword gap</h2><p class="sub">Competitors rank in the top 100 for these; {{ client.name }} does not. Semrush.</p></div></div>
+<div>
+  <section class="card"><div class="ph"><div><h2>Keyword gap</h2><p class="sub">Competitors rank in Google's top 100 for these; {{ client.name }} does not.</p></div></div>
     {% if gaps %}<table><tr><th>Keyword</th><th class="r">Search volume</th></tr>
     {% for g in gaps %}<tr><td>{{ g.keyword }}</td><td class="r">{{ g.volume|n }}</td></tr>{% endfor %}</table>
     <a class="more" href="{{ url_for('dash.competitors', cid=client.id) }}">All gaps</a>
-    {% else %}<p class="empty">Appears after the first Semrush pull.</p>{% endif %}</section>
-  <section class="card staff-only"><div class="ph"><h2>Data freshness</h2></div>
-  {% if runs %}<div class="tw" style="margin-top:0"><table><tr><th>Source</th><th>Last run</th><th>Result</th></tr>
-  {% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'GA4','ai':'ChatGPT prompts','semrush':'Semrush','pages':'Page checks','sitemap':'Sitemap'}.get(r.collector, r.collector) }}</td>
-  <td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{% if r.status=='ok' %}<span class="tag t-pass">OK</span>{% elif r.status=='running' %}<span class="tag t-na">Running</span>{% else %}<span class="tag t-fail">Failed</span> <span class="note">{{ (r.note or '')[:120] }}</span>{% endif %}</td></tr>{% endfor %}</table></div>
-  {% else %}<p class="empty">Nothing pulled yet. Start a pull from Settings, Data.</p>{% endif %}</section>
+    {% else %}<p class="empty">Appears after the first keyword data refresh.</p>{% endif %}</section>
 </div>
 
 {% else %}
@@ -157,7 +152,7 @@
       <span class="nm">{{ e.name }}</span><span class="tr"><i style="width:{{ e.score or 0 }}%;background:{{ e.colour }}"></i></span><span class="v">{{ (e.score|round|int ~ '/100') if e.score is not none else '–' }}</span></div>{% endfor %}
   </section>
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="4" height="9"/><rect x="10" y="6" width="4" height="14"/><rect x="17" y="3" width="4" height="17"/></svg></span>Google footprint</h2>
-      <span class="note">Semrush, top 100 positions</span></div>
+      <span class="note">Google top 100</span></div>
     <div class="tw" style="margin-top:0"><table class="mx"><tr><th>Brand</th><th style="text-align:right">Organic keywords</th><th style="text-align:right">Est. traffic</th><th style="text-align:right">Shared with you</th></tr>
       {% for e in board.ents %}{% set s = seo_by.get(e.key) %}<tr><td class="t"><span class="dotav" style="background:{{ e.colour }};width:18px;height:18px;font-size:9px;margin-right:6px">{{ e.initial }}</span>{{ e.name }}</td>
         <td style="text-align:right">{{ s.keywords|n if s and s.keywords else '–' }}</td><td style="text-align:right">{{ s.traffic|n if s and s.traffic else '–' }}</td>

@@ -2,7 +2,7 @@
 {% block title %}Prompts · {{ client.name }}{% endblock %}
 {% block body %}
 {% set arg = {'b': focus.key} if focus.key else {} %}
-<section class="card"><div class="ph"><div><h2>LLM overview</h2><p class="sub">Brand mentions across the tracked prompts, per AI engine, last 30 days. Each prompt is asked through the engine's API with web search on, from India.</p></div>
+<section class="card"><div class="ph"><div><h2>LLM overview</h2><p class="sub">Brand mentions across the tracked prompts, per AI engine, last 30 days. Answers are read from India with web search on.</p></div>
   {% if staff %}<a class="btn ln" href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">+ Add prompt</a>{% endif %}</div>
   <div class="ents">{% for e in board.ents %}
     <a class="ent{{ ' on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}">

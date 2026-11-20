@@ -31,6 +31,7 @@ nav.side{background:#fff;border-right:1px solid var(--hair);position:sticky;top:
 .tab svg{width:17px;height:17px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .tab:hover{background:var(--surface);color:var(--ink)}
 .tab.on{background:var(--surface);color:var(--ink);border-left-color:var(--ink);font-weight:700}
+.acct{margin-top:auto;border-top:1px solid var(--hair);padding:14px 10px 0;font-size:11.5px;color:var(--grey);line-height:1.6}.acct a,.acct .linkbtn{color:var(--grey)}
 .intel{margin-top:auto;border-top:1px solid var(--hair);padding:16px 10px 0;font-size:11.5px;color:var(--grey);line-height:1.6}
 .intel .t{font:700 10px var(--fh);letter-spacing:.14em;text-transform:uppercase;color:var(--ink);display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .intel b{color:var(--ink);font-family:var(--fn);font-weight:700}.intel a{color:var(--grey)}
@@ -198,9 +199,7 @@ svg text{font-family:var(--fb)}
   {% if owner %}{{ navlink('publishing', 'Publishing', url_for('dash.publishing', cid=client.id)) }}{% endif %}{% endcall %}
   {% call group('Reports', ['report'], 'rep') %}
   {{ navlink('report', 'Monthly report', url_for('dash.monthly_report', cid=client.id)) }}{% endcall %}
-  <div class="intel"><div class="t"><span class="pulse"></span>Prepared by Hovers</div>
-    {% if intel %}Reading <b>{{ intel.queries|n }}</b> searches{% if intel.prompts %} and <b>{{ intel.prompts }}</b> ChatGPT prompts{% endif %}, refreshed daily.{% endif %}
-    <form method="post" action="{{ url_for('portal.logout') }}" style="margin-top:8px">{{ viewer }} · <button class="linkbtn">Sign out</button></form></div>
+  <div class="acct"><form method="post" action="{{ url_for('portal.logout') }}">{{ viewer }} · <button class="linkbtn">Sign out</button></form></div>
   {% else %}{% if client %}
   <a class="client" href="{{ url_for('dash.clients') }}" title="Switch brand">
     <span class="bm"><span>{{ client.name[:1] }}</span><img src="https://www.google.com/s2/favicons?domain={{ client.domain }}&sz=128" alt="" onerror="this.remove()"></span>
@@ -235,9 +234,7 @@ svg text{font-family:var(--fb)}
   <a class="client" href="{{ url_for('dash.clients') }}"><span class="bm orb"><svg viewBox="186 200 322 272" aria-hidden="true"><g fill="none" stroke-width="24"><path d="M193 343 L250 313 L372 313 L487 224" stroke="#A80000"/><path d="M193 398 L250 368 L366 368 L490 276" stroke="#F50000"/><path d="M193 452 L250 423 L380 423 L490 335" stroke="#F50000"/></g><g fill="#fff"><circle cx="252" cy="313" r="15"/><circle cx="366" cy="368" r="15"/><circle cx="253" cy="423" r="15"/><circle cx="487" cy="224" r="16"/></g></svg></span><span><b>Orbit</b><span class="s">by Hovers · search intelligence</span></span></a>
   {{ navlink('brands', 'Brands', url_for('dash.clients')) }}
   {% endif %}
-  <div class="intel"><div class="t"><span class="pulse"></span>Intelligence layer</div>
-    {% if client and intel %}Reading <b>{{ intel.queries|n }}</b> searches and <b>{{ intel.pages|n }}</b> pages{% if intel.prompts %}, <b>{{ intel.prompts }}</b> ChatGPT prompts{% endif %}, refreshed every night.{% else %}Search Console, GA4, ChatGPT, Semrush, Reddit and YouTube in one place.{% endif %}
-    <div style="margin-top:8px">{{ staff }} · <a href="{{ url_for('connections') }}">Google connections</a></div></div>
+  <div class="acct"><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="csrf" value="{{ csrf }}">{{ staff }}<br><a href="{{ url_for('connections') }}">Google connections</a> · <button class="linkbtn">Sign out</button></form></div>
   {% endif %}
 </nav>
 <div class="mainwrap">
@@ -248,10 +245,10 @@ svg text{font-family:var(--fb)}
 <main>
 {% if request.args.get('msg') %}<div class="msg" role="status">{{ request.args.get('msg') }}</div>{% endif %}
 {% if client and client.sample and viewer %}<div class="samplebar" role="status"><b>Placeholder figures</b> appear in some Semrush, Reddit and YouTube sections while your Hovers team completes the setup.</div>{% endif %}
-{% if client and client.sample and not viewer and (active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_')) %}<div class="samplebar" role="status"><b>Sample data</b> on the Semrush, Reddit and YouTube sections of this screen, for reviewing the layout. Nothing came from Semrush, Apify or YouTube, and no credits were used. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
+{% if client and client.sample and not viewer and (active in ('competitors','ideas','technical','search','settings','reddit','youtube') or (active or '').startswith('r_')) %}<div class="samplebar" role="status"><b>Sample data</b> is showing on parts of this screen. <a href="{{ url_for('dash.settings', cid=client.id, tab='data') }}">Remove it in Settings</a>.</div>{% endif %}
 {% if client and not hide_head %}{% include "_brandhead.html" %}{% endif %}
 {% block body %}{% endblock %}
-<footer class="foot"><span>Hovers® — {{ client.name ~ ' · ' if client }}Orbit by Hovers</span><span class="dots" aria-hidden="true"></span><span>Confidential</span></footer>
+<footer class="foot"><span>Hovers® — {{ client.name ~ ' · ' if client }}Orbit by Hovers</span></footer>
 </main>
 </div>
 </div>

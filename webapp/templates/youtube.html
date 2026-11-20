@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% import "_autopilot.html" as ap with context %}
 {% block body %}
-<div class="top"><div><span class="kicker">{{ t('Community · YouTube', 'Community · YouTube (video SERP + LLM citations)') }}</span><h1>What YouTube shows</h1>
+<div class="top"><div><span class="kicker">AI search · YouTube</span><h1>What YouTube shows</h1>
 <p class="lead">Who shows up when people search the category on YouTube, which videos and creators name {{ client.name }} or its competitors, what viewers ask in the comments, and the videos ChatGPT cites in its answers.</p></div></div>
 
 {{ ap.card("youtube", status, topics, auto, cols, why,
-     "Each week: searches YouTube in India for the brand, each competitor and each topic, finds " ~ client.name ~ "'s own channel" ~ (" (found)" if channel else "") ~ ", reads stats and top comments, and the videos ChatGPT cites. Free: uses Google's daily quota (" ~ (quota|n) ~ " of " ~ (daily|n) ~ " used today).",
+     "Each week Orbit searches YouTube in India for the brand, each competitor and each topic, finds " ~ client.name ~ "'s own channel" ~ (" (found)" if channel else "") ~ ", and reads the videos AI assistants cite.",
      "Refresh now") }}
 
 {% if summ %}
@@ -64,6 +64,6 @@
 {% endif %}
 </section>
 {% else %}
-<section class="card"><p class="empty">{{ 'The first YouTube pull is running; refresh in a minute or two.' if status.running else ('No YouTube data yet. It fills itself once a YouTube API key is on the server.' if why else 'No YouTube data yet.') }}</p></section>
+<section class="card"><p class="empty">{{ 'The first YouTube pull is running; refresh in a minute or two.' if status.running else ('YouTube insights appear after the first weekly refresh.') }}</p></section>
 {% endif %}
 {% endblock %}

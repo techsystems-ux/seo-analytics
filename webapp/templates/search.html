@@ -2,7 +2,7 @@
 {% import "_semrush.html" as sm with context %}
 {% block body %}
 {% macro cwv(v, good, poor, unit='') %}{% if v is none %}<span class="mute">–</span>{% else %}<span class="tag {{ 't-pass' if v <= good else 't-fail' if v > poor else 't-warn' }}">{{ v|round(2) if unit == '' else v|n }}{{ unit }}</span>{% endif %}{% endmacro %}
-<div class="top"><div><span class="kicker">{{ t('Visibility · Google search', 'Organic search · Google Search Console + GA4') }}</span><h1>{{ t('How people find you on Google', 'Organic search performance') }}</h1>
+<div class="top"><div><span class="kicker">Google search · Search performance</span><h1>{{ t('How people find you on Google', 'Organic search performance') }}</h1>
 </div></div>
 
 
@@ -48,7 +48,7 @@
   </div>
   <div class="tw">
   {% if tab=='rankings' %}
-    <p class="note">Daily Google position for each tracked keyword, from Search Console (free, average across devices and pages). Change compares with 7 days earlier. A Semrush column appears if the brand's Semrush Position Tracking is imported.</p>
+    <p class="note">Daily Google position for each tracked keyword, from Search Console. Change compares with 7 days earlier.</p>
     {% if trend %}<div class="card" style="padding:14px"><div class="top" style="align-items:center"><h2>{{ kw }}</h2><a href="{{ search_link(tab='rankings') }}">Close</a></div><p class="note">Position by day, selected period (lower is better).</p>{{ trend }}</div>{% endif %}
     {% if data %}<table><tr><th>Keyword</th><th class="r">Position</th><th class="r">7-day change</th><th class="r">Best (selected dates)</th><th class="r">Clicks (selected dates)</th><th>Ranking page</th><th>On Google's page</th>{% if data|selectattr('semrush')|list %}<th class="r">Semrush</th>{% endif %}<th></th></tr>
     {% for r in data %}<tr><td><a href="{{ search_link(tab='rankings', kw=r.keyword) }}">{{ r.keyword }}</a>{% if 'auto' in r.tags %} <span class="tag t-na">auto</span>{% endif %}</td>
