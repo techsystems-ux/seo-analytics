@@ -92,7 +92,7 @@ def main(argv=None):
                 import ai_visibility
                 ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "ai"),
                           int(os.environ.get("AI_SAMPLES", "1")))[0])
-            for eng in [e for e in ("gemma", "phi", "deepseek") if e in only]:
+            for eng in [e for e in ("gemma", "phi") if e in only]:
                 import open_models
                 if open_models.available():
                     ok &= log(conn, cid, eng, lambda eng=eng: open_models.sync_client(conn, cid, eng)[0])

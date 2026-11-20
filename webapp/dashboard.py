@@ -253,6 +253,7 @@ def overview(cid):
         pm = B.prompt_matrix(conn, cid, focus["key"], ents, engs)
         aio = B.aio_keywords(conn, cid)
         seo_by = _seo_by(conn, cid, ents)
+        comp_search = A.competitor_search(conn, cid, focus["domain"]) if not focus["primary"] and focus["domain"] else None
         vis, search, rev = A.visibility(conn, cid), A.search_totals(conn, cid), A.organic_revenue(conn, cid)
         last, gaps = A.keyword_gaps(conn, cid, 6)
         chart = line_chart(A.daily_clicks(conn, cid, 90), ["nonbranded", "branded"])
@@ -261,12 +262,13 @@ def overview(cid):
     labels = [w.strftime("%d %b") for w in board["weeks"]]
     trend = viz.lines(labels, [{"name": e["name"], "colour": e["colour"], "values": e["trend"]} for e in board["ents"]], ymax=100)
     scored = [e for e in board["ents"] if e["score"] is not None]
-    vis_cols = viz.columns([e["name"] if len(e["name"]) <= 12 else e["name"][:11] + "…" for e in scored],
+    vis_cols = viz.columns([e["name"] if len(e["name"]) <= 8 else e["name"][:7] + "…" for e in scored],
                            [{"name": "Visibility", "colour": "#2F5BEA", "values": [e["score"] for e in scored]}], ymax=100)
     sov_parts = [{"name": e["name"], "value": e["sov"] or 0, "colour": e["colour"]} for e in board["ents"]]
     sov_donut = viz.donut(sov_parts, centre=f"{board['answers']:,}", sub="answers read")
     return view("overview.html", c, "overview", tab=tab, ents=ents, focus=focus, board=board, engs=engs, pm=pm, aio=aio, needs=B.NEEDS,
                 search_ov=B.search_overview(kb, aio), comp_seo=seo_by.get(focus["key"]) if not focus["primary"] else None, seo_by=seo_by,
+                comp_search=comp_search,
                 trend=trend, vis_cols=vis_cols, sov_donut=sov_donut,
                 ranked=sorted(board["ents"], key=lambda e: -(e["score"] if e["score"] is not None else -1)),
                 vis=vis, search=search, rev=rev, gaps=gaps, chart=chart, runs=runs,

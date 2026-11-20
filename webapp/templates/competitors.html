@@ -6,7 +6,7 @@
 <div class="staff-only" style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">{{ sm.run(actions.keywords, 'Refresh keyword data') }}
 {% if actions.keywords.last %}<span class="note">Updated {{ actions.keywords.last.strftime('%d %b %Y') }}</span>{% endif %}</div></div>
 
-{% if vis %}<section class="card"><h2>Hovers Visibility Score in ChatGPT</h2><p class="note">{{ vis.date.strftime('%d %b %Y') }} · mention 35%, position 25%, citation 25%, sentiment 15%</p>
+{% if vis %}<section class="card"><h2>Orbit AI Visibility Score in ChatGPT</h2><p class="note">{{ vis.date.strftime('%d %b %Y') }} · mention 35%, position 25%, citation 25%, sentiment 15%</p>
 <div class="tw"><table><tr><th>Brand</th><th class="r">Score</th><th class="r">Named in</th><th class="r">Cited in</th><th class="r">Average position</th><th class="r">Share of voice</th></tr>
 {% for b in vis.brands %}<tr><td>{% if b.brand=='' %}<b>{{ client.name }} (you)</b>{% else %}{{ b.brand }}{% endif %}</td><td class="r"><b>{{ b.score|n }}</b></td><td class="r">{{ b.mention_rate|pct }}</td><td class="r">{{ b.citation_rate|pct }}</td><td class="r">{{ b.avg_position|n if b.avg_position else '–' }}</td><td class="r">{{ b.sov|pct }}</td></tr>{% endfor %}</table></div></section>{% endif %}
 

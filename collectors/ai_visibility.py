@@ -300,7 +300,7 @@ def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
                                                        WHERE answer_id = ANY(%s) AND rank_in_answer IS NOT NULL""", [ids]):
         ment[(aid, brand)] = (rank, sent, rec)
     cites = conn.execute("SELECT answer_id, domain FROM citations WHERE answer_id = ANY(%s) AND cited", [ids]).fetchall()
-    citing = engine in CITING
+    citing = engine in CITING and bool(conn.execute("SELECT EXISTS (SELECT 1 FROM citations WHERE answer_id = ANY(%s))", [ids]).fetchone()[0])
     stage_w = {aid: STAGE.get(stage, 1.0) for aid, _, stage in ev}
     out = {}
     for b in brands:
@@ -333,7 +333,7 @@ def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
           " | ".join(f"{n}: {v['score']} (named {round(100 * v['mention_rate'])}%, sov {round(100 * v['sov'])}%)" for n, v in res.items()), flush=True)
     return res
 
-def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True, deadline=None, eng=OpenAIEngine):
+def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True, deadline=None, eng=OpenAIEngine, only=None):
     """deadline (time.time()): stop starting new prompts after it; tally['more'] = 1 tells the caller to run again
     (prompts already asked this cycle are skipped, so the next run picks up where this one stopped).
     eng: the engine (OpenAIEngine for ChatGPT; claude_answers.ClaudeEngine for Claude). tally['stopped'] = why a spend cap stopped it."""
@@ -344,6 +344,7 @@ def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, senti
                            [client_id]).fetchall()
     tally = {}
     for pid, text, region in prompts:
+        if only is not None and pid not in only: continue                 # answers fetched ahead (open_models): only those are stored
         if deadline and time.time() + getattr(eng, "prompt_seconds", 0) > deadline:
             tally["more"] = 1; break
         why = eng.guard(conn, client_id)

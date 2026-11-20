@@ -11,12 +11,12 @@ MUTED = "#8A8F98"
 def color(i):
     return BRAND if i == 0 else PALETTE[(i - 1) % len(PALETTE)]
 
-def ring(value, size=132, stroke=14, colour=BRAND, label=None):
-    """0-100 ring with the number in the middle."""
+def ring(value, size=132, stroke=14, colour=BRAND, label=None, unit="%"):
+    """0-100 ring with the number in the middle (unit '%' for a share, '' for a score out of 100)."""
     v = max(0.0, min(100.0, float(value or 0)))
     r = (size - stroke) / 2
     circ = 2 * 3.14159265 * r
-    txt = "–" if value is None else f"{v:.0f}%"
+    txt = "–" if value is None else f"{v:.0f}{unit}"
     return Markup(
         f'<svg class="viz-ring" viewBox="0 0 {size} {size}" width="{size}" height="{size}" role="img" aria-label="{escape(label or txt)}">'
         f'<circle cx="{size/2}" cy="{size/2}" r="{r}" fill="none" stroke="{GRID}" stroke-width="{stroke}"/>'

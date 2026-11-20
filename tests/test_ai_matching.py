@@ -74,7 +74,7 @@ cl = webapp.app.test_client()
 with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"] = "tok"
 page = cl.get(f"/c/{A}").get_data(as_text=True)
 links = re.findall(r'<a class="eng[^"]*" href="([^"]+)"', page)
-assert len(links) == 9 and all("e=" in l for l in links), links
+assert len(links) == 6 and all("e=" in l for l in links), links          # one button per real engine
 assert re.search(r'<a class="eng on" href="[^"]*e=chatgpt', page) and "Zavya" in page and ">zavya.co<" not in page
 assert "no answers from" not in page                                    # ChatGPT has answers
 gem = cl.get(f"/c/{A}?e=gemini").get_data(as_text=True)
@@ -118,38 +118,39 @@ OM._models.clear()
 nv = Nv()
 assert OM.pick_model(nv, "nvapi-test", "gemma") == "google/gemma-3-27b-it"
 assert OM.pick_model(nv, "nvapi-test", "phi") == "microsoft/phi-4-mini-instruct"
-assert OM.pick_model(nv, "nvapi-test", "deepseek") == "deepseek-ai/deepseek-v4-flash"
+assert set(OM.FAMILIES) == {"gemma", "phi"} and OM.ENGINE_KEY == {"gemma": "gemini", "phi": "bing_copilot"}
 with connect() as conn:
     tally, _ = OM.sync_client(conn, A, "gemma", session=nv)
     assert tally == {"ok": 1}, tally
     ask = nv.calls[0]
     assert ask["model"] == "google/gemma-3-27b-it" and ask["messages"][0]["role"] == "system" and "India" in ask["messages"][0]["content"]
-    row = conn.execute("""SELECT a.full_text, a.engine_version, a.raw_json FROM answers a JOIN runs r USING (run_id) WHERE r.engine='gemma'""").fetchone()
+    row = conn.execute("""SELECT a.full_text, a.engine_version, a.raw_json FROM answers a JOIN runs r USING (run_id) WHERE r.engine='gemini'""").fetchone()
     assert row[0].startswith("For silver, Zavya") and "<think>" not in row[0] and row[1] == "google/gemma-3-27b-it" and row[2]["via"] == "nvidia"
     ms = conn.execute("""SELECT brand, rank_in_answer, sentiment FROM mentions m JOIN answers a USING (answer_id) JOIN runs r USING (run_id)
-                         WHERE r.engine='gemma' ORDER BY rank_in_answer NULLS LAST""").fetchall()
+                         WHERE r.engine='gemini' ORDER BY rank_in_answer NULLS LAST""").fetchall()
     assert ms[0] == ("zavya.co", 1, "positive") and ms[1][:2] == ("truesilver.co.in", 2) and ms[-1][0] == "Tanishq" and ms[-1][1] is None, ms
-    assert conn.execute("SELECT 1 FROM scores_daily WHERE client_id=%s AND engine='gemma'", [A]).fetchone()
-    assert not conn.execute("SELECT 1 FROM citations c JOIN answers a USING (answer_id) JOIN runs r USING (run_id) WHERE r.engine='gemma'").fetchone()
+    assert conn.execute("SELECT 1 FROM scores_daily WHERE client_id=%s AND engine='gemini'", [A]).fetchone()
+    assert not conn.execute("SELECT 1 FROM citations c JOIN answers a USING (answer_id) JOIN runs r USING (run_id) WHERE r.engine='gemini'").fetchone()
     conn.execute("DELETE FROM pull_tasks"); conn.execute("DELETE FROM pull_queue")
     due = worker.ai_due(conn, A)
-    assert "gemma" not in due and "phi" in due and "deepseek" in due and "claude" not in due, due   # gemma answered today
+    assert "gemma" not in due and "phi" in due and "deepseek" not in due and "claude" not in due, due   # gemma (as Gemini) answered today
     # a ChatGPT refresh queued a moment ago does not stop the open models from starting when the brand is opened
     worker.enqueue(conn, A, "auto", ["--client-id", A, "--only", "ai"], "t")
     t2 = conn.execute("SELECT now()").fetchone()[0]
     worker.ensure_fresh(conn, A)
     new = {r[0] for r in conn.execute("""SELECT t.step FROM pull_tasks t JOIN pull_queue q USING (pull_id)
                                         WHERE t.client_id=%s AND q.requested_at >= %s""", [A, t2])}
-    assert {"phi", "deepseek"} <= new and "ai" not in new, new
+    assert "phi" in new and "ai" not in new, new
     assert worker.ensure_fresh(conn, A) is None                            # and nothing is queued twice
 print("open models: newest instruction model per family picked from NVIDIA's list, the shopper's country given, a reasoning "
       "block dropped, brands read like ChatGPT (no citations: no web search), and they run by themselves once a day")
 
 page = cl.get(f"/c/{A}/ai").get_data(as_text=True)
 import html as _h; heads = [_h.unescape(h) for h in re.findall(r"<th class=\"e\"[^>]*title=\"([^\"]+)\"", page)]
-assert "Gemma (Google's open model)" in heads and "Phi (Microsoft's open model)" in heads and not any("Gemini" == h for h in heads), heads
+assert any(h.startswith("Gemini: test answers from Gemma") for h in heads) and any(h.startswith("Copilot: test answers from Phi") for h in heads), heads
+assert not any("Gemma" == h or "DeepSeek" in h for h in heads), heads
 assert re.search(r'<a class="ck r" href="/c/%s/ai/answer/' % A, page)               # cells open that engine's answer
-assert "Not connected yet: AI Overviews, Gemini, Perplexity, Copilot" in page
+assert "Not connected yet: AI Overviews, Perplexity" in page and "Gemini," not in page.split("Not connected yet:")[1][:80]
 assert "zavya.co, truesilver.co.in" in page or "Zavya" in page
 print("prompts table: a column per connected engine (Gemini, Perplexity, Copilot listed as not connected), each cell opens that answer")
 print("ALL MATCHING TESTS PASSED")

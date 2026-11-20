@@ -12,11 +12,12 @@ ENGINES = [("chatgpt", "ChatGPT", "chatgpt.com", ("chatgpt", "openai")),
            ("gemini", "Gemini", "gemini.google.com", ("gemini", "bard")),
            ("perplexity", "Perplexity", "perplexity.ai", ("perplexity",)),
            ("bing_copilot", "Copilot", "copilot.microsoft.com", ("copilot", "bing")),
-           ("claude", "Claude", "claude.ai", ("claude", "anthropic")),
-           ("gemma", "Gemma", "ai.google.dev", ()),             # Google's open model, via NVIDIA (not Gemini)
-           ("phi", "Phi", "microsoft.com", ()),                 # Microsoft's open model, via NVIDIA (not Copilot)
-           ("deepseek", "DeepSeek", "deepseek.com", ("deepseek",))]
-FULL = {"gemma": "Gemma (Google's open model)", "phi": "Phi (Microsoft's open model)", "deepseek": "DeepSeek (open model)"}
+           ("claude", "Claude", "claude.ai", ("claude", "anthropic"))]
+# Testing phase: Gemini and Copilot answers come from Google's and Microsoft's open models (open_models.py) until the real
+# connections are added. The team sees this on screen (TESTING); the numbers are labelled by engine like the rest.
+TESTING = {"gemini": "test answers from Gemma, Google's open model, until the Gemini connection is added",
+           "bing_copilot": "test answers from Phi, Microsoft's open model, until the Copilot connection is added"}
+FULL = {}
 LABEL = {k: l for k, l, _, _ in ENGINES}
 
 def logo(domain, size=64):
@@ -27,8 +28,8 @@ def engines(conn, cid):
     have = {r[0] for r in conn.execute("SELECT DISTINCT engine::text FROM runs WHERE client_id=%s AND status='ok'", [cid])}
     have |= {r[0] for r in conn.execute("SELECT DISTINCT engine::text FROM scores_daily WHERE client_id=%s", [cid])}
     can = connected()
-    return [{"key": k, "label": l, "full": FULL.get(k, l), "logo": logo(d), "tracked": k in have, "connected": k in have or k in can}
-            for k, l, d, _ in ENGINES]
+    return [{"key": k, "label": l, "full": f"{l}: {TESTING[k]}" if k in TESTING else l, "logo": logo(d), "tracked": k in have,
+             "connected": k in have or k in can, "testing": TESTING.get(k)} for k, l, d, _ in ENGINES]
 
 def connected():
     """Engines Orbit can ask right now (a key on the server), whether or not they have answered yet."""
@@ -38,7 +39,7 @@ def connected():
     if os.environ.get("ANTHROPIC_API_KEY"): out.add("claude")
     try:
         import open_models
-        if open_models.available(): out |= set(open_models.FAMILIES)
+        if open_models.available(): out |= set(open_models.ENGINE_KEY.values())
     except Exception:
         pass
     return out
@@ -72,7 +73,7 @@ def _f(v): return float(v) if v is not None else None
 # Orbit reach weights: how much each engine counts in the all-engines score (an editorial estimate of where Indian shoppers ask,
 # reviewed each quarter; engines without data drop out and the rest are rescaled). Method: docs, "Orbit AI Visibility Score".
 REACH = {"chatgpt": 0.40, "ai_overviews": 0.20, "gemini": 0.12, "perplexity": 0.06, "bing_copilot": 0.05, "claude": 0.05,
-         "deepseek": 0.04, "google_ai_mode": 0.03, "grok": 0.02, "gemma": 0.015, "phi": 0.015}
+         "google_ai_mode": 0.03, "grok": 0.02}
 
 def blended(per):
     """All-engines score from the latest score per engine, weighted by REACH."""
@@ -154,12 +155,10 @@ def ai_board(conn, cid, ents, want=None):
 NEEDS = {"chatgpt": "OpenAI key (OPENAI_API_KEY_2) or a connected ChatGPT plan, plus approved prompts",
          "claude": "Integrations, Check Claude answers now (button only, $10 limit)",
          "ai_overviews": "Google results with AI Overviews: a DataForSEO key (DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD), not built yet",
-         "gemini": "a Google AI Studio key (GEMINI_API_KEY), collector not built yet",
+         "gemini": "the NVIDIA key (Vercel name 'Google') for test answers from Gemma; a Google AI Studio key (GEMINI_API_KEY) for real Gemini answers, not built yet",
          "perplexity": "a Perplexity Sonar key (PERPLEXITY_API_KEY), collector not built yet",
-         "bing_copilot": "no public API; only through a data vendor such as DataForSEO",
-         "gemma": "the NVIDIA key (Vercel name 'Google'); runs by itself once a day",
-         "phi": "the NVIDIA key (Vercel name 'Microsoft'); runs by itself once a day",
-         "deepseek": "the NVIDIA key ('Google' or 'Microsoft'); runs by itself once a day"}
+         "bing_copilot": "the NVIDIA key (Vercel name 'Microsoft') for test answers from Phi; real Copilot answers only through a data vendor such as DataForSEO",
+}
 
 def prompt_matrix(conn, cid, key, ents, engs):
     """Every approved prompt: for each engine, is the chosen entity named in the latest run (None = not asked), its place,

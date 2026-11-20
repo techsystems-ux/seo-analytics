@@ -19,9 +19,10 @@ import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
-ORDER = ["rescore", "gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "gemma", "phi", "deepseek", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
+ORDER = ["rescore", "gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "gemma", "phi", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
-NIGHTLY = "gsc,ga4,rank,semrush,ai,gemma,phi,deepseek,pages,index,cwv,blogs,crawl,youtube,reddit"
+NIGHTLY = "gsc,ga4,rank,semrush,ai,gemma,phi,pages,index,cwv,blogs,crawl,youtube,reddit"
+SIDE_BY_SIDE = ("ai", "gemma", "phi")                # AI engines of one pull start together (separate APIs, separate limits)
 PAID_STEPS = ("ai", "claude", "blogs", "semrush")   # OpenAI (prompts, blog drafts), Claude and Semrush: limited per brand per day
 BUTTON_ONLY = ("claude",)                          # never scheduled or started by opening a page: the team's button only
 FREE_REFRESH = "gsc,ga4,rank,pages,index,cwv"  # what opening a dashboard with stale data may start (costs nothing)
@@ -66,12 +67,14 @@ def enqueue(conn, client_id, label, args, who=None):
     steps = [s for s in ORDER if s in set(o["only"].split(","))]
     if o.get("research") and "research" not in steps: steps.append("research")
     extra = {k: o[k] for k in ("max_units", "seeds", "research", "manual") if o.get(k)}
+    side = next((n for n, s in enumerate(steps) if s in SIDE_BY_SIDE), None)
     for cid in clients:
         for n, step in enumerate(steps):
             task_args = {**extra, "force": o["force"]}
+            seq = (side if step in SIDE_BY_SIDE else n) * 100
             if step == "blogs" and requested_blogs is not None: task_args["left"] = requested_blogs
             conn.execute("INSERT INTO pull_tasks (pull_id, client_id, step, args, seq) VALUES (%s,%s,%s,%s,%s)",
-                         [pid, cid, step, json.dumps(task_args), n * 100])
+                         [pid, cid, step, json.dumps(task_args), seq])
     return pid
 
 def adopt_waiting(conn):
@@ -174,7 +177,7 @@ def ai_due(conn, cid):
     if prompts and open_models.available():
         for e in open_models.FAMILIES:
             fresh = conn.execute(f"""SELECT EXISTS (SELECT 1 FROM runs WHERE client_id=%s AND engine=%s AND status='ok'
-                                     AND run_at > now() - interval '{AI_FRESH_HOURS} hours')""", [cid, e]).fetchone()[0]
+                                     AND run_at > now() - interval '{AI_FRESH_HOURS} hours')""", [cid, open_models.ENGINE_KEY[e]]).fetchone()[0]
             if not fresh and stale(e, 0.5): steps.append(e)               # and not tried in the last 12 hours
     steps += [s for s, key in WEEKLY_AI.items() if os.environ.get(key) and stale(s)]
     return steps
@@ -286,7 +289,7 @@ def step_open(conn, task, deadline):
     cid, engine, out = task["client_id"], task["step"], {}
     if not open_models.available(): return "no NVIDIA key on the server", []
     def go():
-        tally, _ = open_models.sync_client(conn, cid, engine, deadline=deadline - 20)
+        tally, _ = open_models.sync_client(conn, cid, engine, deadline=deadline)
         out.update(tally); return {k: v for k, v in tally.items() if k != "more"}
     daily.log(conn, cid, engine, go)
     return str(out), ([(engine, {"cont": True})] if out.get("more") else [])
@@ -347,7 +350,7 @@ def run_task(conn, task, deadline):
         return f"{out.get('n', 0)} answers re-read", []
     if step == "ai": return step_ai(conn, task, deadline)
     if step == "claude": return step_claude(conn, task, deadline)
-    if step in ("gemma", "phi", "deepseek"): return step_open(conn, task, deadline)
+    if step in ("gemma", "phi"): return step_open(conn, task, deadline)
     if step == "blogs": return step_blogs(conn, task, deadline)
     if step == "crawl": return step_crawl(conn, task, deadline)
     rc = _daily(task["client_id"], step, task["args"])          # ga4, rank, pages, reddit, youtube, semrush...: one call each
@@ -366,6 +369,14 @@ def _finish_pulls(conn):
                       exit_code = CASE WHEN EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id AND t.status='error') THEN 1 ELSE 0 END
                     WHERE q.finished_at IS NULL AND EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id)
                       AND NOT EXISTS (SELECT 1 FROM pull_tasks t WHERE t.pull_id=q.pull_id AND t.status IN ('queued','running'))""")
+
+def claimable():
+    """Whether a queued task could start now (nothing earlier in its pull waiting) and there is room for another run."""
+    from common import connect
+    with connect() as conn:
+        if pending(conn)[1] >= MAX_PARALLEL: return False
+        return bool(conn.execute(CLAIM.split("WHERE task_id = (", 1)[1].rsplit(")", 1)[0].replace("LIMIT 1 FOR UPDATE OF t SKIP LOCKED", "LIMIT 1")
+                                 .replace("SELECT t.task_id", "SELECT 1")).fetchone())
 
 def pending(conn):
     return conn.execute("SELECT count(*) FILTER (WHERE status='queued'), count(*) FILTER (WHERE status='running') FROM pull_tasks").fetchone()
@@ -386,6 +397,7 @@ def work(budget=RUN_BUDGET, hard_stop=HARD_STOP, connect=None, kick_after=True):
         with connect() as conn:
             row = conn.execute(CLAIM).fetchone()
         if not row: break
+        if kick_after and claimable(): kick()                              # another task can start now: run it side by side
         task = dict(zip(["task_id", "pull_id", "client_id", "step", "args", "seq", "attempts"], row))
         try:
             with connect() as conn:

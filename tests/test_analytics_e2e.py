@@ -18,7 +18,7 @@ owner = re.sub(r"postgresql://[^@]*@/[^?]*", "postgresql://site_owner:owner-pw@/
 from start_local import migrate
 with psycopg.connect(owner, autocommit=True) as c:
     migrate(c)
-    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 27
+    assert c.execute("SELECT count(*) FROM schema_migrations").fetchone()[0] == 28
 os.environ.update(DATABASE_URL=owner, DB_SET_ROLE="aeo_app")
 from common import connect
 with connect() as c:
@@ -166,7 +166,7 @@ checks = {"/c": ["Gargi", "23"], f"/c/{cid}": ["Brand visibility score", "LLMs o
           f"/c/{cid}/research/keyword": ["Keyword research", "No lookups yet", "disabled"], f"/c/{cid}/research/domain": ["Quick pick", "gargi.shop"],
           f"/c/{cid}/research/backlinks": ["Backlink analytics"], f"/c/{cid}/research/paid": ["Paid and shopping"],
           f"/c/{cid}/reddit": ["What Reddit says", "Reddit insights appear after the first weekly refresh", "Not connected yet"], f"/c/{cid}/youtube": ["What YouTube shows", "Not connected yet"],
-          f"/c/{cid}/ai": ["Hovers Visibility Score", "#2", "Zaveri Pearls", "Failed"], f"/c/{cid}/ai/answer/{aid}": ["GIVA is the best known", "Read only"],
+          f"/c/{cid}/ai": ["Orbit AI Visibility Score", "#2", "Zaveri Pearls", "Failed"], f"/c/{cid}/ai/answer/{aid}": ["GIVA is the best known", "Read only"],
           f"/c/{cid}/pages": ["Pages found", "No checked pages in this view yet"], f"/c/{cid}/pages?show=unchecked": ["silver mangalsutra", "Not checked yet"], f"/c/{cid}/settings": ["Gargi by PNG"],
           f"/c/{cid}/settings?tab=prompts": ["best silver jewellery brands in India", "Approve all"]}
 import rank

@@ -19,12 +19,14 @@
 {% if board.engine and not board.has_data %}<div class="msg" role="status" style="margin-top:12px">Showing {{ engine_label(board.engine) }}: no answers from {{ engine_label(board.engine) }} yet, so the numbers below are empty.
   {% if board.engine == 'chatgpt' %}The first answers are being collected and appear within a few minutes.{% elif board.engine == 'claude' %}Claude is checked from Integrations.{% else %}{{ engine_label(board.engine) }} is not connected yet.{% endif %}
   <span class="staff-only note">Team note: needs {{ needs.get(board.engine, 'a collector') }}.</span></div>{% endif %}
+{% set te = engs|selectattr('key', 'equalto', board.engine)|first if board.engine else None %}
+{% if te and te.testing and board.has_data and staff %}<div class="msg" role="status" style="margin-top:12px"><b>Testing:</b> {{ engine_label(board.engine) }} shows {{ te.testing }}. They have no web search, so they cite no sources.</div>{% endif %}
 
 {% if tab != 'competitors' %}
 {# ------------------------------------------------------------------ Dashboard: one entity #}
 <div class="g3">
-  <section class="card"><div class="ph"><h2>Brand visibility score <span class="info" title="Hovers Visibility Score for {{ me.name }} in {{ board.engine and engine_label(board.engine) or 'AI answers' }}: how often, how high and how positively it is named across the tracked prompts, 0 to 100.">i</span></h2></div>
-    <div class="vis">{{ ring(me.score, colour=me.colour, label='Visibility score') }}
+  <section class="card"><div class="ph"><h2>Brand visibility score <span class="info" title="Orbit AI Visibility Score for {{ me.name }} in {{ board.engine and engine_label(board.engine) or 'AI answers' }}: how often, how high and how positively it is named across the tracked prompts, 0 to 100.">i</span></h2></div>
+    <div class="vis">{{ ring(me.score, colour=me.colour, label='Visibility score, out of 100', unit='') }}
       <p class="note" style="margin:0">{% if me.change is not none %}{% if me.change > 0 %}<span class="up" style="color:var(--ok)">▲ {{ me.change }} pts</span>{% elif me.change < 0 %}<span class="down">▼ {{ -me.change }} pts</span>{% else %}No change{% endif %} in four weeks{% elif me.score is none %}{{ 'Collecting the first answers' if board.engine == 'chatgpt' else 'No ' ~ engine_label(board.engine) ~ ' answers yet' }}{% else %}First weeks of data{% endif %}</p>
       <div class="reach">
         <div><b>{{ me.citations|n }}</b><span>Citations · 30 days</span></div>
@@ -33,32 +35,32 @@
   </section>
 
   <section class="card"><div class="ph"><h2>Search overview <span class="info" title="Google: share of tracked keywords on page 1 and ranking at all (Search Console), and of AI Overview keywords where the site is cited (Semrush).">i</span></h2>
-      <a class="btn red" href="{{ url_for('dash.search', cid=client.id) }}">View full report</a></div>
+      {% if me.primary %}<a class="btn red" href="{{ url_for('dash.search', cid=client.id) }}">View full report</a>{% endif %}</div>
     {% if me.primary %}<div class="hb">{% for b in search_ov %}<div class="hb-r"><span class="t">{{ b.label }}</span><span class="v">{{ b.value ~ '/100' if b.value is not none else '–' }}</span>
       <span class="tr"><i style="width:{{ b.value or 0 }}%"></i></span><span class="n">{{ b.note }}</span></div>{% endfor %}</div>
     {% else %}<div class="hb">
       <div class="hb-r"><span class="t">Organic keywords (Semrush)</span><span class="v">{{ comp_seo.keywords|n if comp_seo and comp_seo.keywords else '–' }}</span><span class="n">Keywords {{ me.name }} ranks for in Google's top 100</span></div>
       <div class="hb-r"><span class="t">Estimated organic traffic</span><span class="v">{{ comp_seo.traffic|n if comp_seo and comp_seo.traffic else '–' }}</span><span class="n">Monthly visits from Google, Semrush estimate</span></div>
-      <div class="hb-r"><span class="t">Keywords in common with you</span><span class="v">{{ comp_seo.common|n if comp_seo and comp_seo.common else '–' }}</span><span class="n">Search Console data is only available for your own site</span></div></div>{% endif %}
+      <div class="hb-r"><span class="t">Keywords in common with you</span><span class="v">{{ comp_seo.common|n if comp_seo and comp_seo.common else '–' }}</span><span class="n">Both rank in Google's top 100 · Semrush</span></div></div>{% endif %}
   </section>
 
   <section class="card"><div class="ph"><h2>LLMs overview <span class="info" title="Visibility score per AI engine for {{ me.name }}. Engines Orbit does not ask yet are shown greyed.">i</span></h2></div>
     {% for e in engs %}{% set r = me.engines.get(e.key) %}<div class="lb{{ '' if r else ' off' }}"><img class="lg" src="{{ e.logo }}" alt="{{ e.label }}" title="{{ e.label }}" onerror="this.style.visibility='hidden'">
       <span class="tr"><i style="width:{{ r.score|float if r and r.score is not none else 0 }}%;background:{{ me.colour }}"></i></span>
       <span class="v">{{ (r.score|float)|round|int if r and r.score is not none else 'Not tracked' }}</span></div>{% endfor %}
-    <p class="note" style="margin:10px 0 0">Score out of 100 · {{ board.answers|n }} answers read in the last 30 days.</p>
+    <p class="note" style="margin:10px 0 0">Score out of 100 · {{ board.answers|n }} answer{{ 's' if board.answers != 1 }} read in the last 30 days.</p>
   </section>
 </div>
 
 <div class="g21">
-  <section class="card"><div class="ph"><h2>Trend analysis <span class="info" title="Weekly visibility score, ChatGPT. Your brand and each tracked competitor.">i</span></h2>
+  <section class="card"><div class="ph"><h2>Trend analysis <span class="info" title="Weekly visibility score, {{ engine_label(board.engine) if board.engine else 'ChatGPT' }}. Your brand and each tracked competitor.">i</span></h2>
       <div class="legend">{% for e in board.ents %}<span><i style="background:{{ e.colour }}"></i>{{ e.name }}</span>{% endfor %}</div></div>
     {{ trend }}
   </section>
   <section class="card"><div class="ph"><h2>Sentiment analysis <span class="info" title="Share of {{ me.name }}'s mentions that are positive, last 30 days, per engine.">i</span></h2></div>
     <div class="keys"><span><i style="background:var(--ok)"></i>Positive</span><span><i style="background:var(--bad)"></i>Negative or neutral</span></div>
     <div class="sent"><div class="sent-h"><span>LLMs</span><span style="text-align:center">Sentiment</span></div>
-      {% for e in engs %}{% set sv = me.sentiment_by.get(e.key) %}<div class="sent-r"><span class="e"><img class="lg lgx" src="{{ e.logo }}" alt="" onerror="this.style.visibility='hidden'"><span><b>{{ e.label }}</b><small>{{ me.mentions_by.get(e.key, 0) }} mentions</small></span></span>
+      {% for e in engs %}{% set sv = me.sentiment_by.get(e.key) %}<div class="sent-r"><span class="e"><img class="lg lgx" src="{{ e.logo }}" alt="" onerror="this.style.visibility='hidden'"><span><b>{{ e.label }}</b><small>{{ me.mentions_by.get(e.key, 0) }} mention{{ '' if me.mentions_by.get(e.key, 0) == 1 else 's' }}</small></span></span>
         {% if sv is not none %}<span class="g">{{ gauge(sv) }}</span>{% else %}<span class="na">{{ 'No mentions' if e.tracked else 'Not tracked' }}</span>{% endif %}</div>{% endfor %}</div>
   </section>
 </div>
@@ -73,8 +75,9 @@
     {% else %}<p class="empty">Collecting the first AI answers; they appear here within a few minutes.</p>{% endif %}
   </section>
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></span>Keywords in AI Overview</h2>
-      {% if aio.date %}<span class="note">{{ aio.owned }} of {{ aio.with }} cite {{ client.name }}</span>{% endif %}</div>
-    {% if aio.rows %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Keyword</th><th style="text-align:right">Volume</th><th class="e">Rank</th><th class="e">Cited in AIO</th></tr>
+      {% if aio.date and me.primary and aio.with %}<span class="note">{{ aio.owned }} of {{ aio.with }} cite {{ client.name }}</span>{% endif %}</div>
+    {% if not me.primary %}<p class="empty">AI Overview citations come from Semrush for {{ client.name }}'s own keywords; they are not pulled for {{ me.name }}. <a href="{{ url_for('dash.overview', cid=client.id, **({'e': board.engine} if board.chosen else {})) }}">See {{ client.name }}'s</a></p>
+    {% elif aio.rows %}<div class="tw" style="margin-top:0"><table class="mx"><tr><th>Keyword</th><th style="text-align:right">Volume</th><th class="e">Rank</th><th class="e">Cited in AIO</th></tr>
       {% for k in aio.rows[:6] %}<tr><td class="t">{{ k.keyword }}</td><td style="text-align:right">{{ k.volume|n }}</td>
         <td class="c"><span class="rk {{ 'g' if k.position and k.position <= 3 else 'y' if k.position and k.position <= 10 else 'b' }}">{{ k.position or '–' }}</span></td>
         <td class="c">{% if k.owned %}<span class="ck">✓</span>{% else %}<span class="ck no">–</span>{% endif %}</td></tr>{% endfor %}</table></div>
@@ -83,6 +86,7 @@
   </section>
 </div>
 
+{% if me.primary %}
 {# ------------------------------------------------------------------ Google search, the SEO side #}
 <div class="sep"><span>Google search</span></div>
 <div class="grid">
@@ -122,6 +126,35 @@
 </div>
 
 {% else %}
+{# ------------------------------------------------------------------ Google search, a competitor: Semrush only #}
+{% set you = board.ents|selectattr('primary')|first %}
+<div class="sep"><span>Google search · {{ me.name }}</span></div>
+<p class="note" style="margin:-6px 0 0">Search Console and Analytics exist only for {{ client.name }}'s own site, so {{ me.name }}'s Google numbers are Semrush estimates{% if comp_search and comp_search.date %} (keyword gaps pulled {{ comp_search.date.strftime('%d %b %Y') }}){% endif %}.</p>
+<div class="grid">
+  <div class="card kpi"><div class="l">Organic keywords</div><div class="v{{ '' if comp_seo and comp_seo.keywords else ' mute' }}">{{ comp_seo.keywords|n if comp_seo and comp_seo.keywords else '–' }}</div><div class="s mute">in Google's top 100 · Semrush</div></div>
+  <div class="card kpi"><div class="l">Estimated organic traffic</div><div class="v{{ '' if comp_seo and comp_seo.traffic else ' mute' }}">{{ comp_seo.traffic|n if comp_seo and comp_seo.traffic else '–' }}</div><div class="s mute">visits a month from Google · Semrush</div></div>
+  <div class="card kpi"><div class="l">Keywords in common with {{ client.name }}</div><div class="v{{ '' if comp_seo and comp_seo.common else ' mute' }}">{{ comp_seo.common|n if comp_seo and comp_seo.common else '–' }}</div><div class="s mute">both rank in the top 100</div></div>
+  <div class="card kpi"><div class="l">Ranks where {{ client.name }} doesn't</div><div class="v{{ '' if comp_search and comp_search.beats_n else ' mute' }}">{{ comp_search.beats_n|n if comp_search and comp_search.date else '–' }}</div><div class="s mute">{% if comp_search and comp_search.beats_n %}{{ comp_search.page1 }} of them on page 1{% else %}from the keyword gap pull{% endif %}</div></div>
+</div>
+<div class="g2">
+  <section class="card"><div class="ph"><div><h2>Where {{ me.name }} ranks and {{ client.name }} doesn't</h2><p class="sub">Google top 100, by search volume. Each is a page {{ client.name }} could build.</p></div></div>
+    {% if comp_search and comp_search.beats %}<div class="tw" style="margin-top:0"><table><tr><th>Keyword</th><th class="r">Search volume</th><th class="r">{{ me.name }}'s position</th></tr>
+    {% for g in comp_search.beats[:10] %}<tr><td>{{ g.keyword }}</td><td class="r">{{ g.volume|n }}</td><td class="r"><span class="rk {{ 'g' if g.position <= 3 else 'y' if g.position <= 10 else 'b' }}">{{ g.position }}</span></td></tr>{% endfor %}</table></div>
+    <a class="more" href="{{ url_for('dash.competitors', cid=client.id) }}">All keyword gaps</a>
+    {% else %}<p class="empty">{{ 'The keyword gap pull found no keywords where ' ~ me.name ~ ' ranks and ' ~ client.name ~ ' does not.' if comp_search and comp_search.date else 'Appears after the first keyword gap pull.' }}</p>{% endif %}
+  </section>
+  <section class="card"><div class="ph"><div><h2>{{ me.name }} vs {{ client.name }} in AI answers</h2><p class="sub">{{ engine_label(board.engine) if board.engine else 'AI answers' }}, same prompts, last 30 days.</p></div></div>
+    <div class="tw" style="margin-top:0"><table><tr><th></th><th class="r">{{ me.name }}</th><th class="r">{{ client.name }}</th></tr>
+      <tr><td>AI visibility score</td><td class="r"><b>{{ me.score|round|int if me.score is not none else '–' }}</b></td><td class="r">{{ you.score|round|int if you.score is not none else '–' }}</td></tr>
+      <tr><td>Named in answers</td><td class="r">{{ me.mention_rate|pct if me.mention_rate is not none else '–' }}</td><td class="r">{{ you.mention_rate|pct if you.mention_rate is not none else '–' }}</td></tr>
+      <tr><td>Share of voice</td><td class="r">{{ me.sov|pct if me.sov is not none else '–' }}</td><td class="r">{{ you.sov|pct if you.sov is not none else '–' }}</td></tr>
+      <tr><td>Average place when named</td><td class="r">{{ '%.1f'|format(me.avg_position) if me.avg_position else '–' }}</td><td class="r">{{ '%.1f'|format(you.avg_position) if you.avg_position else '–' }}</td></tr>
+      <tr><td>Answers citing its site</td><td class="r">{{ me.citations|n }}</td><td class="r">{{ you.citations|n }}</td></tr></table></div>
+    {% if comp_search and comp_search.top %}<p class="note" style="margin:12px 0 0">Top Google keywords for {{ me.name }}: {% for k in comp_search.top[:5] %}{{ k.keyword }} ({{ k.position }}){{ ', ' if not loop.last }}{% endfor %}.</p>{% endif %}
+  </section>
+</div>
+{% endif %}
+{% else %}
 {# ------------------------------------------------------------------ Competitors: everyone side by side #}
 <div class="ents">{% for e in board.ents %}
   <a class="ent{{ ' on' if e.key == focus.key }}" href="{{ url_for('dash.overview', cid=client.id, tab='competitors', b=e.key) if e.key else url_for('dash.overview', cid=client.id, tab='competitors') }}">
@@ -140,7 +173,7 @@
   </section>
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg></span>AI visibility score</h2></div>
     {{ vis_cols }}
-    {% set scored = board.ents|selectattr('score')|list %}
+    {% set scored = board.ents|rejectattr('score', 'none')|list %}
     <div class="stat3"><div><small>Brands</small><b>{{ board.ents|length }}</b></div>
       <div><small>Top</small><b>{{ (scored|sort(attribute='score', reverse=true)|first).name if scored else '–' }}</b></div>
       <div><small>Average</small><b>{{ ((scored|sum(attribute='score')) / scored|length)|round|int if scored else '–' }}</b></div></div>
@@ -158,10 +191,11 @@
   </section>
   <section class="card"><div class="ph"><h2><span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="4" height="9"/><rect x="10" y="6" width="4" height="14"/><rect x="17" y="3" width="4" height="17"/></svg></span>Google footprint</h2>
       <span class="note">Google top 100</span></div>
-    <div class="tw" style="margin-top:0"><table class="mx"><tr><th>Brand</th><th style="text-align:right">Organic keywords</th><th style="text-align:right">Est. traffic</th><th style="text-align:right">Shared with you</th></tr>
+    <div class="tw" style="margin-top:0"><table class="mx"><tr><th>Brand</th><th style="text-align:right">Keywords</th><th style="text-align:right">Traffic</th><th style="text-align:right">Shared</th></tr>
       {% for e in board.ents %}{% set s = seo_by.get(e.key) %}<tr><td class="t"><span class="dotav" style="background:{{ e.colour }};width:18px;height:18px;font-size:9px;margin-right:6px">{{ e.initial }}</span>{{ e.name }}</td>
         <td style="text-align:right">{{ s.keywords|n if s and s.keywords else '–' }}</td><td style="text-align:right">{{ s.traffic|n if s and s.traffic else '–' }}</td>
         <td style="text-align:right">{{ '–' if e.primary else (s.common|n if s and s.common else '–') }}</td></tr>{% endfor %}</table></div>
+    <p class="note" style="margin:10px 0 0">{{ client.name }}'s row: Search Console queries and GA4 organic sessions, 28 days. Competitors: Semrush estimates.</p>
     <a class="more" href="{{ url_for('dash.competitors', cid=client.id) }}">Keyword gaps and backlinks</a>
   </section>
 </div>

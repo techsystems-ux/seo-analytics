@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-"""Open models hosted free by NVIDIA (build.nvidia.com): Google's Gemma, Microsoft's Phi and DeepSeek, each asked the same
-approved prompts and read exactly like ChatGPT (ai_visibility.py): brands named and their order, sentiment, scores, under
-engines 'gemma', 'phi' and 'deepseek'.
+"""Testing stand-ins for Gemini and Copilot: Google's open model Gemma and Microsoft's open model Phi, hosted free by NVIDIA
+(build.nvidia.com). Each is asked the same approved prompts and read exactly like ChatGPT (ai_visibility.py), and its answers
+are stored under the real engine's key ('gemini', 'bing_copilot') so the screens keep one button per engine. When the real
+Gemini and Copilot connections are added they write to the same keys and these stop.
 
-What these answers are: what those open models say from their own training. They have no live web search here, so they
-cite no sources, and they are not Gemini or Copilot (Google's and Microsoft's consumer products). The screens label them
-by model family.
+What these answers are: what the open models say from their own training, with no live web search, so they cite no sources
+(the score then leaves source authority out). They are not Gemini's or Copilot's own answers; the team sees that on screen.
 
-Free tier: NVIDIA allows roughly 40 requests a minute per key; 429s are waited out. Runs by itself once a day per brand,
-like ChatGPT (worker.ai_due), at no cost.
+Speed: the prompts are asked in parallel (5 at a time, NVIDIA allows ~40 requests a minute per key) and stored together,
+so one worker run covers most of a brand's prompts; the rest carry on in the next run.
 
 API: OpenAI-compatible, POST https://integrate.api.nvidia.com/v1/chat/completions, Authorization: Bearer nvapi-...
 Models are picked from GET /v1/models: the newest instruction-tuned model of each family, unless set:
 Env: NVIDIA_API_KEY (or NVIDIA_GOOGLE_KEY / NVIDIA_MICROSOFT_KEY, Vercel names 'Google' / 'Microsoft'),
-     NVIDIA_GEMMA_MODEL, NVIDIA_PHI_MODEL, NVIDIA_DEEPSEEK_MODEL
-Usage: python open_models.py --client-id UUID [--engine gemma|phi|deepseek]
+     NVIDIA_GEMMA_MODEL, NVIDIA_PHI_MODEL, OPEN_MODEL_THREADS (default 5)
+Usage: python open_models.py --client-id UUID [--engine gemma|phi]
 """
 import argparse, json, os, re, sys, time
 import requests
@@ -25,8 +25,8 @@ BASE = "https://integrate.api.nvidia.com/v1"
 FAMILIES = {   # engine: (vendor prefix in NVIDIA's catalog, env override, preferred words, avoided words)
     "gemma": ("google/gemma", "NVIDIA_GEMMA_MODEL", ("it", "instruct"), ("embed", "code", "vision", "shield", "guard")),
     "phi": ("microsoft/phi", "NVIDIA_PHI_MODEL", ("instruct",), ("vision", "embed", "multimodal", "audio")),
-    "deepseek": ("deepseek-ai/deepseek", "NVIDIA_DEEPSEEK_MODEL", ("chat", "flash", "v4", "v3"), ("coder", "embed", "math", "distill", "ocr")),
 }
+ENGINE_KEY = {"gemma": "gemini", "phi": "bing_copilot"}            # stored under the real engine's key while testing
 LOCALE = "The person asking is a shopper in India. Answer the question directly and name specific brands or stores where helpful."
 
 def key_for(engine=None):
@@ -95,7 +95,7 @@ def first_json(text):
 
 def make_engine(engine):
     class OpenModelEngine:
-        key, default_model, prompt_seconds = engine, None, 150
+        key, default_model, prompt_seconds = ENGINE_KEY[engine], None, 0
 
         @staticmethod
         def ask(session, api_key, text, region):
@@ -140,13 +140,48 @@ def make_engine(engine):
 
 ENGINES = {e: make_engine(e) for e in FAMILIES}
 
+def fetch(api_key, engine, text, region, session=None):
+    """One prompt, network only (runs in a thread): the answer and the brands judged in it."""
+    eng, session = ENGINES[engine], session or requests.Session()
+    j = eng.ask(session, api_key, text, region)
+    answer = eng.parse(j)[0]
+    return j, (eng.judge(session, api_key, answer) if answer else [])
+
 def sync_client(conn, client_id, engine, samples=1, cycle=None, session=None, deadline=None):
+    """Asks the prompts not yet answered this cycle, in parallel, until `deadline`; stores what came back."""
+    import datetime as dt, time
+    from concurrent.futures import ThreadPoolExecutor, wait, FIRST_COMPLETED
     key = key_for(engine)
     if not key: raise OpenModelError("No NVIDIA key on the server.")
-    session = session or requests.Session()
+    cycle = cycle or dt.date.today()
     eng = ENGINES[engine]
-    tally, scores = AV.sync_client(conn, client_id, key, samples, cycle, session, True, deadline, eng=eng)
-    # answers store the model actually used
+    pick_model(session or requests.Session(), key, engine)                # once, before the threads
+    done = {r[0] for r in conn.execute("""SELECT prompt_id FROM runs WHERE client_id=%s AND engine=%s AND cycle=%s AND status='ok'""",
+                                       [client_id, eng.key, cycle])}
+    todo = [(pid, text, region) for pid, text, region in conn.execute(
+        "SELECT prompt_id, text, region FROM prompts WHERE client_id=%s AND approved AND active ORDER BY created_at", [client_id])
+        if pid not in done]
+    got, failed = {}, {}
+    if todo:
+        stop = (deadline - 25) if deadline else time.time() + 600
+        pool = ThreadPoolExecutor(max_workers=max(1, int(os.environ.get("OPEN_MODEL_THREADS", "5"))))
+        futs = {pool.submit(fetch, key, engine, text, region, session): pid for pid, text, region in todo}
+        pending = set(futs)
+        while pending and time.time() < stop:
+            fin, pending = wait(pending, timeout=max(0.5, stop - time.time()), return_when=FIRST_COMPLETED)
+            for f in fin:
+                try: got[futs[f]] = f.result()
+                except Exception as e: failed[futs[f]] = e
+        pool.shutdown(wait=False, cancel_futures=True)
+    by_text, current = {text: pid for pid, text, _ in todo}, {}
+    def ask(s, k, text, region):                                           # serves what the threads fetched
+        pid = current["pid"] = by_text[text]
+        if pid in failed: raise failed[pid]
+        return got[pid][0]
+    Fetched = type(eng.__name__ + "Fetched", (eng,), {"ask": staticmethod(ask), "judge": staticmethod(lambda s, k, answer: got[current["pid"]][1])})
+    tally, scores = AV.sync_client(conn, client_id, key, samples, cycle, session or requests.Session(), True, None, eng=Fetched,
+                                   only=set(got) | set(failed))
+    if len(got) + len(failed) < len(todo): tally["more"] = 1
     return tally, scores
 
 def main():

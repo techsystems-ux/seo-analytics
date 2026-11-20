@@ -2,7 +2,7 @@
 {% block title %}Prompts · {{ client.name }}{% endblock %}
 {% block body %}
 {% set arg = {'b': focus.key} if focus.key else {} %}
-<section class="card"><div class="ph"><div><h2>LLM overview</h2><p class="sub">Brand mentions across the tracked prompts, per AI engine, last 30 days. Answers are read from India with web search on.</p></div>
+<section class="card"><div class="ph"><div><h2>LLM overview</h2><p class="sub">Brand mentions across the tracked prompts, per AI engine, last 30 days. Answers are read for a shopper in India, with web search on where the engine has it.</p></div>
   {% if staff %}<a class="btn ln" href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">+ Add prompt</a>{% endif %}</div>
   <div class="ents">{% for e in board.ents %}
     <a class="ent{{ ' on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}">
@@ -15,15 +15,15 @@
 
 {% if vis and vis.you %}
 <div class="grid">
-  <div class="card kpi"><div class="l">Hovers Visibility Score · {{ me.name }}</div><div class="v">{{ me.score|n if me.score is not none else '–' }}</div><div class="s">{% if me.primary %}<span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}{% else %}{{ me.change|delta(' pts') if me.change is not none else '' }}{% endif %}</div></div>
-  <div class="card kpi"><div class="l">Named in answers · 35%</div><div class="v">{{ me.mention_rate|pct if me.mention_rate is not none else '–' }}</div><div class="bar"><i style="width:{{ (me.mention_rate or 0)*100 }}%"></i></div></div>
-  <div class="card kpi"><div class="l">Position when named · 25%</div><div class="v">{{ me.avg_position|n if me.avg_position else '–' }}</div><div class="s mute">average place among brands named</div></div>
-  {% if me.primary %}<div class="card kpi"><div class="l">Site cited · 25%</div><div class="v">{{ vis.you.citation_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.citation_rate or 0)*100 }}%"></i></div></div>
+  <div class="card kpi"><div class="l">Orbit AI Visibility Score · {{ me.name }}</div><div class="v">{{ me.score|n if me.score is not none else '–' }}</div><div class="s">{% if me.primary %}<span class="tag t-blk">{{ vis.band }}</span> {{ vis.change_7d|delta(' pts') if vis.change_7d is not none else '' }}{% else %}{{ me.change|delta(' pts') if me.change is not none else '' }}{% endif %}</div></div>
+  <div class="card kpi"><div class="l">Named in answers</div><div class="v">{{ me.mention_rate|pct if me.mention_rate is not none else '–' }}</div><div class="bar"><i style="width:{{ (me.mention_rate or 0)*100 }}%"></i></div></div>
+  <div class="card kpi"><div class="l">Place when named · 50% of an answer</div><div class="v">{{ me.avg_position|n if me.avg_position else '–' }}</div><div class="s mute">average place among brands named</div></div>
+  {% if me.primary %}<div class="card kpi"><div class="l">Site cited · 15%</div><div class="v">{{ vis.you.citation_rate|pct }}</div><div class="bar"><i style="width:{{ (vis.you.citation_rate or 0)*100 }}%"></i></div></div>
   <div class="card kpi"><div class="l">Sentiment · 15%</div><div class="v">{{ vis.you.sentiment|pct }}</div><div class="s mute">100% = always positive</div></div>
   {% else %}<div class="card kpi"><div class="l">Share of voice</div><div class="v">{{ me.sov|pct if me.sov is not none else '–' }}</div><div class="s mute">of all tracked brands named</div></div>
   <div class="card kpi"><div class="l">Citations of its site</div><div class="v">{{ me.citations }}</div><div class="s mute">last 30 days</div></div>{% endif %}
 </div>
-<section class="card"><div class="ph"><div><h2>Trend analysis · {{ me.name }}</h2><p class="sub">0 to 39 Not shortlisted · 40 to 59 Emerging · 60 to 79 Competitive · 80 and above Leader</p></div>
+<section class="card"><div class="ph"><div><h2>Trend analysis · {{ me.name }}</h2><p class="sub">0 to 14 Not shortlisted · 15 to 34 Emerging · 35 to 59 Competitive · 60 and above Leader</p></div>
   <div class="mpill" style="margin:0">{% for e in board.ents %}<a class="{{ 'on' if e.key == focus.key }}" href="{{ url_for('dash.ai', cid=client.id, b=e.key, stage=stage) if e.key else url_for('dash.ai', cid=client.id, stage=stage) }}"><span class="dotav" style="background:{{ e.colour }};width:20px;height:20px;font-size:10px">{{ e.initial }}</span>{{ e.name }}</a>{% endfor %}</div></div>
   {{ trend }}</section>
 {% else %}<div class="card empty">No score yet. ChatGPT's answers are being collected and the score appears within a few minutes; refresh this page shortly.</div>{% endif %}
@@ -45,7 +45,7 @@
 {% else %}<tr><td colspan="{{ 4 + cols|length }}" class="empty">The starting prompts are being set up; they appear here when the brand is next opened.</td></tr>{% endfor %}</table></div>
 <p class="note" style="margin:8px 0 0">✓ or #place: named in that engine's latest answer · ✗: asked, not named · ·: not asked yet. Click a cell to read the answer.
   {% set notyet = engs|rejectattr('connected')|map(attribute='label')|list %}{% if notyet %}Not connected yet: {{ notyet|join(', ') }}.{% endif %}
-  Gemma, Phi and DeepSeek are open models answering from their own knowledge, without web search.</p></section>
+  {% if staff %}{% for g in engs if g.testing and g.connected %}<span class="staff-only">{{ g.label }}: {{ g.testing }}. </span>{% endfor %}{% endif %}</p></section>
 
 <div class="g2">
 <section class="card"><div class="ph"><div><h2>Sites AI cites most</h2><p class="sub">Last 30 days. These are the places to be mentioned.</p></div><a class="note" href="{{ url_for('dash.sources', cid=client.id) }}">All AI citations</a></div>

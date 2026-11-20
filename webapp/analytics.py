@@ -176,6 +176,25 @@ def keyword_gaps(conn, client_id, limit=50):
                                       WHERE client_id=%s AND pulled_on=%s ORDER BY search_volume DESC NULLS LAST LIMIT %s""",
                                    [client_id, last, limit]), ["keyword", "volume", "cpc", "competition", "positions"])
 
+def bare(d): return (d or "").lower().replace("https://", "").replace("http://", "").replace("www.", "").strip("/")
+
+def competitor_search(conn, client_id, domain, limit=12):
+    """A competitor's Google side, from Semrush only (Search Console exists for the brand's own site alone): the keywords it
+    ranks for that the brand does not (latest keyword gap pull), and its own keyword list when one was pulled."""
+    d = bare(domain)
+    last, gaps = keyword_gaps(conn, client_id, 500)
+    beats = []
+    for g in gaps:
+        pos = {bare(k): v for k, v in (g["positions"] or {}).items()}
+        if pos.get(d) is not None: beats.append({"keyword": g["keyword"], "volume": g["volume"], "position": pos[d]})
+    beats.sort(key=lambda r: (-(r["volume"] or 0), r["position"]))
+    own_last = conn.execute("SELECT max(pulled_on) FROM semrush_keywords WHERE client_id=%s AND domain=%s", [client_id, d]).fetchone()[0]
+    top = rows(conn.execute("""SELECT keyword, position, search_volume FROM semrush_keywords WHERE client_id=%s AND domain=%s AND pulled_on=%s
+                               ORDER BY traffic_pct DESC NULLS LAST, search_volume DESC NULLS LAST LIMIT %s""",
+                            [client_id, d, own_last, limit]), ["keyword", "position", "volume"]) if own_last else []
+    return {"date": last, "beats": beats[:limit], "beats_n": len(beats), "top": top, "top_date": own_last,
+            "page1": sum(1 for r in beats if r["position"] and r["position"] <= 10)}
+
 def semrush_keywords(conn, client_id, limit=50):
     dom = conn.execute("SELECT domain FROM clients WHERE client_id=%s", [client_id]).fetchone()[0]
     dom = dom.lower().replace("https://", "").replace("http://", "").replace("www.", "").strip("/")

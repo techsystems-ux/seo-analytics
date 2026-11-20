@@ -13,7 +13,8 @@
     {% set be = (board.ents|selectattr('key', 'equalto', fe.key if fe else '')|first) if board is defined and board else None %}
     {% if be and be.blended is not none %}<span title="Orbit AI Visibility Score across {{ be.engines_scored }} engine{{ 's' if be.engines_scored != 1 }}, weighted by reach"><b>AI visibility:</b> {{ be.blended|round|int }}/100</span>{% endif %}
     <span><b>AI prompts:</b> {{ intel.prompts if intel else 0 }}</span>
-    <span><b>Google keywords:</b> {{ intel.keywords if intel else 0 }}</span>
+    {% if fe and not fe.primary %}{% if comp_seo is defined and comp_seo and comp_seo.keywords %}<span title="Semrush estimate"><b>Organic keywords:</b> {{ comp_seo.keywords|n }}</span>{% endif %}
+    {% else %}<span><b>Google keywords:</b> {{ intel.keywords if intel else 0 }}</span>{% endif %}
     {% if ents is defined and ents|length > 1 %}
     <form method="get" class="bh-switch">{% for k, v in request.args.items() if k != 'b' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
       <label for="bh-b" class="sr">Show</label>
