@@ -33,6 +33,21 @@ def queue_ai(conn, cid):
         dashboard.run_daily(args)
     return n
 
+def queue_claude(conn, cid):
+    import dashboard, worker
+    args = ["--client-id", cid, "--only", "claude", "--force-weekly"]
+    if dashboard.ONLINE:
+        worker.enqueue(conn, cid, "claude", args, who()); worker.kick()
+    else:
+        dashboard.run_daily(args)
+
+def claude_card(conn, cid):
+    import claude_answers
+    st = claude_answers.status(conn)
+    last = conn.execute("""SELECT max(run_at) FILTER (WHERE status='ok'), count(*) FILTER (WHERE status='ok' AND cycle = current_date)
+                           FROM runs WHERE client_id=%s AND engine='claude'""", [cid]).fetchone()
+    return {**st, "last": last[0], "today": last[1]}
+
 def ai_note(n):
     return f" Asking ChatGPT {n} prompt{'s' if n != 1 else ''} now; the AI screens fill in over the next few minutes." if n else \
            " No prompts are approved yet, so there is nothing to ask ChatGPT. Approve prompts first."
@@ -45,10 +60,11 @@ def integrations(cid):
         gsc = conn.execute("SELECT gsc_site_url IS NOT NULL, ga4_property_id IS NOT NULL FROM client_integrations WHERE client_id=%s", [cid]).fetchone()
         shop = conn.execute("SELECT status, shop FROM cms_connections WHERE client_id=%s AND platform='shopify'", [cid]).fetchone()
         approved, suggested, last_ai = prompt_counts(conn, cid)
+        claude = claude_card(conn, cid)
     st = session.get("chatgpt_oauth") or {}
     signing = st if st.get("cid") == cid and request.args.get("step") == "paste" else None
     return view("integrations.html", c, "integrations", gpt=gpt, mode=cp.mode(), signing=signing, gsc=gsc, shop=shop,
-                approved=approved, suggested=suggested, last_ai=last_ai,
+                approved=approved, suggested=suggested, last_ai=last_ai, claude=claude,
                 has_key=bool(os.environ.get("OPENAI_API_KEY_2")), msg=request.args.get("msg"), err=request.args.get("err"))
 
 @bp.post("/c/<cid>/integrations")
@@ -58,6 +74,17 @@ def integrations_post(cid):
     here = url_for("dash.integrations", cid=cid)
     with connect() as conn:
         client_or_404(conn, cid)
+        if what == "run_claude":
+            if not session.get("staff_email"): abort(403)
+            if not os.environ.get("ANTHROPIC_API_KEY"):
+                return err_to(here, "Claude is not connected yet: add ANTHROPIC_API_KEY in Vercel (Sensitive, Production).")
+            n = prompt_counts(conn, cid)[0]
+            if not n: return err_to(here, ai_note(0).strip())
+            import worker
+            ok, when = worker.paid_next(conn, cid, "claude")
+            if not ok: return err_to(here, f"Claude answers already ran today for this brand; the next run can start {when}.")
+            queue_claude(conn, cid)
+            return back_with(here, f"Asking Claude {n} prompt{'s' if n != 1 else ''} now; the AI screens fill in over the next few minutes.")
         if what == "connect":
             url, state = cp.start(conn, cid, who(), callback_url())
             session["chatgpt_oauth"] = {"cid": cid, "state": state, "url": url}

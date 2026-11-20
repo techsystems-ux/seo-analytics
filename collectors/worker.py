@@ -19,10 +19,10 @@ import datetime as dt, json, os, sys, time, traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "..", "seo")]
 
-ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
+ORDER = ["gsc", "gsc_history", "ga4", "rank", "semrush", "ai", "claude", "pages", "index", "cwv", "semrush_ideas", "semrush_backlinks", "semrush_gap",
          "semrush_audit", "semrush_rank", "research", "reddit", "youtube", "blogs", "crawl"]
-NIGHTLY = "gsc,ga4,rank,semrush,ai,pages,index,cwv,blogs,crawl,youtube,reddit"
-PAID_STEPS = ("ai", "blogs", "semrush")         # OpenAI (prompts, blog drafts) and Semrush: limited per brand per day
+NIGHTLY = "gsc,ga4,rank,semrush,ai,claude,pages,index,cwv,blogs,crawl,youtube,reddit"
+PAID_STEPS = ("ai", "claude", "blogs", "semrush")   # OpenAI (prompts, blog drafts), Claude and Semrush: limited per brand per day
 FREE_REFRESH = "gsc,ga4,rank,pages,index,cwv"  # what opening a dashboard with stale data may start (costs nothing)
 RUN_BUDGET = int(os.environ.get("WORKER_BUDGET", "100"))       # seconds a run keeps starting new tasks
 HARD_STOP = int(os.environ.get("WORKER_HARD_STOP", "270"))     # tasks must wrap up before this (Vercel stops at 300)
@@ -209,6 +209,20 @@ def step_ai(conn, task, deadline):
     daily.log(conn, cid, "ai", go)
     return str(out), ([("ai", {"cont": True})] if out.get("more") else [])
 
+def step_claude(conn, task, deadline):
+    """Claude's answers to the approved prompts (Anthropic API, web search on), with the monthly spend limit."""
+    import claude_answers, daily
+    cid, out = task["client_id"], {}
+    key = os.environ.get("ANTHROPIC_API_KEY")
+    if not key: return "no Claude key on the server", []
+    def go():
+        tally, _ = claude_answers.sync_client(conn, cid, key, int(os.environ.get("AI_SAMPLES", "1")), deadline=deadline - 60)
+        out.update(tally)
+        if tally.get("stopped") and not any(tally.get(k) for k in ("ok", "error")): raise RuntimeError(tally["stopped"])
+        return {k: v for k, v in tally.items() if k not in ("more", "stopped")}
+    daily.log(conn, cid, "claude", go)
+    return str(out), ([("claude", {"cont": True})] if out.get("more") and not out.get("stopped") else [])
+
 def step_blogs(conn, task, deadline):
     """Topic research once, then one draft per task (each OpenAI call with web search can take a minute or two)."""
     import blog_writer, daily, chatgpt_plan
@@ -254,6 +268,7 @@ def run_task(conn, task, deadline):
     if step == "gsc": return step_gsc(conn, task, deadline)
     if step == "gsc_history": return step_gsc(conn, task, deadline, history=True)
     if step == "ai": return step_ai(conn, task, deadline)
+    if step == "claude": return step_claude(conn, task, deadline)
     if step == "blogs": return step_blogs(conn, task, deadline)
     if step == "crawl": return step_crawl(conn, task, deadline)
     rc = _daily(task["client_id"], step, task["args"])          # ga4, rank, pages, reddit, youtube, semrush...: one call each

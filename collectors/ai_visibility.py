@@ -125,29 +125,43 @@ def tracked_brands(conn, client_id):
         out.append({"name": n, "aliases": a or [], "domain": d, "is_client": False})
     return out
 
-def run_prompt(conn, session, key, client_id, prompt_id, text, region, cycle, sample_no, brands, sentiment=True):
+class OpenAIEngine:
+    """ChatGPT through the OpenAI API (or the brand's own ChatGPT plan). Other engines (claude_answers.py) give the same five calls."""
+    key, default_model = "chatgpt", MODEL
+    @staticmethod
+    def ask(session, key, text, region): return ask(session, key, text, region)
+    @staticmethod
+    def parse(j): return parse_response(j)
+    @staticmethod
+    def judge(session, key, answer): return judge_brands(session, key, answer)
+    @staticmethod
+    def meta(j, key, judge_meta=None): return {"usage": j.get("usage"), "id": j.get("id"), "via": getattr(key, "via", None) or "api"}
+    @staticmethod
+    def guard(conn, client_id): return None            # a reason to stop before the next prompt (spend caps), or None
+
+def run_prompt(conn, session, key, client_id, prompt_id, text, region, cycle, sample_no, brands, sentiment=True, eng=OpenAIEngine):
     row = conn.execute("""INSERT INTO runs (client_id, prompt_id, engine, region, sample_no, cycle, status)
-                          VALUES (%s,%s,'chatgpt',%s,%s,%s,'error') ON CONFLICT (prompt_id, engine, region, cycle, sample_no) DO NOTHING
-                          RETURNING run_id""", [client_id, prompt_id, region, sample_no, cycle]).fetchone()
+                          VALUES (%s,%s,%s,%s,%s,%s,'error') ON CONFLICT (prompt_id, engine, region, cycle, sample_no) DO NOTHING
+                          RETURNING run_id""", [client_id, prompt_id, eng.key, region, sample_no, cycle]).fetchone()
     if not row:                                                    # already asked this cycle: retry only if it failed
-        row = conn.execute("""SELECT run_id FROM runs WHERE prompt_id=%s AND engine='chatgpt' AND region=%s AND cycle=%s AND sample_no=%s
-                              AND status='error'""", [prompt_id, region, cycle, sample_no]).fetchone()
+        row = conn.execute("""SELECT run_id FROM runs WHERE prompt_id=%s AND engine=%s AND region=%s AND cycle=%s AND sample_no=%s
+                              AND status='error'""", [prompt_id, eng.key, region, cycle, sample_no]).fetchone()
         if not row: return "skipped"
         conn.execute("DELETE FROM answers WHERE run_id=%s", [row[0]])
     run_id = row[0]
     try:
-        j = ask(session, key, text, region)
-        via = getattr(key, "via", None) or "api"
-        answer, cited, consulted = parse_response(j)
-        judged = judge_brands(session, key, answer) if sentiment and answer else []
+        j = eng.ask(session, key, text, region)
+        meta = eng.meta(j, key)
+        answer, cited, consulted = eng.parse(j)
+        judged = eng.judge(session, key, answer) if sentiment and answer else []
+        if isinstance(judged, tuple): judged, jmeta = judged; meta = eng.meta(j, key, jmeta)
     except Exception as e:
         conn.execute("UPDATE runs SET status='error', error=%s, run_at=now() WHERE run_id=%s", [str(e)[:500], run_id]); return "error"
     client = brands[0]; comp_domains = [b["domain"] for b in brands[1:] if b["domain"]]
     with conn.transaction():
         answer_id = conn.execute("""INSERT INTO answers (client_id, run_id, full_text, engine_version, raw_json, parsed_at)
                                     VALUES (%s,%s,%s,%s,%s,now()) RETURNING answer_id""",
-                                 [client_id, run_id, answer, j.get("model", MODEL), json.dumps({"usage": j.get("usage"), "id": j.get("id"),
-                                                                                       "via": via})]).fetchone()[0]
+                                 [client_id, run_id, answer, j.get("model", eng.default_model), json.dumps(meta)]).fetchone()[0]
         verdict = {b["name"].lower(): b for b in judged}
         found = find_mentions(answer, brands)
         known = {m["name"].lower() for m in found}
@@ -219,9 +233,10 @@ def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
         out[b["name"]] = s
     return out
 
-def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True, deadline=None):
+def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True, deadline=None, eng=OpenAIEngine):
     """deadline (time.time()): stop starting new prompts after it; tally['more'] = 1 tells the caller to run again
-    (prompts already asked this cycle are skipped, so the next run picks up where this one stopped)."""
+    (prompts already asked this cycle are skipped, so the next run picks up where this one stopped).
+    eng: the engine (OpenAIEngine for ChatGPT; claude_answers.ClaudeEngine for Claude). tally['stopped'] = why a spend cap stopped it."""
     import time
     cycle = cycle or dt.date.today(); session = session or requests.Session()
     brands = tracked_brands(conn, client_id)
@@ -231,11 +246,13 @@ def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, senti
     for pid, text, region in prompts:
         if deadline and time.time() > deadline:
             tally["more"] = 1; break
+        why = eng.guard(conn, client_id)
+        if why: tally["stopped"] = why; break
         for n in range(1, samples + 1):
-            res = run_prompt(conn, session, key, client_id, pid, text, region, cycle, n, brands, sentiment)
+            res = run_prompt(conn, session, key, client_id, pid, text, region, cycle, n, brands, sentiment, eng)
             tally[res] = tally.get(res, 0) + 1
     regions = {r for _, _, r in prompts}
-    scores = {r: compute_scores(conn, client_id, cycle, r) for r in regions}
+    scores = {r: compute_scores(conn, client_id, cycle, r, eng.key) for r in regions}
     return tally, scores
 
 def main():

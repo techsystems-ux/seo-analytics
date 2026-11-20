@@ -53,11 +53,12 @@
 <tr><td>Google Search Console</td><td>{% if integ and integ[0] %}<span class="tag t-pass">Connected</span> <span class="note">{{ integ[0] }}</span>{% else %}{{ no|safe }}{% endif %}</td></tr>
 <tr><td>Google Analytics 4</td><td>{% if integ and integ[1] %}<span class="tag t-pass">Connected</span> <span class="note">{{ integ[1] }}</span>{% else %}{{ no|safe }}{% endif %}</td></tr>
 <tr><td>AI answers (ChatGPT)</td><td>{{ (ok if keys.OPENAI_API_KEY_2 else no)|safe }}</td></tr>
+<tr><td>AI answers (Claude)</td><td>{{ (ok if keys.ANTHROPIC_API_KEY else no)|safe }}</td></tr>
 <tr><td>Keyword and competitor data (Semrush)</td><td>{{ (ok if keys.SEMRUSH_API_KEY else no)|safe }}</td></tr>
 <tr><td>Reddit</td><td>{{ (ok if keys.APIFY_TOKEN else no)|safe }}</td></tr>
 <tr><td>YouTube</td><td>{{ (ok if keys.YOUTUBE_API_KEY else no)|safe }}</td></tr></table>
 <p class="note">Google accounts are linked from <a href="{{ url_for('connections') }}">Google connections</a>.</p></section>
-<section class="card"><h2>Refresh</h2><p class="note">Orbit refreshes every brand each night at 02:00 IST: Search Console, GA4, rankings, AI answers, keyword data and blog drafts.
+<section class="card"><h2>Refresh</h2><p class="note">Orbit refreshes every brand each night at 02:00 IST: Search Console, GA4, rankings, AI answers (ChatGPT and Claude), keyword data and blog drafts.
 Page checks and the site crawl run weekly.</p>
 <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start">
 {% for only,label in [('gsc,ga4,rank','Refresh Search Console, GA4 and rankings'),('ai','Re-ask the AI prompts'),('pages','Re-check pages')] %}
@@ -75,7 +76,7 @@ Page checks and the site crawl run weekly.</p>
 <button class="btn blk">Remove sample data</button></form>{% endif %}
 </section>
 <section class="card"><h2>Refresh history</h2>{% if runs %}<table><tr><th>Source</th><th>Started</th><th>Result</th></tr>
-{% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'Google Analytics','ai':'AI answers','semrush':'Keyword data','pages':'Page checks','sitemap':'Sitemap','crawl':'Site crawl','reddit':'Reddit','youtube':'YouTube','blogs':'Blog drafts','rank':'Rankings','index':'Indexing','cwv':'Page speed'}.get(r.collector, r.collector|replace('_',' ')|capitalize) }}</td>
+{% for r in runs %}<tr><td>{{ {'gsc':'Search Console','ga4':'Google Analytics','ai':'AI answers (ChatGPT)','claude':'AI answers (Claude)','semrush':'Keyword data','pages':'Page checks','sitemap':'Sitemap','crawl':'Site crawl','reddit':'Reddit','youtube':'YouTube','blogs':'Blog drafts','rank':'Rankings','index':'Indexing','cwv':'Page speed'}.get(r.collector, r.collector|replace('_',' ')|capitalize) }}</td>
 <td>{{ r.started.strftime('%d %b, %H:%M') }}</td><td>{% if r.status=='ok' %}<span class="tag t-pass">Done</span>{% elif r.status=='running' %}<span class="tag t-na">Running</span>{% else %}<span class="tag t-fail" title="{{ (r.note or '').split('\n')[0][:300] }}">Did not finish</span>{% endif %}</td></tr>{% endfor %}</table>
 {% else %}<p class="empty">Nothing has run yet.</p>{% endif %}</section>
 {% else %}

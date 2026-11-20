@@ -507,7 +507,7 @@ def settings(cid):
         project = conn.execute("SELECT semrush_project_id FROM clients WHERE client_id=%s", [cid]).fetchone()[0]
         actions, by_feature = semrush_actions(conn, cid), A.semrush_by_feature(conn)
         viewers = conn.execute("SELECT email, added_by, added_at, last_login FROM client_viewers WHERE client_id=%s ORDER BY email", [cid]).fetchall()
-    keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY_2", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
+    keys = {k: bool(os.environ.get(k)) for k in ("OPENAI_API_KEY_2", "ANTHROPIC_API_KEY", "SEMRUSH_API_KEY", "APIFY_TOKEN", "YOUTUBE_API_KEY")}
     login = {"google": bool(os.environ.get("CLIENT_OAUTH_CLIENT_ID")), "email": bool(os.environ.get("RESEND_API_KEY"))}
     return view("settings.html", c, "settings", paid_per_day=int(os.environ.get("PAID_RUNS_PER_DAY", "1")), semrush_auto=int(os.environ.get("SEMRUSH_AUTO_UNITS", "400")), tab=tab, rules=rules, prompts=prompts, integ=integ, runs=runs, budget=budget, keys=keys,
                 msg=request.args.get("msg"), project=project, actions=actions, by_feature=by_feature, viewers=viewers, login=login,
@@ -696,7 +696,7 @@ def activity_status(cid, pull_id):
         row = conn.execute("SELECT finished_at, exit_code FROM pull_queue WHERE pull_id=%s AND client_id::text=%s", [pull_id, cid]).fetchone()
         if not row: abort(404)
         tasks = conn.execute("SELECT step, status, note FROM pull_tasks WHERE pull_id=%s AND client_id::text=%s ORDER BY seq, task_id", [pull_id, cid]).fetchall()
-    labels = {"blogs": "Drafting blog", "ai": "Checking AI answers", "gsc": "Fetching Google Search data", "gsc_history": "Fetching search history", "ga4": "Fetching Analytics", "rank": "Updating rankings", "crawl": "Scanning pages", "index": "Checking indexing", "cwv": "Measuring page speed", "reddit": "Fetching Reddit", "youtube": "Fetching YouTube"}
+    labels = {"blogs": "Drafting blog", "ai": "Checking AI answers", "claude": "Checking Claude answers", "gsc": "Fetching Google Search data", "gsc_history": "Fetching search history", "ga4": "Fetching Analytics", "rank": "Updating rankings", "crawl": "Scanning pages", "index": "Checking indexing", "cwv": "Measuring page speed", "reddit": "Fetching Reddit", "youtube": "Fetching YouTube"}
     items = [{"label": labels.get(step, "Fetching research data"), "state": "skipped" if status == "done" and (note or "").startswith("skipped:") else status} for step, status, note in tasks]
     state = "error" if row[0] and row[1] else "finished" if row[0] else "running" if any(t["state"] == "running" for t in items) else "queued"
     response = make_response({"state": state, "tasks": items})

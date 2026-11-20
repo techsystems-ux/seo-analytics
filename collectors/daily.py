@@ -92,6 +92,10 @@ def main(argv=None):
                 import ai_visibility
                 ok &= log(conn, cid, "ai", lambda: ai_visibility.sync_client(conn, cid, chatgpt_plan.route_for(conn, cid, os.environ.get("OPENAI_API_KEY_2"), "ai"),
                           int(os.environ.get("AI_SAMPLES", "1")))[0])
+            if "claude" in only and os.environ.get("ANTHROPIC_API_KEY"):
+                import claude_answers
+                ok &= log(conn, cid, "claude", lambda: claude_answers.sync_client(conn, cid, os.environ["ANTHROPIC_API_KEY"],
+                          int(os.environ.get("AI_SAMPLES", "1")))[0])
             if "pages" in only and weekly_due(conn, cid, "pages", a.force_weekly):
                 import run_checks, sitemap
                 ok &= log(conn, cid, "sitemap", lambda: "{found} pages in the sitemap, {added} new, {keywords} keywords assigned".format(
