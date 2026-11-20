@@ -42,6 +42,14 @@
       <label><input type="checkbox" name="use_for_blogs" {{ 'checked' if gpt.use_for_blogs }}> Use for blog drafts</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn blk" name="what" value="settings">Save</button>
         <button class="btn ln" name="what" value="test" formnovalidate>Test connection</button></div></form>
+    <div style="border-top:1px solid var(--line,#eee);padding-top:12px;display:flex;flex-direction:column;gap:8px">
+      <p style="margin:0"><b>AI answers from ChatGPT</b> · {{ approved }} approved prompt{{ 's' if approved != 1 }}{% if last_ai %} · last checked {{ last_ai.strftime('%d %b, %H:%M') }}{% endif %}</p>
+      <p class="note" style="margin:0">Orbit asks each approved prompt in ChatGPT with web search on, then records which brands it names, in what order, how it describes them and which sites it cites.
+        That fills the Dashboard score, Prompts, AI citations and competitor comparison.</p>
+      {% if approved %}<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn red" name="what" value="run_ai" {{ 'disabled' if not gpt.use_for_ai }}>Check AI answers now</button></form>
+      {% elif staff %}<p class="note" style="margin:0;color:var(--red)">No prompts approved yet{% if suggested %} ({{ suggested }} suggested){% endif %}. <a href="{{ url_for('dash.settings', cid=client.id, tab='prompts') }}">Approve prompts in Settings</a>, then check AI answers here.</p>
+      {% else %}<p class="note" style="margin:0">The Hovers team is setting up the prompts to track. Answers appear here once they are approved.</p>{% endif %}
+    </div>
     <form method="post" onsubmit="return confirm('Disconnect ChatGPT for {{ client.name }}?')"><input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="btn ln" name="what" value="disconnect">Disconnect</button></form>
   {% else %}

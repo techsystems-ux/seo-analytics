@@ -123,7 +123,8 @@ class Responses:                                  # api.openai.com/v1/responses:
 RS = Responses()
 
 # ---------------------------------------------------------------- sign-in (paste mode) through the screens
-import app as webapp
+import app as webapp, dashboard
+ran = []; dashboard.run_daily = lambda args, out=None: ran.append(args)          # AI runs started from Integrations
 cl = webapp.app.test_client()
 with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"] = "tok"
 page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)
@@ -146,6 +147,7 @@ assert "err=" in bad.headers["Location"]
 back = f"http://127.0.0.1:1455/auth/callback?code=code-1&scope=chatgpt.tokens.use.direct+email+offline_access+openid+profile+resource.invoke&state={q['state']}&client_id=oaiapp_issued1"
 r = cl.post(f"/c/{A}/integrations", data={"csrf": "tok", "what": "paste", "address": back})
 assert "msg=" in r.headers["Location"] and "Connected+brand%40example.com" in r.headers["Location"], r.headers["Location"]
+assert "Asking+ChatGPT+1+prompt" in r.headers["Location"] and ran[-1][:4] == ["--client-id", A, "--only", "ai"]   # first check starts by itself
 ex = H.posts[-1][1] if H.posts[-1][1]["grant_type"] == "authorization_code" else H.posts[0][1]
 assert ex["client_id"] == "oaiapp_issued1" and ex["redirect_uri"] == cp.LOOPBACK and ex["resource"] == cp.RESOURCE and len(ex["code_verifier"]) > 40
 with connect() as conn:
@@ -185,6 +187,11 @@ _rq.Session = lambda: RS
 r = cl.post(f"/c/{A}/integrations", data={"csrf": "tok", "what": "test"})
 _rq.Session = _orig_session
 assert "msg=Working" in r.headers["Location"], r.headers["Location"]
+n0 = len(ran)
+r = cl.post(f"/c/{A}/integrations", data={"csrf": "tok", "what": "run_ai"})
+assert "msg=Asking+ChatGPT" in r.headers["Location"] and len(ran) == n0 + 1
+page = cl.get(f"/c/{A}/integrations").get_data(as_text=True)
+assert "1 approved prompt" in page and "Check AI answers now" in page
 print("screen: account, models (hidden ones left out), choose model and what it is used for, test connection")
 
 # ---------------------------------------------------------------- AI answers on the plan, then the limit
