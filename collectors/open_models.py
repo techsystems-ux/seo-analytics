@@ -63,21 +63,21 @@ def pick_model(session, key, engine):
     _models[engine] = sorted(preferred, key=version_key, reverse=True)[0]
     return _models[engine]
 
-def chat(session, key, model, messages, max_tokens=1400, timeout=120):
-    for attempt in range(5):
+def chat(session, key, model, messages, max_tokens=1400, timeout=70):
+    for attempt in range(3):
         try:
             r = session.post(BASE + "/chat/completions", headers={"Authorization": f"Bearer {key}", "Accept": "application/json"},
                              json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": 0.3, "stream": False},
                              timeout=timeout)
         except requests.RequestException as e:
-            if attempt < 2: time.sleep(3); continue
+            if attempt < 1: time.sleep(3); continue
             raise OpenModelError(f"Could not reach NVIDIA ({type(e).__name__}).")
         if r.status_code == 200:
             return r.json()
-        if r.status_code in (429, 500, 502, 503, 504) and attempt < 4:
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < 2:
             try: wait = float(r.headers.get("retry-after") or 0)
             except (TypeError, ValueError): wait = 0
-            time.sleep(min(20, wait or 3 * (attempt + 1))); continue
+            time.sleep(min(10, wait or 3 * (attempt + 1))); continue
         if r.status_code in (401, 403): raise OpenModelError("NVIDIA refused the key for this model.")
         raise OpenModelError(f"NVIDIA {r.status_code}: {(r.text or '')[:200]}")
     raise OpenModelError("NVIDIA stayed busy; the rest runs next time.")
@@ -95,7 +95,7 @@ def first_json(text):
 
 def make_engine(engine):
     class OpenModelEngine:
-        key, default_model = engine, None
+        key, default_model, prompt_seconds = engine, None, 150
 
         @staticmethod
         def ask(session, api_key, text, region):
@@ -118,7 +118,7 @@ def make_engine(engine):
                     {"role": "system", "content": "List every brand, store or marketplace named in the text, in order of first appearance. "
                      'Reply with JSON only: {"brands":[{"name":"...","sentiment":"positive|neutral|negative","recommended":true|false}]}. '
                      "Do not add brands that are not named."},
-                    {"role": "user", "content": answer[:6000]}], max_tokens=700, timeout=90)
+                    {"role": "user", "content": answer[:6000]}], max_tokens=700, timeout=40)
             except OpenModelError:
                 return []
             data = first_json(((j.get("choices") or [{}])[0].get("message") or {}).get("content") or "") or {}

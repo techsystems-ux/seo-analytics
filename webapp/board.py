@@ -69,6 +69,17 @@ def pick(ents, key):
 
 def _f(v): return float(v) if v is not None else None
 
+# Orbit reach weights: how much each engine counts in the all-engines score (an editorial estimate of where Indian shoppers ask,
+# reviewed each quarter; engines without data drop out and the rest are rescaled). Method: docs, "Orbit AI Visibility Score".
+REACH = {"chatgpt": 0.40, "ai_overviews": 0.20, "gemini": 0.12, "perplexity": 0.06, "bing_copilot": 0.05, "claude": 0.05,
+         "deepseek": 0.04, "google_ai_mode": 0.03, "grok": 0.02, "gemma": 0.015, "phi": 0.015}
+
+def blended(per):
+    """All-engines score from the latest score per engine, weighted by REACH."""
+    got = [(REACH.get(k, 0.01), _f(v["score"])) for k, v in per.items() if v.get("score") is not None]
+    w = sum(x for x, _ in got)
+    return round(sum(x * s for x, s in got) / w, 1) if w else None
+
 def ai_board(conn, cid, ents, want=None):
     """Latest AI numbers per entity and engine, weekly visibility trend, mentions, citations and sentiment.
     want: the engine chosen on screen (a key from ENGINES); default ChatGPT, or the first engine with data."""
@@ -128,7 +139,7 @@ def ai_board(conn, cid, ents, want=None):
         main = per.get(eng) if eng else None
         sc = _f(main["score"]) if main else None
         b4 = before.get((eng, e["key"]))
-        out.append({**e, "engines": per, "score": sc, "change": round(sc - b4, 1) if sc is not None and b4 is not None else None,
+        out.append({**e, "engines": per, "score": sc, "blended": blended(per), "engines_scored": len(per), "change": round(sc - b4, 1) if sc is not None and b4 is not None else None,
                     "mention_rate": _f(main["mention_rate"]) if main else None, "sov": _f(main["sov"]) if main else None,
                     "avg_position": _f(main["avg_position"]) if main else None,
                     "mentions": (ment.get(e["key"], {}).get(eng, 0) if want in LABEL else sum(ment.get(e["key"], {}).values())),

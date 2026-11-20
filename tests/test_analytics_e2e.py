@@ -113,16 +113,18 @@ with connect() as conn:
     tally, scores = av.sync_client(conn, cid, "SK", samples=1, cycle=day, session=fo)
     assert tally == {"ok": 1, "error": 1}, tally
     s = scores["IN"]
-    # Gargi: 2 runs but 1 failed, so 1 answer: named (place 2 -> 0.8), cited, positive -> 100*(.35+.25*.8+.25+.15) = 95
-    assert s["Gargi"]["score"] == 95.0 and s["Gargi"]["avg_position"] == 2, s["Gargi"]
-    assert s["GIVA"]["score"] == 100.0 and s["Palmonas"]["score"] == 0.0
+    # Gargi: 2 runs but 1 failed, so 1 answer (awareness prompt, weight .8): named 2nd (D = 1/log2 3 = .631), recommended, positive,
+    # own site cited -> v = .5*.631 + .2 + .15 + .15 = .8155; with the 2-answer prior: 100 * .8*.8155 / (.8 + 2) = 23.3
+    assert s["Gargi"]["score"] == 23.3 and s["Gargi"]["raw"] == 81.55 and s["Gargi"]["avg_position"] == 2, s["Gargi"]
+    assert s["GIVA"]["score"] == 28.57 and s["Palmonas"]["score"] == 0.0
+    assert abs(s["Gargi"]["sov"] + s["GIVA"]["sov"] - 1) < 1e-9 and s["GIVA"]["sov"] > s["Gargi"]["sov"]      # prominence-weighted share
     m = dict(conn.execute("SELECT brand, rank_in_answer FROM mentions WHERE client_id=%s", [cid]).fetchall())
     assert m == {"GIVA": 1, "Gargi": 2, "Zaveri Pearls": None}, m                # Zaveri kept as an untracked brand
     cit = conn.execute("SELECT domain, cited, is_client, source_type FROM citations WHERE client_id=%s ORDER BY domain", [cid]).fetchall()
     assert cit == [("gargi.shop", True, True, "own_site"), ("giva.co", True, False, "competitor"), ("reddit.com", False, False, "reddit")], cit
     again, _ = av.sync_client(conn, cid, "SK", samples=1, cycle=day, session=fo)  # rerun: retries only the failed prompt
     assert again == {"skipped": 1, "error": 1}, again
-print("chatgpt: answer stored, mentions in order, citations split cited/read, failure retried, score = 95 (Competitive... Leader band)", av.band(95))
+print("chatgpt: answer stored, mentions in order, citations split cited/read, failure retried, score 23.3 on one answer (", av.band(23.3), "band; 81.6 before the evidence prior)")
 
 # ------------------------------------------------------------------ Search Console and GA4 rows, then the screens
 with connect() as conn:
@@ -155,7 +157,7 @@ with cl.session_transaction() as s: s["staff_email"] = "seo@hovers.in"; s["csrf"
 with connect() as conn:
     aid = conn.execute("SELECT answer_id FROM answers WHERE client_id=%s", [cid]).fetchone()[0]
     pid = conn.execute("INSERT INTO pages (client_id, url, page_type, primary_keyword) VALUES (%s,'https://gargi.shop/collections/mangalsutra','collection','silver mangalsutra') RETURNING page_id", [cid]).fetchone()[0]
-checks = {"/c": ["Gargi", "95"], f"/c/{cid}": ["Brand visibility score", "LLMs overview", "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"], f"/c/{cid}?tab=competitors": ["Brand visibility ranking", "Google footprint", "GIVA", "Primary"], f"/c/{cid}/ai-traffic": ["AI traffic performance"], f"/c/{cid}/ai?b=GIVA": ["LLM prompts", "GIVA"],
+checks = {"/c": ["Gargi", "23"], f"/c/{cid}": ["Brand visibility score", "LLMs overview", "Tracked keywords", "Keyword gap", "silver anklets for women", "+50.0%"], f"/c/{cid}?tab=competitors": ["Brand visibility ranking", "Google footprint", "GIVA", "Primary"], f"/c/{cid}/ai-traffic": ["AI traffic performance"], f"/c/{cid}/ai?b=GIVA": ["LLM prompts", "GIVA"],
           f"/c/{cid}/search": ["Non-branded clicks", "silver mangalsutra"], f"/c/{cid}/search?tab=revenue": ["/collections/mangalsutra", "100.0%"],
           f"/c/{cid}/search?tab=pages": ["/collections/mangalsutra"], f"/c/{cid}/competitors": ["silver anklets for women", "giva.co · 3"],
           f"/c/{cid}/competitors?tab=list": ["myntra.com", "Track"], f"/c/{cid}/competitors?tab=keywords": ["silver bracelet for women", "Refresh keyword data"], f"/c/{cid}/settings?tab=data": ["Uses up to 400 Semrush credits", "disabled", "Semrush project ID", "Refresh keyword data now", "Data sources", "Refresh history"],

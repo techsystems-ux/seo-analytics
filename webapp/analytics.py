@@ -3,7 +3,7 @@ plain dicts, so screens stay thin and the numbers can be tested without a browse
 import datetime as dt, os, sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seo"))
 
-BANDS = [(80, "Leader"), (60, "Competitive"), (40, "Emerging"), (0, "Not shortlisted")]
+BANDS = [(60, "Leader"), (35, "Competitive"), (15, "Emerging"), (0, "Not shortlisted")]   # same as ai_visibility.BANDS
 def band(s): return None if s is None else next(n for f, n in BANDS if float(s) >= f)
 
 def pct_change(now, before):

@@ -273,7 +273,7 @@ def step_claude(conn, task, deadline):
     key = os.environ.get("ANTHROPIC_API_KEY")
     if not key: return "no Claude key on the server", []
     def go():
-        tally, _ = claude_answers.sync_client(conn, cid, key, int(os.environ.get("AI_SAMPLES", "1")), deadline=deadline - 60)
+        tally, _ = claude_answers.sync_client(conn, cid, key, int(os.environ.get("AI_SAMPLES", "1")), deadline=deadline - 20)
         out.update(tally)
         if tally.get("stopped") and not any(tally.get(k) for k in ("ok", "error")): raise RuntimeError(tally["stopped"])
         return {k: v for k, v in tally.items() if k not in ("more", "stopped")}
@@ -286,7 +286,7 @@ def step_open(conn, task, deadline):
     cid, engine, out = task["client_id"], task["step"], {}
     if not open_models.available(): return "no NVIDIA key on the server", []
     def go():
-        tally, _ = open_models.sync_client(conn, cid, engine, deadline=deadline - 45)
+        tally, _ = open_models.sync_client(conn, cid, engine, deadline=deadline - 20)
         out.update(tally); return {k: v for k, v in tally.items() if k != "more"}
     daily.log(conn, cid, engine, go)
     return str(out), ([(engine, {"cont": True})] if out.get("more") else [])
@@ -400,7 +400,7 @@ def work(budget=RUN_BUDGET, hard_stop=HARD_STOP, connect=None, kick_after=True):
         with connect() as conn: _finish_pulls(conn)
     with connect() as conn:
         queued, running = pending(conn)
-    if queued and kick_after: kick()
+    if queued and kick_after and (done or failed): kick()      # nothing claimable = the running task's own run carries on
     return {"ran": done, "failed": failed, "queued": queued, "running": running, "seconds": round(time.time() - t0)}
 
 def kick():

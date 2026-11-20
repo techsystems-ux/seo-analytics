@@ -4,14 +4,19 @@
 For every approved prompt it asks the engine, stores the answer, then records:
   mentions   which tracked brands the answer names, in what order, with what sentiment
   citations  which links the answer cites, and which it only read while searching
-Then it writes the Hovers Visibility Score for the client and each tracked competitor (scores_daily).
+Then it writes the Orbit AI Visibility Score for the client and each tracked competitor (scores_daily).
 
-Hovers Visibility Score, 0-100, per brand per engine per day:
-  35% mention rate      share of answers that name the brand
-  25% position          where the brand appears among the brands named (1st = 1.0, then 0.2 less per place, floor 0.2)
-  25% citation rate     share of answers that cite the brand's own site
-  15% sentiment         positive 1, neutral 0.5, negative 0, over the answers that name the brand
-Bands: 0-39 Not shortlisted, 40-59 Emerging, 60-79 Competitive, 80+ Leader.
+Orbit AI Visibility Score (OVS), 0-100, per brand per engine per region per day. Full method: docs, "Orbit AI Visibility Score".
+  Evidence: the newest answer to every active prompt (per sample) from the last 14 days, up to the day scored.
+  Per answer, for a brand:  v = named * (0.50 D + 0.20 E + 0.15 S) + 0.15 C
+      D  prominence, DCG decay on the brand's place among the brands named: 1 / log2(place + 1)  (1st 1.0, 2nd .63, 3rd .50)
+      E  endorsement: the answer recommends it (1) or only names it (0)
+      S  sentiment: positive 1, neutral .5, negative 0
+      C  source authority: the answer cites the brand's own site (engines without web search: dropped, the rest rescaled)
+  Per prompt weight w: buying stage (awareness .8, consideration 1, decision 1.25) x 0.25 when the prompt itself names the brand.
+  Score = 100 * sum(w v) / (sum(w) + K), K = 2: two answers' worth of 'not yet seen' so thin evidence can't read as dominance.
+  Share of voice: the brand's share of all prominence (w * D) earned by tracked brands.
+Bands: 0-14 Not shortlisted, 15-34 Emerging, 35-59 Competitive, 60+ Leader.
 
 The API answer approximates what ChatGPT shows users; it is not a scrape of chatgpt.com.
 Usage: python ai_visibility.py --client-id UUID [--samples 1] [--date 2026-11-12]
@@ -26,8 +31,13 @@ import chatgpt_plan
 
 API = "https://api.openai.com/v1/responses"
 MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-astra")
-WEIGHTS = {"mention": 0.35, "position": 0.25, "citation": 0.25, "sentiment": 0.15}
-BANDS = [(80, "Leader"), (60, "Competitive"), (40, "Emerging"), (0, "Not shortlisted")]
+WEIGHTS = {"prominence": 0.50, "endorsement": 0.20, "sentiment": 0.15, "authority": 0.15}
+STAGE = {"awareness": 0.8, "consideration": 1.0, "decision": 1.25}
+BRANDED = 0.25            # a prompt that names the brand itself proves little about the brand's visibility
+PRIOR_K = 2.0             # evidence prior, in answers
+WINDOW_DAYS = 14          # newest answer per prompt within this many days
+CITING = {"chatgpt", "claude", "perplexity", "ai_overviews", "gemini", "bing_copilot", "grok", "google_ai_mode"}
+BANDS = [(60, "Leader"), (35, "Competitive"), (15, "Emerging"), (0, "Not shortlisted")]
 SENT = {"positive": 1.0, "neutral": 0.5, "negative": 0.0}
 
 def band(score):
@@ -87,7 +97,7 @@ def judge_brands(session, key, answer):
     return json.loads(text).get("brands", [])
 
 # ------------------------------------------------------------------ reading the answer
-SCORING_VERSION = 2            # bump when brand detection changes: saved answers are re-read for free (rescore)
+SCORING_VERSION = 3            # bump when brand detection changes: saved answers are re-read for free (rescore)
 
 def stem(text):
     """'zavya.co' -> 'zavya', 'www.truesilver.co.in' -> 'truesilver', 'CaratLane' -> 'caratlane' (letters and digits only)."""
@@ -147,7 +157,7 @@ def tracked_brands(conn, client_id):
 
 class OpenAIEngine:
     """ChatGPT through the OpenAI API (or the brand's own ChatGPT plan). Other engines (claude_answers.py) give the same five calls."""
-    key, default_model = "chatgpt", MODEL
+    key, default_model, prompt_seconds = "chatgpt", MODEL, 0
     @staticmethod
     def ask(session, key, text, region): return ask(session, key, text, region)
     @staticmethod
@@ -241,42 +251,75 @@ def rescore_due(conn, client_id):
     return conn.execute("SELECT EXISTS (SELECT 1 FROM answers WHERE client_id=%s)", [client_id]).fetchone()[0]
 
 def position_score(rank):
-    return max(0.2, 1 - 0.2 * (rank - 1)) if rank else 0.0
+    """Prominence: DCG-style decay on the place among the brands named (1st 1.0, 2nd 0.63, 3rd 0.50, 5th 0.39, 10th 0.29)."""
+    import math
+    return 1 / math.log2(rank + 1) if rank else 0.0
 
-def score_brand(answers):
-    """answers = [{mentioned, rank, cited, sentiment}] for one brand -> components and score."""
+def answer_value(a, citing=True):
+    """One answer's value for one brand, 0-1. a = {mentioned, rank, recommended, sentiment, cited}."""
+    W = WEIGHTS
+    named = (W["prominence"] * position_score(a["rank"]) + W["endorsement"] * (1.0 if a.get("recommended") else 0.0)
+             + W["sentiment"] * SENT.get(a.get("sentiment") or "neutral", 0.5)) if a["mentioned"] else 0.0
+    if not citing: return named / (1 - W["authority"])
+    return named + W["authority"] * (1.0 if a.get("cited") else 0.0)
+
+def score_brand(answers, citing=True, k=PRIOR_K):
+    """answers = [{mentioned, rank, recommended, sentiment, cited, weight}] for one brand -> components and the score."""
     n = len(answers)
     if not n: return None
+    w = [a.get("weight", 1.0) for a in answers]
+    vals = [answer_value(a, citing) for a in answers]
+    sw = sum(w)
     named = [a for a in answers if a["mentioned"]]
-    mention = len(named) / n
-    pos = sum(position_score(a["rank"]) for a in named) / len(named) if named else 0.0
-    cite = sum(1 for a in answers if a["cited"]) / n
-    sent = sum(SENT.get(a["sentiment"] or "neutral", 0.5) for a in named) / len(named) if named else 0.0
-    score = 100 * (WEIGHTS["mention"] * mention + WEIGHTS["position"] * pos + WEIGHTS["citation"] * cite + WEIGHTS["sentiment"] * sent)
     ranks = [a["rank"] for a in named if a["rank"]]
-    return {"samples": n, "mention_rate": mention, "position": pos, "citation_rate": cite, "sentiment": sent,
-            "avg_position": sum(ranks) / len(ranks) if ranks else None, "score": round(score, 2)}
+    raw = sum(x * y for x, y in zip(w, vals)) / sw if sw else 0.0
+    score = 100 * sum(x * y for x, y in zip(w, vals)) / (sw + k) if sw + k else 0.0
+    return {"samples": n, "mention_rate": len(named) / n, "position": sum(position_score(r) for r in ranks) / len(ranks) if ranks else 0.0,
+            "citation_rate": sum(1 for a in answers if a.get("cited")) / n,
+            "endorsement": sum(1 for a in named if a.get("recommended")) / len(named) if named else 0.0,
+            "sentiment": sum(SENT.get(a.get("sentiment") or "neutral", 0.5) for a in named) / len(named) if named else None,
+            "avg_position": sum(ranks) / len(ranks) if ranks else None, "raw": round(100 * raw, 2), "score": round(score, 2),
+            "prominence": sum(x * position_score(a["rank"]) for x, a in zip(w, answers) if a["mentioned"])}
+
+def evidence(conn, client_id, cycle, region, engine):
+    """The newest ok answer per (prompt, sample) in the window ending on `cycle`: [(answer_id, prompt text, funnel stage)]."""
+    return conn.execute("""SELECT DISTINCT ON (r.prompt_id, r.sample_no) a.answer_id, p.text, p.funnel_stage::text
+                           FROM runs r JOIN answers a USING (run_id) JOIN prompts p USING (prompt_id)
+                           WHERE r.client_id=%s AND r.region=%s AND r.engine::text=%s AND r.status='ok' AND p.active
+                             AND r.cycle <= %s AND r.cycle > %s::date - %s
+                           ORDER BY r.prompt_id, r.sample_no, r.cycle DESC, r.run_at DESC""",
+                        [client_id, region, engine, cycle, cycle, WINDOW_DAYS]).fetchall()
 
 def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
     brands = tracked_brands(conn, client_id)
-    rows = conn.execute("""SELECT a.answer_id FROM runs r JOIN answers a USING (run_id)
-                           WHERE r.client_id=%s AND r.cycle=%s AND r.region=%s AND r.engine=%s AND r.status='ok'""",
-                        [client_id, cycle, region, engine]).fetchall()
-    ids = [r[0] for r in rows]
+    ev = evidence(conn, client_id, cycle, region, engine)
+    ids = [r[0] for r in ev]
     if not ids: return {}
     ment = {}
-    for aid, brand, rank, sent in conn.execute("""SELECT answer_id, brand, rank_in_answer, sentiment FROM mentions
-                                                  WHERE answer_id = ANY(%s) AND rank_in_answer IS NOT NULL""", [ids]):
-        ment[(aid, brand)] = (rank, sent)
+    for aid, brand, rank, sent, rec in conn.execute("""SELECT answer_id, brand, rank_in_answer, sentiment, recommended FROM mentions
+                                                       WHERE answer_id = ANY(%s) AND rank_in_answer IS NOT NULL""", [ids]):
+        ment[(aid, brand)] = (rank, sent, rec)
     cites = conn.execute("SELECT answer_id, domain FROM citations WHERE answer_id = ANY(%s) AND cited", [ids]).fetchall()
-    total_mentions = sum(1 for _ in ment)
+    citing = engine in CITING
+    stage_w = {aid: STAGE.get(stage, 1.0) for aid, _, stage in ev}
     out = {}
     for b in brands:
-        ans = [{"mentioned": (aid, b["name"]) in ment, "rank": ment.get((aid, b["name"]), (None, None))[0],
-                "sentiment": ment.get((aid, b["name"]), (None, None))[1],
-                "cited": any(a == aid and same_site(d, b["domain"]) for a, d in cites)} for aid in ids]
-        s = score_brand(ans)
-        sov = sum(1 for k in ment if k[1] == b["name"]) / total_mentions if total_mentions else 0
+        pats = brand_patterns(b["name"], b["aliases"], b["domain"])
+        ans = []
+        for aid, text, _ in ev:
+            rank, sent, rec = ment.get((aid, b["name"]), (None, None, None))
+            branded = any(p.search(text or "") for p in pats)
+            ans.append({"mentioned": rank is not None, "rank": rank, "sentiment": sent, "recommended": rec,
+                        "cited": any(a == aid and same_site(d, b["domain"]) for a, d in cites),
+                        "weight": stage_w[aid] * (BRANDED if branded else 1.0), "sov_weight": stage_w[aid]})
+        s = score_brand(ans, citing)
+        s["sov_mass"] = sum(a["sov_weight"] * position_score(a["rank"]) for a in ans if a["mentioned"])
+        out[b["name"]] = (b, s)
+    total = sum(s["sov_mass"] for _, s in out.values())
+    res = {}
+    for name, (b, s) in out.items():
+        sov = s["sov_mass"] / total if total else 0.0
+        s["sov"] = sov
         key = "" if b["is_client"] else b["name"]
         conn.execute("""INSERT INTO scores_daily (client_id, engine, region, date, brand, samples, mention_rate, citation_rate, share_of_voice,
                           avg_position, sentiment, visibility_score) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
@@ -285,8 +328,10 @@ def compute_scores(conn, client_id, cycle, region="IN", engine="chatgpt"):
                           sentiment=EXCLUDED.sentiment, visibility_score=EXCLUDED.visibility_score""",
                      [client_id, engine, region, cycle, key, s["samples"], s["mention_rate"], s["citation_rate"], sov,
                       s["avg_position"], s["sentiment"], s["score"]])
-        out[b["name"]] = s
-    return out
+        res[name] = s
+    print(f"[ovs] {client_id} {engine} {region} {cycle} answers={len(ids)} " +
+          " | ".join(f"{n}: {v['score']} (named {round(100 * v['mention_rate'])}%, sov {round(100 * v['sov'])}%)" for n, v in res.items()), flush=True)
+    return res
 
 def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, sentiment=True, deadline=None, eng=OpenAIEngine):
     """deadline (time.time()): stop starting new prompts after it; tally['more'] = 1 tells the caller to run again
@@ -299,13 +344,15 @@ def sync_client(conn, client_id, key, samples=1, cycle=None, session=None, senti
                            [client_id]).fetchall()
     tally = {}
     for pid, text, region in prompts:
-        if deadline and time.time() > deadline:
+        if deadline and time.time() + getattr(eng, "prompt_seconds", 0) > deadline:
             tally["more"] = 1; break
         why = eng.guard(conn, client_id)
         if why: tally["stopped"] = why; break
         for n in range(1, samples + 1):
             res = run_prompt(conn, session, key, client_id, pid, text, region, cycle, n, brands, sentiment, eng)
             tally[res] = tally.get(res, 0) + 1
+        if res == "ok":
+            compute_scores(conn, client_id, cycle, region, eng.key)       # the dashboard moves after every answer, even if a run is cut off
     regions = {r for _, _, r in prompts}
     scores = {r: compute_scores(conn, client_id, cycle, r, eng.key) for r in regions}
     return tally, scores

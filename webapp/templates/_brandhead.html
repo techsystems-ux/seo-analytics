@@ -10,6 +10,8 @@
   </div>
   <div class="bh-meta">
     {% set d = fe.domain if fe else client.domain %}{% if d %}<span><b>URL:</b> <a href="https://{{ d }}" target="_blank" rel="noopener">https://{{ d }}/</a></span>{% endif %}
+    {% set be = (board.ents|selectattr('key', 'equalto', fe.key if fe else '')|first) if board is defined and board else None %}
+    {% if be and be.blended is not none %}<span title="Orbit AI Visibility Score across {{ be.engines_scored }} engine{{ 's' if be.engines_scored != 1 }}, weighted by reach"><b>AI visibility:</b> {{ be.blended|round|int }}/100</span>{% endif %}
     <span><b>AI prompts:</b> {{ intel.prompts if intel else 0 }}</span>
     <span><b>Google keywords:</b> {{ intel.keywords if intel else 0 }}</span>
     {% if ents is defined and ents|length > 1 %}

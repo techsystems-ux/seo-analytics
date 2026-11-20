@@ -100,7 +100,7 @@ def room(conn, need=PROMPT_WORST_USD):
 def headers(key):
     return {"x-api-key": key, "anthropic-version": VERSION, "content-type": "application/json"}
 
-def call(session, key, body, timeout=180):
+def call(session, key, body, timeout=110):
     """One Messages request with polite retries on rate limits and overload; plain-language errors otherwise."""
     for attempt in range(4):
         try:
@@ -184,7 +184,7 @@ def judge(session, key, answer):
                             "messages": [{"role": "user", "content": answer}],
                             "tools": [{"name": "record_brands", "description": "Record the brands named in the answer.",
                                        "input_schema": AV.SENTIMENT_SCHEMA}],
-                            "tool_choice": {"type": "tool", "name": "record_brands"}}, timeout=120)
+                            "tool_choice": {"type": "tool", "name": "record_brands"}}, timeout=50)
     use = next((b for b in j.get("content") or [] if b.get("type") == "tool_use" and b.get("name") == "record_brands"), None)
     brands = (use or {}).get("input", {}).get("brands") or []
     clean = [{"name": str(b.get("name", ""))[:200], "sentiment": b.get("sentiment") if b.get("sentiment") in AV.SENT else "neutral",
@@ -192,7 +192,7 @@ def judge(session, key, answer):
     return clean, {"model": j.get("model") or JUDGE_MODEL, "usage": j.get("usage") or {}}
 
 class ClaudeEngine:
-    key, default_model = "claude", MODEL
+    key, default_model, prompt_seconds = "claude", MODEL, 200
     ask = staticmethod(ask)
     parse = staticmethod(parse)
     judge = staticmethod(judge)
